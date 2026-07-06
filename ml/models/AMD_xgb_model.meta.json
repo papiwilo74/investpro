@@ -1,0 +1,57 @@
+{
+  "ticker": "AMD",
+  "metrics": {
+    "accuracy": 0.42574257425742573,
+    "precision": 0.48717948717948717,
+    "recall": 0.3333333333333333,
+    "f1": 0.3958333333333333,
+    "train_size": 400,
+    "test_size": 101
+  },
+  "feature_importances": {
+    "feat_return_1d": 0.028834568336606026,
+    "feat_return_3d": 0.03756921738386154,
+    "feat_return_5d": 0.03832823038101196,
+    "feat_return_10d": 0.043556347489356995,
+    "feat_volatility_5d": 0.03768454119563103,
+    "feat_volatility_10d": 0.04938329756259918,
+    "feat_rsi": 0.05299776792526245,
+    "feat_macd_diff": 0.02394200675189495,
+    "feat_bollinger_pct_b": 0.06616682559251785,
+    "feat_dist_sma_20": 0.09677563607692719,
+    "feat_dist_sma_50": 0.045453574508428574,
+    "feat_dist_sma_200": 0.08990734815597534,
+    "feat_dist_vwap": 0.10357208549976349,
+    "feat_cmf": 0.05461831018328667,
+    "feat_vol_change": 0.0279440488666296,
+    "feat_macro_spy_return": 0.044164277613162994,
+    "feat_macro_spy_trend": 0.06325823813676834,
+    "feat_macro_vix": 0.09584375470876694
+  },
+  "features_list": [
+    "feat_return_1d",
+    "feat_return_3d",
+    "feat_return_5d",
+    "feat_return_10d",
+    "feat_volatility_5d",
+    "feat_volatility_10d",
+    "feat_rsi",
+    "feat_macd_diff",
+    "feat_bollinger_pct_b",
+    "feat_dist_sma_20",
+    "feat_dist_sma_50",
+    "feat_dist_sma_200",
+    "feat_dist_vwap",
+    "feat_cmf",
+    "feat_vol_change",
+    "feat_macro_spy_return",
+    "feat_macro_spy_trend",
+    "feat_macro_vix"
+  ],
+  "best_params": {
+    "learning_rate": 0.01,
+    "max_depth": 7,
+    "n_estimators": 100
+  },
+  "optimized": true
+}

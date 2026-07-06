@@ -1,0 +1,57 @@
+{
+  "ticker": "TSLA",
+  "metrics": {
+    "accuracy": 0.4158415841584158,
+    "precision": 0.32941176470588235,
+    "recall": 0.9333333333333333,
+    "f1": 0.48695652173913045,
+    "train_size": 400,
+    "test_size": 101
+  },
+  "feature_importances": {
+    "feat_return_1d": 0.051518455147743225,
+    "feat_return_3d": 0.02056187391281128,
+    "feat_return_5d": 0.03956837207078934,
+    "feat_return_10d": 0.047821156680583954,
+    "feat_volatility_5d": 0.06843742728233337,
+    "feat_volatility_10d": 0.04663282632827759,
+    "feat_rsi": 0.05253412574529648,
+    "feat_macd_diff": 0.06791819632053375,
+    "feat_bollinger_pct_b": 0.05217062309384346,
+    "feat_dist_sma_20": 0.06898439675569534,
+    "feat_dist_sma_50": 0.08115866780281067,
+    "feat_dist_sma_200": 0.07094425708055496,
+    "feat_dist_vwap": 0.06282390654087067,
+    "feat_cmf": 0.06833353638648987,
+    "feat_vol_change": 0.03672122210264206,
+    "feat_macro_spy_return": 0.059140417724847794,
+    "feat_macro_spy_trend": 0.04888653755187988,
+    "feat_macro_vix": 0.05584397166967392
+  },
+  "features_list": [
+    "feat_return_1d",
+    "feat_return_3d",
+    "feat_return_5d",
+    "feat_return_10d",
+    "feat_volatility_5d",
+    "feat_volatility_10d",
+    "feat_rsi",
+    "feat_macd_diff",
+    "feat_bollinger_pct_b",
+    "feat_dist_sma_20",
+    "feat_dist_sma_50",
+    "feat_dist_sma_200",
+    "feat_dist_vwap",
+    "feat_cmf",
+    "feat_vol_change",
+    "feat_macro_spy_return",
+    "feat_macro_spy_trend",
+    "feat_macro_vix"
+  ],
+  "best_params": {
+    "learning_rate": 0.01,
+    "max_depth": 5,
+    "n_estimators": 200
+  },
+  "optimized": true
+}

@@ -1,0 +1,142 @@
+/* Estilos específicos que complementan a Tailwind CSS */
+
+/* Fondo dinámico y Premium */
+body {
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(210, 100%, 93%, 0.5) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, hsla(160, 100%, 93%, 0.5) 0px, transparent 50%);
+  background-attachment: fixed;
+  background-size: cover;
+}
+
+body.dark {
+  background-color: #020617;
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(210, 100%, 15%, 0.4) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, hsla(160, 100%, 15%, 0.3) 0px, transparent 50%);
+}
+
+/* Efecto Cristal (Glassmorphism) */
+.glass {
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+}
+
+.dark .glass {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Contenedores de Lightweight Charts */
+.chart-container-wrapper {
+  height: 450px;
+  width: 100%;
+}
+
+.chart-container-wrapper-sub {
+  height: 200px;
+  width: 100%;
+}
+
+/* Composite Gauge circular usando conic-gradient */
+.gauge {
+  background: conic-gradient(#e2e8f0 0deg, #e2e8f0 360deg);
+  transition: background 0.3s ease;
+}
+
+.dark .gauge {
+  background: conic-gradient(#1e293b 0deg, #1e293b 360deg);
+}
+
+/* Skeleton Loading Shimmer */
+.skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: loadingShimmer 1.5s infinite;
+}
+
+.dark .skeleton {
+  background: linear-gradient(90deg, #1e293b 25%, #0f172a 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: loadingShimmer 1.5s infinite;
+}
+
+/* Personalización de los botones activos en el Sidebar */
+.watchlist-btn.active {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  border-color: transparent;
+}
+
+/* Tabs active slide style alternative */
+.tab.active {
+  background-color: var(--tab-bg-active, #ffffff);
+  color: #3b82f6;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.dark .tab.active {
+  background-color: #1e293b;
+  color: #60a5fa;
+  box-shadow: none;
+}
+
+/* Toasts Container */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000;
+}
+
+/* Animaciones */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes loadingShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+/* Ajustes adicionales de scrollbar para el sidebar */
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background-color: #334155;
+  border-radius: 4px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+/* Ocultar paneles inactivos */
+.panel.hidden {
+  display: none !important;
+}
+.panel.active {
+  display: flex !important;
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}

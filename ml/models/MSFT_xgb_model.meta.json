@@ -1,0 +1,57 @@
+{
+  "ticker": "MSFT",
+  "metrics": {
+    "accuracy": 0.5841584158415841,
+    "precision": 0.25,
+    "recall": 0.2,
+    "f1": 0.2222222222222222,
+    "train_size": 400,
+    "test_size": 101
+  },
+  "feature_importances": {
+    "feat_return_1d": 0.02745039016008377,
+    "feat_return_3d": 0.035986579954624176,
+    "feat_return_5d": 0.0385376401245594,
+    "feat_return_10d": 0.04845183342695236,
+    "feat_volatility_5d": 0.05171516165137291,
+    "feat_volatility_10d": 0.0818730965256691,
+    "feat_rsi": 0.06670863181352615,
+    "feat_macd_diff": 0.08436591178178787,
+    "feat_bollinger_pct_b": 0.042087506502866745,
+    "feat_dist_sma_20": 0.07919106632471085,
+    "feat_dist_sma_50": 0.05197363719344139,
+    "feat_dist_sma_200": 0.03691568970680237,
+    "feat_dist_vwap": 0.04802644997835159,
+    "feat_cmf": 0.04744849354028702,
+    "feat_vol_change": 0.02738439291715622,
+    "feat_macro_spy_return": 0.03433126583695412,
+    "feat_macro_spy_trend": 0.09551794081926346,
+    "feat_macro_vix": 0.10203424841165543
+  },
+  "features_list": [
+    "feat_return_1d",
+    "feat_return_3d",
+    "feat_return_5d",
+    "feat_return_10d",
+    "feat_volatility_5d",
+    "feat_volatility_10d",
+    "feat_rsi",
+    "feat_macd_diff",
+    "feat_bollinger_pct_b",
+    "feat_dist_sma_20",
+    "feat_dist_sma_50",
+    "feat_dist_sma_200",
+    "feat_dist_vwap",
+    "feat_cmf",
+    "feat_vol_change",
+    "feat_macro_spy_return",
+    "feat_macro_spy_trend",
+    "feat_macro_vix"
+  ],
+  "best_params": {
+    "learning_rate": 0.1,
+    "max_depth": 7,
+    "n_estimators": 100
+  },
+  "optimized": true
+}

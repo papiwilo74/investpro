@@ -1,0 +1,57 @@
+{
+  "ticker": "NVDA",
+  "metrics": {
+    "accuracy": 0.43564356435643564,
+    "precision": 0.3389830508474576,
+    "recall": 0.5263157894736842,
+    "f1": 0.41237113402061853,
+    "train_size": 400,
+    "test_size": 101
+  },
+  "feature_importances": {
+    "feat_return_1d": 0.0,
+    "feat_return_3d": 0.0,
+    "feat_return_5d": 0.0,
+    "feat_return_10d": 0.10486018657684326,
+    "feat_volatility_5d": 0.08018654584884644,
+    "feat_volatility_10d": 0.059773072600364685,
+    "feat_rsi": 0.023791873827576637,
+    "feat_macd_diff": 0.07258804142475128,
+    "feat_bollinger_pct_b": 0.18775615096092224,
+    "feat_dist_sma_20": 0.05805201455950737,
+    "feat_dist_sma_50": 0.08969560265541077,
+    "feat_dist_sma_200": 0.11574593186378479,
+    "feat_dist_vwap": 0.0,
+    "feat_cmf": 0.014962984248995781,
+    "feat_vol_change": 0.0020830377470701933,
+    "feat_macro_spy_return": 0.0,
+    "feat_macro_spy_trend": 0.0,
+    "feat_macro_vix": 0.19050462543964386
+  },
+  "features_list": [
+    "feat_return_1d",
+    "feat_return_3d",
+    "feat_return_5d",
+    "feat_return_10d",
+    "feat_volatility_5d",
+    "feat_volatility_10d",
+    "feat_rsi",
+    "feat_macd_diff",
+    "feat_bollinger_pct_b",
+    "feat_dist_sma_20",
+    "feat_dist_sma_50",
+    "feat_dist_sma_200",
+    "feat_dist_vwap",
+    "feat_cmf",
+    "feat_vol_change",
+    "feat_macro_spy_return",
+    "feat_macro_spy_trend",
+    "feat_macro_vix"
+  ],
+  "best_params": {
+    "learning_rate": 0.01,
+    "max_depth": 3,
+    "n_estimators": 50
+  },
+  "optimized": true
+}

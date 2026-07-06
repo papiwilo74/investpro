@@ -1,0 +1,57 @@
+{
+  "ticker": "META",
+  "metrics": {
+    "accuracy": 0.4752475247524752,
+    "precision": 0.32051282051282054,
+    "recall": 1.0,
+    "f1": 0.4854368932038835,
+    "train_size": 400,
+    "test_size": 101
+  },
+  "feature_importances": {
+    "feat_return_1d": 0.0343049094080925,
+    "feat_return_3d": 0.0,
+    "feat_return_5d": 0.023533310741186142,
+    "feat_return_10d": 0.0,
+    "feat_volatility_5d": 0.10236053913831711,
+    "feat_volatility_10d": 0.060910098254680634,
+    "feat_rsi": 0.11624288558959961,
+    "feat_macd_diff": 0.11767000705003738,
+    "feat_bollinger_pct_b": 0.0,
+    "feat_dist_sma_20": 0.10781826078891754,
+    "feat_dist_sma_50": 0.0,
+    "feat_dist_sma_200": 0.1318456381559372,
+    "feat_dist_vwap": 0.0,
+    "feat_cmf": 0.09195289760828018,
+    "feat_vol_change": 0.0,
+    "feat_macro_spy_return": 0.0,
+    "feat_macro_spy_trend": 0.09380573779344559,
+    "feat_macro_vix": 0.1195557713508606
+  },
+  "features_list": [
+    "feat_return_1d",
+    "feat_return_3d",
+    "feat_return_5d",
+    "feat_return_10d",
+    "feat_volatility_5d",
+    "feat_volatility_10d",
+    "feat_rsi",
+    "feat_macd_diff",
+    "feat_bollinger_pct_b",
+    "feat_dist_sma_20",
+    "feat_dist_sma_50",
+    "feat_dist_sma_200",
+    "feat_dist_vwap",
+    "feat_cmf",
+    "feat_vol_change",
+    "feat_macro_spy_return",
+    "feat_macro_spy_trend",
+    "feat_macro_vix"
+  ],
+  "best_params": {
+    "learning_rate": 0.01,
+    "max_depth": 3,
+    "n_estimators": 50
+  },
+  "optimized": true
+}

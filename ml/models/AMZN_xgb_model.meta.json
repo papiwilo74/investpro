@@ -1,0 +1,57 @@
+{
+  "ticker": "AMZN",
+  "metrics": {
+    "accuracy": 0.5445544554455446,
+    "precision": 0.4375,
+    "recall": 0.525,
+    "f1": 0.4772727272727273,
+    "train_size": 400,
+    "test_size": 101
+  },
+  "feature_importances": {
+    "feat_return_1d": 0.03495056927204132,
+    "feat_return_3d": 0.0273719634860754,
+    "feat_return_5d": 0.06030423194169998,
+    "feat_return_10d": 0.0335426963865757,
+    "feat_volatility_5d": 0.05380496010184288,
+    "feat_volatility_10d": 0.07817190885543823,
+    "feat_rsi": 0.06219290569424629,
+    "feat_macd_diff": 0.060346510261297226,
+    "feat_bollinger_pct_b": 0.04757606238126755,
+    "feat_dist_sma_20": 0.03793442249298096,
+    "feat_dist_sma_50": 0.06356300413608551,
+    "feat_dist_sma_200": 0.09927751123905182,
+    "feat_dist_vwap": 0.038616228848695755,
+    "feat_cmf": 0.08475372195243835,
+    "feat_vol_change": 0.029068948701024055,
+    "feat_macro_spy_return": 0.036222562193870544,
+    "feat_macro_spy_trend": 0.08137864619493484,
+    "feat_macro_vix": 0.07092323154211044
+  },
+  "features_list": [
+    "feat_return_1d",
+    "feat_return_3d",
+    "feat_return_5d",
+    "feat_return_10d",
+    "feat_volatility_5d",
+    "feat_volatility_10d",
+    "feat_rsi",
+    "feat_macd_diff",
+    "feat_bollinger_pct_b",
+    "feat_dist_sma_20",
+    "feat_dist_sma_50",
+    "feat_dist_sma_200",
+    "feat_dist_vwap",
+    "feat_cmf",
+    "feat_vol_change",
+    "feat_macro_spy_return",
+    "feat_macro_spy_trend",
+    "feat_macro_vix"
+  ],
+  "best_params": {
+    "max_depth": 5,
+    "learning_rate": 0.05,
+    "n_estimators": 100
+  },
+  "optimized": false
+}
