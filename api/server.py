@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse
 from config import WATCHLIST
 from api.routes import market, analysis, backtest, portfolio, ml, advisor, broker
 from api.auth import register_auth_routes, get_current_user
+from ml.ensemble import ensemble
 
 app = FastAPI(title="Inversion Helper API", version="2.0.0")
 
@@ -49,6 +50,12 @@ app.include_router(broker.public_router, prefix="/api/broker", tags=["Broker Pub
 @app.get("/api/watchlist")
 async def get_watchlist():
     return WATCHLIST
+
+# Estado del Ensemble Adaptativo
+@app.get("/api/ensemble/status")
+async def get_ensemble_status():
+    from api.utils import sanitize_for_json
+    return sanitize_for_json(ensemble.get_status())
 
 # Configurar Frontend Estático si la carpeta existe
 frontend_path = Path(_PROJECT_ROOT) / "frontend"

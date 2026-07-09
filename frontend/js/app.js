@@ -1080,6 +1080,7 @@ class App {
           <div id="broker-advisor-container"></div>
           <div id="broker-ml-container"></div>
           <div id="broker-risk-container"></div>
+          <div id="broker-ensemble-container"></div>
         </div>
       `;
 
@@ -1128,21 +1129,18 @@ class App {
       const bCont = document.getElementById('broker-breadth-container');
       if (bCont) bCont.innerHTML = Components.marketBreadthCard(breadth);
 
-    } catch(e) {
-      if (e.message && e.message.includes('Not authenticated')) {
-        this.api.logout();
-        this.updateAuthUI();
-        panel.innerHTML = `
-          <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-8 shadow-premium dark:shadow-none text-center">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Sesión Expirada</h3>
-            <p class="text-sm text-slate-500 mb-6">Tu token ha expirado. Inicia sesión nuevamente.</p>
-            <button id="broker-login-btn" class="px-6 py-2.5 text-sm font-bold rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white transition-all shadow-md hover:shadow-lg">Iniciar Sesión</button>
-          </div>
-        `;
-        document.getElementById('broker-login-btn').addEventListener('click', () => this.showLoginModal());
-      } else {
-        panel.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 border-l-4 border-l-rose-500 rounded-2xl p-6 shadow-premium">Error al cargar datos del broker: ${e.message}</div>`;
+      // Render ensemble status async
+      const eCont = document.getElementById('broker-ensemble-container');
+      if (eCont) {
+        this.api.getEnsembleStatus().then(status => {
+          eCont.innerHTML = Components.ensembleCard(status);
+        }).catch(() => {
+          eCont.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-5 shadow-premium dark:shadow-none"><h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ensemble Adaptativo</h3><p class="text-xs text-slate-500">Esperando datos...</p></div>`;
+        });
       }
+
+    } catch(e) {
+      panel.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 border-l-4 border-l-rose-500 rounded-2xl p-6 shadow-premium">Error al cargar datos del broker: ${e.message}</div>`;
     }
   }
 }

@@ -943,6 +943,45 @@ const Components = {
       </div>
     `;
   }
+
+  ensembleCard(status) {
+    if (!status || !status.weights) {
+      return `<div class="glass rounded-2xl p-5 border-l-4 border-l-violet-500"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ensemble Adaptativo</span><p class="text-xs text-slate-500 mt-2">Inicializando...</p></div>`;
+    }
+    const regime = Object.keys(status.weights)[0] || 'BULL';
+    const weights = status.weights[regime] || {};
+    const accuracy = status.accuracy || {};
+
+    const bars = Object.entries(weights).map(([model, weight]) => {
+      const pct = (weight * 100).toFixed(0);
+      const acc = accuracy[model];
+      const accStr = acc ? `${(acc.global_accuracy * 100).toFixed(0)}%` : '—';
+      const colors = {xgboost: 'bg-cyan-500', neural_brain: 'bg-violet-500', rl_agent: 'bg-amber-500', online_advisor: 'bg-emerald-500', ta_classic: 'bg-blue-500'};
+      const color = colors[model] || 'bg-slate-400';
+      return `
+        <div class="mb-1.5">
+          <div class="flex justify-between text-[10px] font-medium text-slate-500 mb-0.5">
+            <span>${model.replace('_', ' ')}</span>
+            <span>${pct}% · ${accStr}</span>
+          </div>
+          <div class="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div class="h-full rounded-full ${color} transition-all" style="width: ${pct}%"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="glass rounded-2xl p-5 border-l-4 border-l-violet-500 shadow-premium">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ensemble Adaptativo</span>
+          <span class="text-[10px] font-medium text-slate-400">Régimen: ${regime}</span>
+        </div>
+        ${bars}
+        <p class="text-[10px] text-slate-400 mt-2">Predicciones: ${status.prediction_count || 0}</p>
+      </div>
+    `;
+  }
 };
 
 window.Components = Components;

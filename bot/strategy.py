@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from db.repositories import KellyRepository
 from ml.rl import RLExitAgent
+from ml.ensemble import ensemble, ModelSignal
 
 # Instancias globales para compatibilidad con código existente.
 # Los nuevos componentes deben inyectar rl_agent y kelly_tracker vía constructor.
@@ -287,6 +288,9 @@ class StrategyParams:
     use_volatility_targeting: bool = True
     target_annual_volatility: float = 0.15
 
+    # Ensemble adaptativo: blend de modelos con pesos dinámicos
+    use_ensemble: bool = True
+
     # Score mínimo más alto en régimen cauteloso (VIX alto / SPY lateral)
     cautious_regime_score_boost: float = 0.15
 
@@ -505,6 +509,7 @@ class TradingBrain:
         # Inyección de dependencias: permite testear sin singletons globales
         self._rl_agent = rl_agent_instance or rl_agent
         self._kelly = kelly_instance or kelly_tracker
+        self._ensemble = ensemble
         self._load_neural_if_needed()
 
     @classmethod
@@ -896,6 +901,42 @@ class TradingBrain:
         # Usar score suavizado si está disponible
         smooth_score = getattr(self, '_last_smooth_score', score)
         entry_score = smooth_score if smooth_score != score else score
+
+        # ── Ensemble adaptativo ────────────────────────────────────────
+        if p.use_ensemble:
+            xgb_signal = None
+            if ml_direction is not None and ml_probability is not None:
+                xgb_dir = "BULLISH" if ml_direction == "ALCISTA" else "BEARISH"
+                xgb_signal = ModelSignal(direction=xgb_dir, probability=ml_probability, score=(ml_probability * 2 - 1))
+            nn_signal = None
+            if p.use_neural_brain and self._neural_brain and self._neural_brain is not False:
+                nn_result = self._neural_predict(
+                    df, current_index, entry_score, has_position=False,
+                    position_pnl_pct=0.0, weekly_trend=weekly_trend,
+                    market_regime=market_regime, position_side="LONG",
+                    prev_score=prev_score,
+                )
+                if nn_result and nn_result["confidence"] >= 0.3:
+                    nn_dir = {"BUY": "BULLISH", "HOLD": "NEUTRAL", "SELL": "BEARISH"}.get(nn_result["action"], "NEUTRAL")
+                    nn_signal = ModelSignal(direction=nn_dir, probability=nn_result["confidence"], score=(nn_result["confidence"] * 2 - 1))
+
+            ensemble_regime = market_regime
+            if ensemble_regime not in ("BULL", "BEAR", "LATERAL"):
+                ensemble_regime = "BULL" if ensemble_regime == "NEUTRAL" else "HIGH_VOL"
+
+            ens_result = self._ensemble.predict(
+                regime=ensemble_regime,
+                xgboost_signal=xgb_signal,
+                neural_brain_signal=nn_signal,
+                ta_score=entry_score,
+            )
+
+            if ens_result.consensus_direction == "BULLISH" and ens_result.confidence >= 0.3:
+                entry_score = max(entry_score, ens_result.blended_score)
+                ml_direction = "ALCISTA"
+                ml_probability = ens_result.confidence
+            elif ens_result.consensus_direction == "BEARISH" and ens_result.confidence >= 0.4:
+                return Decision("HOLD", f"Ensemble bearish ({ens_result.blended_score:.2f}, conf={ens_result.confidence:.2f})")
 
         if entry_score < p.buy_score_threshold:
             return Decision("HOLD", f"score below buy threshold ({entry_score:.2f})")
