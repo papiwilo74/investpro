@@ -1,296 +1,189 @@
-# Inversion Helper
+# InvestPro — Inversion Helper
 
-Dashboard y bot de apoyo para analisis tecnico, backtesting, machine learning, optimizacion de portafolio y paper trading con Alpaca.
+Bot de trading automatizado con inteligencia artificial, backtesting, optimización genética y risk management institucional.
 
-> Uso educativo. No es recomendacion financiera.
+## Arquitectura
 
-## Configuracion
+```
+investpro/
+├── api/            # FastAPI REST + autenticación JWT
+│   ├── routes/     # broker, market, analysis, backtest, portfolio, ml, advisor
+│   ├── auth.py     # JWT login
+│   ├── schemas.py  # Pydantic v2
+│   └── server.py   # App principal
+├── backtesting/    # WFO, Monte Carlo, validación estadística
+│   ├── validation.py
+│   ├── bot_engine.py
+│   └── engine.py
+├── bot/            # Core del bot
+│   ├── engine.py        # Orquestador principal
+│   ├── strategy.py      # TradingBrain + Kelly + Decision engine
+│   ├── risk.py          # RiskManager (correlación, circuit breaker, Kelly)
+│   ├── online_advisor.py# Q-learning para filtro de entradas
+│   ├── notifications.py # Telegram/Discord/log
+│   ├── performance_tracker.py  # Equity curve, rolling metrics
+│   ├── state_manager.py # Estado + daily orders vía SQLite
+│   └── market_regime.py # Filtro de régimen (SPY SMA + VIX)
+├── broker/         # Cliente Alpaca
+├── db/             # SQLAlchemy models + repositories
+├── ml/             # Machine Learning
+│   ├── ensemble.py         # Adaptive Ensemble (NUEVO)
+│   ├── train.py            # XGBoost per-ticker
+│   ├── neural_brain.py     # PyTorch NN (HOLD/BUY/SELL/SHORT/COVER)
+│   ├── rl.py               # RL exit agent (Q-learning)
+│   ├── lstm_model.py       # LSTM price forecaster
+│   ├── sentiment.py        # VADER news sentiment
+│   └── features.py         # Feature engineering
+├── indicators/     # Technical indicators + SignalGenerator
+├── portfolio/      # Markowitz optimization
+├── data/           # SQLite DBs, JSON state, model weights
+└── frontend/       # Vanilla JS SPA (Tailwind CSS)
+```
 
-1. Instala dependencias:
+## Stack
+
+| Componente | Tecnología |
+|------------|-----------|
+| Backend | Python 3.12, FastAPI, Uvicorn |
+| Base de datos | SQLite (x4), SQLAlchemy 2.0 |
+| ML | XGBoost, PyTorch, scikit-learn, hmmlearn |
+| Broker | Alpaca Markets API (Paper Trading) |
+| Frontend | Vanilla JS, Tailwind CSS, Lightweight Charts |
+| CI/CD | GitHub Actions, Render |
+| Notificaciones | Telegram Bot API, Discord Webhook |
+
+## Requisitos
+
+- Python 3.10+
+- Cuenta Alpaca (paper) — [alpaca.markets](https://alpaca.markets)
+- (Opcional) Bot de Telegram + Chat ID para notificaciones
+
+## Instalación
 
 ```bash
+git clone https://github.com/papiwilo74/investpro.git
+cd investpro
+python -m venv .venv
+.venv\Scripts\activate   # Windows
 pip install -r requirements.txt
 ```
 
-2. Copia `.env.example` a `.env` y configura tus credenciales de Alpaca paper:
+## Configuración
 
-```bash
-ALPACA_API_KEY=
-ALPACA_SECRET_KEY=
+Crear archivo `.env` en la raíz:
+
+```env
+ALPACA_API_KEY="tu-api-key"
+ALPACA_SECRET_KEY="tu-secret-key"
 ALPACA_BASE_URL=https://paper-api.alpaca.markets
 ALPACA_PAPER=true
+
+TELEGRAM_BOT_TOKEN="tu-token"    # opcional
+TELEGRAM_CHAT_ID="tu-chat-id"    # opcional
 ```
 
-## Comandos utiles
+## Uso
 
-### Instalacion y arranque
-
-Instala dependencias del proyecto:
+### Servidor Web (modo recomendado)
 
 ```bash
-pip install -r requirements.txt
+python -m uvicorn api.server:app --reload --port 8000
 ```
 
-Arranca la web app FastAPI + frontend:
+Abrir `http://localhost:8000` en el navegador.
+
+### Bot autónomo (CLI)
 
 ```bash
-python main.py --web
+python -m bot.engine --daemon       # Loop cada 10 min
+python -m bot.engine --intraday     # Loop cada 5 min (día de mercado)
+python -m bot.engine --ticker AAPL  # Modo single-ticker
 ```
 
-Abre la web app en otro puerto si el `8000` esta ocupado:
+### Backtesting
 
 ```bash
-python main.py --web --port 8080
+python -m backtesting.run --ticker AAPL --period 2y
+python -m backtesting.genetic       # Optimización genética
 ```
 
-### Modo Hedge Fund (Trading 100% Automático)
-
-Ejecutar el Bot Multi-Ticker en vivo (Escanea NVDA, AAPL, etc., y opera con Alpaca):
-```bash
-python bot/multi_daemon.py
-```
-
-Activar "Cazador Autónomo" (Escanea todo NASDAQ en busca de oportunidades desconocidas):
-```bash
-python bot/multi_daemon.py --auto-scan
-```
-
-Modo Alto Riesgo (Opera Opciones Financieras Calls/Puts):
-```bash
-python bot/multi_daemon.py --auto-scan --options
-```
-
-Forzar evolución de IA manual (Re-entrena la IA con datos frescos de hoy):
-```bash
-python main.py --train
-```
-
-Arranca el dashboard alternativo en Streamlit:
+### Entrenar ML
 
 ```bash
-python main.py --app
+python -m ml.train --ticker AAPL              # XGBoost
+python -m ml.train --ticker AAPL --optimize   # XGBoost + Grid Search
+python -m ml.neural_brain                     # Neural Trading Brain
 ```
 
-### Analisis de mercado
+## Endpoints API
 
-Analiza un ticker con indicadores, senales y backtest basico:
+| Ruta | Descripción |
+|------|-------------|
+| `GET /` | Frontend SPA |
+| `GET /api/watchlist` | Tickers de la watchlist |
+| `GET /api/market/{ticker}` | Datos de mercado + indicadores |
+| `GET /api/analysis/{ticker}/signals` | Señales técnicas + score compuesto |
+| `GET /api/advisor/{ticker}` | Asesor de inversiones IA |
+| `GET /api/ml/{ticker}` | Estado del modelo ML + predicción |
+| `POST /api/ml/{ticker}/train` | Entrenar XGBoost |
+| `GET /api/backtest/{ticker}` | Backtest completo |
+| `GET /api/backtest/{ticker}/validate` | Validación WFO + Monte Carlo |
+| `POST /api/backtest/genetic` | Optimización genética (async) |
+| `GET /api/backtest/genetic/{job_id}` | Estado del job genético |
+| `GET /api/broker/dashboard` | Dashboard completo del bot |
+| `POST /api/broker/bot/toggle` | Activar/detener bot |
+| `GET /api/ensemble/status` | Pesos y precisión del ensemble |
+| `GET /health` | Health check |
+
+## ML Ensemble
+
+El Adaptive Ensemble combina 5 fuentes de señal con pesos dinámicos que se ajustan según precisión reciente:
+
+| Modelo | Framework | Estado |
+|--------|-----------|--------|
+| XGBoost | sklearn/xgboost | ✅ Entrenado (7 tickers) |
+| Neural Trading Brain | PyTorch | ✅ Entrenado |
+| RL Exit Agent | Q-learning | ✅ Activo |
+| Online Advisor | Q-learning | ✅ Activo |
+| TA Clásico | Indicadores técnicos | ✅ Siempre activo |
+| LSTM Forecaster | PyTorch LSTM | 🔄 Pendiente |
+
+Los pesos se actualizan automáticamente cada 10 predicciones basado en accuracy por régimen (BULL/BEAR/LATERAL/HIGH_VOL).
+
+## Tests
 
 ```bash
-python main.py --ticker AAPL --period 1y
+pytest tests/ -v                    # Todos
+pytest tests/test_ensemble.py -v    # Ensemble
+pytest tests/test_auth.py -v        # JWT auth
+pytest tests/test_db.py -v          # Database
+pytest tests/test_kelly.py -v       # Kelly Calculator
+pytest tests/test_risk_manager.py -v # Risk Manager
 ```
 
-Analiza otro intervalo:
+## Despliegue
 
-```bash
-python main.py --ticker MSFT --period 6mo --interval 1d
-```
+El repositorio incluye `render.yaml` para despliegue automático en [Render](https://render.com).
 
-Optimiza un portafolio con varios tickers:
+Variables de entorno requeridas en Render:
+- `ALPACA_API_KEY`
+- `ALPACA_SECRET_KEY`
+- `ALPACA_BASE_URL`
+- `ALPACA_PAPER=true`
+- `TELEGRAM_BOT_TOKEN` (opcional)
+- `TELEGRAM_CHAT_ID` (opcional)
 
-```bash
-python main.py --portfolio AAPL,MSFT,NVDA,GOOGL --period 2y
-```
+## Estructura de Datos
 
-### Watchlist inteligente
+El bot mantiene 4 bases SQLite en `data/`:
 
-Escanea oportunidades en Nasdaq 100:
+| Base | Tablas principales |
+|------|--------------------|
+| `performance.sqlite3` | equity_snapshots, trade_log_telemetry, rolling_metrics |
+| `bot_state.sqlite3` | bot_state, open_positions, daily_orders |
+| `paper_journal.sqlite3` | paper_signals |
+| `inversion_helper.db` | kelly_trades, risk_state, advisor_state (SQLAlchemy) |
 
-```bash
-python main.py --scan-market --universe nasdaq100 --scan-limit 15
-```
+## Licencia
 
-Escanea oportunidades en acciones liquidas del S&P 500:
-
-```bash
-python main.py --scan-market --universe sp500 --scan-limit 15
-```
-```
-
-Escanea la watchlist pequena definida en `config.py`:
-
-```bash
-python main.py --scan-market --universe watchlist --scan-limit 10
-```
-
-Escanea todos los universos disponibles:
-
-```bash
-python main.py --scan-market --universe all --scan-limit 20
-```
-
-Escanea y guarda las oportunidades como senales paper auditables:
-
-```bash
-python main.py --scan-market --universe nasdaq100 --scan-limit 15 --record-paper-signals
-```
-
-El scanner filtra por liquidez, tendencia, volatilidad, precio y score tecnico. Tambien muestra por que acepta o rechaza cada ticker.
-
-### Modo seguro antes de dinero real
-
-Consulta si el paper trading tiene suficiente consistencia:
-
-```bash
-python main.py --paper-safety
-```
-
-Actualiza resultados de senales guardadas y luego muestra el filtro de seguridad:
-
-```bash
-python main.py --paper-safety --update-paper-outcomes
-```
-
-El modo seguro revisa:
-
-- Dias observados.
-- Senales cerradas.
-- Win rate.
-- Retorno promedio.
-- Si aun falta historial antes de pensar en dinero real.
-
-### Machine Learning
-
-Entrena un modelo ML para un ticker:
-
-```bash
-python main.py --train-ml AAPL --period 2y
-```
-
-Entrena y optimiza hiperparametros del modelo ML:
-
-```bash
-python main.py --train-ml AAPL --period 2y --optimize-ml
-```
-
-Entrena un agente de reinforcement learning:
-
-```bash
-python main.py --train-rl AAPL --period 2y
-```
-
-### Backtesting y optimizacion del bot
-
-Ejecuta backtest completo del bot:
-
-```bash
-python main.py --bot-backtest --ticker AAPL --period 2y
-```
-
-Ejecuta backtest con otro intervalo:
-
-```bash
-python main.py --bot-backtest --ticker NVDA --period 1y --interval 1d
-```
-
-Optimiza parametros del bot por grid search:
-
-```bash
-python main.py --optimize-bot --ticker AAPL --period 2y
-```
-
-### Broker y paper trading
-
-Valida conexion con Alpaca paper:
-
-```bash
-python main.py --paper-check
-```
-
-Arranca el bot en modo daemon 24/7:
-
-```bash
-python main.py --daemon
-```
-
-Arranca el bot daemon para un ticker especifico:
-
-```bash
-python main.py --daemon --ticker AAPL --interval 1d
-```
-
-Importante: el bot esta pensado para paper trading. Antes de operar dinero real, usa el modo seguro durante al menos 1-2 meses.
-
-## Endpoints utiles
-
-Watchlist fija:
-
-```text
-GET /api/watchlist
-```
-
-Datos de mercado:
-
-```text
-GET /api/market/AAPL?period=1y&interval=1d
-```
-
-Scanner inteligente:
-
-```text
-GET /api/market/scanner/opportunities?universe=nasdaq100&limit=15
-```
-
-Senales tecnicas:
-
-```text
-GET /api/analysis/AAPL/signals?period=1y&interval=1d
-```
-
-Estado del bot:
-
-```text
-GET /api/broker/bot/status
-```
-
-Activar o detener bot:
-
-```text
-POST /api/broker/bot/toggle
-```
-
-Senales paper guardadas:
-
-```text
-GET /api/broker/paper/signals
-```
-
-Resumen del paper trading:
-
-```text
-GET /api/broker/paper/summary
-```
-
-Actualizar resultados paper:
-
-```text
-POST /api/broker/paper/update-outcomes
-```
-
-Filtro de seguridad antes de dinero real:
-
-```text
-GET /api/broker/paper/safety-gate
-```
-
-## Seguridad del bot
-
-El bot esta bloqueado para live trading por defecto. Para arrancar desde la API o UI de Broker:
-
-- `ALPACA_PAPER` debe ser `true`.
-- Las credenciales deben conectar correctamente.
-- Se aplican limites de riesgo configurados en `config.py`.
-
-Controles actuales:
-
-- Tamano maximo por posicion.
-- Maximo de ordenes por dia.
-- Stop-loss.
-- Take-profit.
-- Trailing stop por ATR.
-- Tamano de posicion por volatilidad.
-- Filtro de tendencia por SMA200.
-- Filtro de RSI alto.
-- Confirmacion opcional por ML si existe modelo entrenado.
-- Scanner inteligente para evitar activos con baja liquidez, volatilidad mala o tendencia debil.
-- Bitacora paper en `data/paper_journal.sqlite3`.
-- Filtro de seguridad antes de considerar live trading.
+Uso personal. No apto para trading real sin validación exhaustiva.

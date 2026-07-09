@@ -82,3 +82,23 @@ class TestSignalGenerator:
             assert s.action in (Action.BUY, Action.SELL, Action.HOLD)
             assert 0.0 <= s.strength <= 1.0
             assert isinstance(s.reason, str)
+
+    def test_composite_score_bounds(self, dummy_with_indicators):
+        df = SignalGenerator.add_signal_columns(dummy_with_indicators)
+        score = SignalGenerator.composite_score(df)
+        assert -1.0 <= score <= 1.0
+
+    def test_composite_score_float(self, dummy_with_indicators):
+        df = SignalGenerator.add_signal_columns(dummy_with_indicators)
+        score = SignalGenerator.composite_score(df)
+        assert isinstance(score, float)
+
+    def test_empty_df_composite_score(self):
+        df = pd.DataFrame()
+        score = SignalGenerator.composite_score(df)
+        assert score == 0.0
+
+    def test_signal_generator_add_all_columns(self, dummy_with_indicators):
+        df = SignalGenerator.add_signal_columns(dummy_with_indicators)
+        expected_cols = {"sig_composite", "sig_momentum", "sig_volume", "sig_rsi", "sig_macd"}
+        assert expected_cols.issubset(set(df.columns))

@@ -92,3 +92,68 @@ class TestTradingBrain:
         decision = brain.decide(df=df, score=0.5, has_position=False, sentiment_label="BAJISTA")
         assert decision.action == "HOLD"
         assert "sentiment" in decision.reason.lower() or "News sentiment" in decision.reason
+
+    def test_ensemble_enabled_blends_signals(self):
+        params = StrategyParams(use_ensemble=True, use_ml_filter=False, buy_score_threshold=0.0)
+        brain = TradingBrain(params)
+        df = pd.DataFrame({"close": [105.0], "sma_200": [100.0], "rsi": [50.0], "adx": [25.0], "atr": [2.0]})
+        decision = brain.decide(df=df, score=0.3, has_position=False, ml_direction="ALCISTA", ml_probability=0.7, market_regime="BULL")
+        assert decision.action in ("BUY", "HOLD")
+
+    def test_ensemble_bearish_blocks_entry(self):
+        params = StrategyParams(use_ensemble=True, use_ml_filter=False, buy_score_threshold=-0.5)
+        brain = TradingBrain(params)
+        df = pd.DataFrame({"close": [105.0], "sma_200": [100.0], "rsi": [50.0], "adx": [25.0], "atr": [2.0]})
+        decision = brain.decide(df=df, score=-0.3, has_position=False, ml_direction="BEARISH", ml_probability=0.8, market_regime="BEAR")
+        # Ensemble bearish + high confidence should block
+        assert decision.action == "HOLD"
+
+    def test_position_state_should_exit_stop_loss(self):
+        from bot.strategy import PositionState
+        params = StrategyParams(stop_loss_pct=-0.05, use_rl_exits=False)
+        pos = PositionState(entry_price=100.0, entry_atr=2.0, params=params)
+        should_exit, reason = pos.should_exit(90.0, rsi=30.0)
+        assert should_exit is True
+        assert "stop-loss" in reason
+
+    def test_position_state_should_exit_take_profit(self):
+        from bot.strategy import PositionState
+        params = StrategyParams(take_profit_pct=0.10, use_rl_exits=False)
+        pos = PositionState(entry_price=100.0, entry_atr=2.0, params=params)
+        should_exit, reason = pos.should_exit(115.0, rsi=70.0)
+        assert should_exit is True
+        assert "take-profit" in reason
+
+    def test_position_state_update_extremes(self):
+        from bot.strategy import PositionState
+        params = StrategyParams()
+        pos = PositionState(entry_price=100.0, entry_atr=2.0, params=params)
+        pos.update_extremes(110.0)
+        assert pos.max_price == 110.0
+        pos.update_extremes(90.0)
+        assert pos.min_price == 90.0
+
+    def test_position_state_current_pnl_pct(self):
+        from bot.strategy import PositionState
+        params = StrategyParams()
+        pos = PositionState(entry_price=100.0, entry_atr=2.0, params=params)
+        assert pos.current_pnl_pct(110.0) == 0.10
+        assert pos.current_pnl_pct(90.0) == -0.10
+
+    def test_position_state_short_pnl(self):
+        from bot.strategy import PositionState
+        params = StrategyParams()
+        pos = PositionState(entry_price=100.0, entry_atr=2.0, params=params, side="SHORT")
+        assert abs(pos.current_pnl_pct(90.0) - 0.1111) < 0.01  # (100/90) - 1
+        assert abs(pos.current_pnl_pct(110.0) - (-0.0909)) < 0.01  # (100/110) - 1
+
+    def test_position_state_serialization_roundtrip(self):
+        from bot.strategy import PositionState
+        params = StrategyParams()
+        pos = PositionState(entry_price=100.0, entry_atr=2.0, params=params, side="LONG", entry_date="2024-01-01")
+        pos.update_extremes(110.0)
+        data = pos.to_dict()
+        restored = PositionState.from_dict(data, params)
+        assert restored.entry_price == 100.0
+        assert restored.max_price == 110.0
+        assert restored.side == "LONG"
