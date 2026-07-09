@@ -152,7 +152,7 @@ class BrokerConfig:
     trailing_stop_atr_mult: float = 3.5
     use_trailing_stop: bool = True
     min_ml_buy_probability: float = 0.55
-    max_daily_orders: int = 3
+    max_daily_orders: int = 20
     bot_active: bool = False
     # ── Apalancamiento (modo Hedge Fund para el bot web) ────────────
     leverage_enabled: bool = True       # Activado por defecto
