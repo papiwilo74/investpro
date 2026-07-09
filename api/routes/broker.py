@@ -307,7 +307,7 @@ async def get_ml_status():
     }
 
 
-@router.get("/dashboard", response_model=DashboardResponse)
+@router.get("/dashboard")
 async def get_broker_dashboard():
     """Endpoint batch: devuelve TODOS los datos del broker en 1 sola petición.
 
