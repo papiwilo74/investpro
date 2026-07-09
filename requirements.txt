@@ -29,6 +29,12 @@ torch==2.5.1
 gymnasium==0.29.1
 stable-baselines3==2.3.2
 
+# Base de datos
+sqlalchemy==2.0.51
+
+# Autenticación JWT
+python-jose[cryptography]==3.5.0
+
 # Validación y configuración
 pydantic==2.9.2
 pydantic-settings==2.6.1

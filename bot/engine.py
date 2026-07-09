@@ -13,6 +13,7 @@ import logging_config  # noqa: F401 — configura loguru al importar
 from bot.state_manager import BotStateManager
 from broker.alpaca_client import AlpacaClient
 from data.fetcher import DataFetcher
+from db import SessionLocal, init_db as init_database
 from indicators.technical import TechnicalIndicators
 from indicators.signals import SignalGenerator
 from ml.train import ModelTrainer
@@ -60,7 +61,19 @@ class TradingBot:
         self.sentiment = SentimentAnalyzer() if use_sentiment else None
         self.journal = SignalJournal(fetcher=self.fetcher)
         self.scanner = MarketScanner(fetcher=self.fetcher, journal=self.journal)
-        self.risk_manager = RiskManager(WEB_RISK_CONFIG if strategy_mode == "web" else None)
+        # ── Database ──────────────────────────────────────────────────
+        try:
+            init_database()
+            self._db_session = SessionLocal()
+            use_db = self._db_session is not None
+        except Exception:
+            self._db_session = None
+            use_db = False
+        # ───────────────────────────────────────────────────────────────
+        self.risk_manager = RiskManager(
+            WEB_RISK_CONFIG if strategy_mode == "web" else None,
+            session=self._db_session if use_db else None,
+        )
         self.risk_manager.set_alert_callback(lambda level, event, msg: notifier.send(event, msg, level))
         self.state = BotStateManager()
 
@@ -94,7 +107,8 @@ class TradingBot:
 
         self.brain = TradingBrain(params)
         self.market_regime = MarketRegimeFilter(fetcher=self.fetcher)
-        self.online_advisor = OnlineAdvisor() if strategy_mode == "web" else None
+        use_db = getattr(self, '_db_session', None) is not None
+        self.online_advisor = OnlineAdvisor(session=self._db_session if use_db else None) if strategy_mode == "web" else None
         self.mtf_filter = MTFFilter(fetcher=self.fetcher) if strategy_mode == "web" else None
         self.market_breadth = MarketBreadth(fetcher=self.fetcher) if strategy_mode == "web" else None
         self.macro_tracker = MacroTracker()
@@ -362,6 +376,11 @@ class TradingBot:
         self._log("Bot detenido.")
         self._save_position_states()
         notifier.bot_stopped("manual")
+        if self._db_session is not None:
+            try:
+                self._db_session.close()
+            except Exception:
+                pass
 
     def _run_loop_sync(self):
         asyncio.run(self._run_loop())

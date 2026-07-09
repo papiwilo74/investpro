@@ -8,15 +8,19 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from config import WATCHLIST
 from api.routes import market, analysis, backtest, portfolio, ml, advisor, broker
+from api.auth import register_auth_routes, get_current_user
 
 app = FastAPI(title="Inversion Helper API", version="2.0.0")
+
+# Registrar autenticación JWT
+register_auth_routes(app)
 
 # Habilitar CORS (restringido a origins conocidos en producción)
 app.add_middleware(
@@ -39,6 +43,7 @@ app.include_router(portfolio.router, prefix="/api/portfolio", tags=["Portfolio"]
 app.include_router(ml.router, prefix="/api/ml", tags=["Machine Learning"])
 app.include_router(advisor.router, prefix="/api/advisor", tags=["Advisor"])
 app.include_router(broker.router, prefix="/api/broker", tags=["Broker"])
+app.include_router(broker.public_router, prefix="/api/broker", tags=["Broker Public"])
 
 # Endpoint de Watchlist
 @app.get("/api/watchlist")

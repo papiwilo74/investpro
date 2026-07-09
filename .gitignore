@@ -68,3 +68,6 @@ Thumbs.db
 #  AGENTS (LOCAL ONLY)
 # ══════════════════════════════════════════════════════════
 .agents/
+
+data/inversion_helper.db
+

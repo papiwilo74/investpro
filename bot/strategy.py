@@ -10,9 +10,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
+from sqlalchemy.orm import Session
+
+from db.repositories import KellyRepository
 from ml.rl import RLExitAgent
 
 # Instancias globales para compatibilidad con código existente.
@@ -32,16 +36,35 @@ class KellyCalculator:
     p = win rate, b = avg_win / avg_loss
     Se usa Half-Kelly (50%) para reducir riesgo.
 
-    Persiste historial de trades en disco para no perderlo al reiniciar.
+    Soporta dos backends de persistencia:
+    - SQLAlchemy (recomendado): pasar session= al constructor
+    - JSON file (legacy): usa data/kelly_trades.json
     """
 
-    def __init__(self, fractional: float = 0.25, file_path: str = ""):
+    def __init__(self, fractional: float = 0.25, file_path: str = "",
+                 session: Session | None = None):
         self.fractional = fractional
         self.trades: list[float] = []
         self._file_path = file_path or str(Path(__file__).resolve().parent.parent / "data" / "kelly_trades.json")
-        self.load()
+        self._repo: KellyRepository | None = None
+        self._use_db = session is not None
+        if session is not None:
+            self._repo = KellyRepository(session)
+            self._load_from_db()
+        else:
+            self._load_from_json()
 
-    def load(self) -> None:
+    def _load_from_db(self) -> None:
+        if self._repo is None:
+            return
+        try:
+            self.trades = self._repo.get_all_trades()
+        except Exception as e:
+            import logging
+            logging.getLogger("inversion_helper.kelly").warning("Error cargando Kelly trades desde DB: %s", e)
+            self.trades = []
+
+    def _load_from_json(self) -> None:
         try:
             if Path(self._file_path).exists():
                 raw = Path(self._file_path).read_text(encoding="utf-8")
@@ -50,10 +73,18 @@ class KellyCalculator:
                 self.fractional = data.get("fractional", self.fractional)
         except Exception as e:
             import logging
-            logging.getLogger("inversion_helper.kelly").warning("Error cargando Kelly trades: %s", e)
+            logging.getLogger("inversion_helper.kelly").warning("Error cargando Kelly trades desde JSON: %s", e)
             self.trades = []
 
+    def load(self) -> None:
+        if self._use_db:
+            self._load_from_db()
+        else:
+            self._load_from_json()
+
     def save(self) -> None:
+        if self._use_db:
+            return
         try:
             Path(self._file_path).parent.mkdir(parents=True, exist_ok=True)
             data = {"trades": self.trades, "fractional": self.fractional}
@@ -64,10 +95,23 @@ class KellyCalculator:
 
     def record(self, pnl_pct: float) -> None:
         self.trades.append(pnl_pct)
-        self.save()
+        if self._use_db and self._repo is not None:
+            try:
+                self._repo.add_trade(pnl_pct, self.fractional)
+            except Exception as e:
+                import logging
+                logging.getLogger("inversion_helper.kelly").warning("Error guardando Kelly trade en DB: %s", e)
+        else:
+            self.save()
 
     def reset(self) -> None:
         self.trades.clear()
+        if self._use_db and self._repo is not None:
+            try:
+                self._repo.clear()
+            except Exception as e:
+                import logging
+                logging.getLogger("inversion_helper.kelly").warning("Error limpiando Kelly trades en DB: %s", e)
 
     @property
     def win_rate(self) -> float:

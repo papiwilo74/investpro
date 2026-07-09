@@ -30,6 +30,9 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from sqlalchemy.orm import Session
+
+from db.repositories import AdvisorRepository
 
 
 # ── Discretización de estado ─────────────────────────────────────────
@@ -92,6 +95,7 @@ class OnlineAdvisor:
         epsilon_min: float = 0.05,
         file_path: str | Path | None = None,
         min_samples_before_trust: int = 10,
+        session: Session | None = None,
     ) -> None:
         self.lr = learning_rate
         self.gamma = discount_factor
@@ -101,14 +105,34 @@ class OnlineAdvisor:
         self.min_samples_before_trust = min_samples_before_trust
 
         self._file_path = Path(file_path or Path(__file__).resolve().parent.parent / "data" / "online_advisor.json")
+        self._repo: AdvisorRepository | None = None
+        self._use_db = session is not None
         self.q_table: dict[str, list[float]] = {}
         self.visits: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
         self.rewards: dict[str, list[list[float]]] = defaultdict(lambda: [[], [], []])
         self.trade_log: list[dict] = []
         self.total_updates = 0
-        self.load()
+        if session is not None:
+            self._repo = AdvisorRepository(session)
+            self._load_from_db()
+        else:
+            self.load()
 
     # ── Persistencia ─────────────────────────────────────────────────
+
+    def _load_from_db(self) -> None:
+        if self._repo is None:
+            return
+        try:
+            self.q_table = self._repo.get_q_table()
+            visits_raw = self._repo.get_visits()
+            self.visits = defaultdict(lambda: [0, 0, 0], visits_raw)
+            rewards_raw = self._repo.get_rewards()
+            self.rewards = defaultdict(lambda: [[], [], []], rewards_raw)
+            self.total_updates = self._repo.get_total_updates()
+            self.trade_log = self._repo.get_trade_log()
+        except Exception as exc:
+            print(f"[OnlineAdvisor] Error cargando desde DB: {exc}")
 
     def load(self) -> None:
         try:
@@ -128,7 +152,25 @@ class OnlineAdvisor:
             self.rewards = defaultdict(lambda: [[], [], []])
             self.trade_log = []
 
+    def _save_to_db(self) -> None:
+        if self._repo is None:
+            return
+        try:
+            for state_key in list(self.q_table.keys()):
+                self._repo.save_state(
+                    state_key=state_key,
+                    q_values=self.q_table.get(state_key, [0.0, 0.0, 0.0]),
+                    visits=self.visits.get(state_key, [0, 0, 0]),
+                    rewards=self.rewards.get(state_key, [[], [], []]),
+                    total_updates=self.total_updates,
+                )
+        except Exception as exc:
+            print(f"[OnlineAdvisor] Error guardando en DB: {exc}")
+
     def save(self) -> None:
+        if self._use_db:
+            self._save_to_db()
+            return
         try:
             self._file_path.parent.mkdir(parents=True, exist_ok=True)
             data = {
@@ -264,6 +306,21 @@ class OnlineAdvisor:
             "vol": annual_volatility,
             "regime": market_regime,
         })
+
+        if self._use_db and self._repo is not None:
+            try:
+                self._repo.add_trade_log(
+                    state_key=key,
+                    action=action_taken,
+                    pnl_pct=pnl_pct,
+                    score=score,
+                    adx=adx,
+                    rsi=rsi,
+                    vol=annual_volatility,
+                    regime=market_regime,
+                )
+            except Exception as exc:
+                print(f"[OnlineAdvisor] Error guardando trade log en DB: {exc}")
 
         # Decaer epsilon lentamente
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)

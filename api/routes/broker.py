@@ -1,15 +1,20 @@
 from collections import defaultdict
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from api.utils import sanitize_for_json
+from api.schemas import BotConfig, BotStatus, DashboardResponse, HealthCheck, MLModelInfo, RiskConfigParams
+from api.auth import get_current_user
 from broker.alpaca_client import AlpacaClient
 from bot.engine import TradingBot
 from bot.safety import SignalJournal
 from bot.strategy import kelly_tracker, create_web_bot_strategy_params
 from config import BROKER_CONFIG, WEB_RISK_CONFIG
 
-router = APIRouter()
+# Router protegido (requiere JWT)
+router = APIRouter(dependencies=[Depends(get_current_user)])
+# Router público (health checks, etc.)
+public_router = APIRouter()
 
 # Bot web en modo conservador: LONG robusto, sin NN/RL/short/scalp.
 bot = TradingBot(strategy_mode="web")
@@ -303,7 +308,7 @@ async def get_ml_status():
     }
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=DashboardResponse)
 async def get_broker_dashboard():
     """Endpoint batch: devuelve TODOS los datos del broker en 1 sola petición.
 
@@ -416,7 +421,7 @@ async def get_broker_dashboard():
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/health")
+@public_router.get("/health", response_model=HealthCheck)
 async def get_health_dashboard():
     """Dashboard de salud del bot: estado consolidado de un vistazo.
 

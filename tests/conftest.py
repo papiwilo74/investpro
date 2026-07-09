@@ -7,6 +7,21 @@ sys.path.insert(0, str(project_root))
 import pytest
 import pandas as pd
 import numpy as np
+from sqlalchemy import text
+
+from db import init_db, SessionLocal, Base
+
+
+@pytest.fixture(autouse=True)
+def _clean_db():
+    init_db()
+    session = SessionLocal()
+    yield session
+    session.rollback()
+    for table in reversed(Base.metadata.sorted_tables):
+        session.execute(table.delete())
+    session.commit()
+    session.close()
 
 
 @pytest.fixture

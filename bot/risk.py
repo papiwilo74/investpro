@@ -16,8 +16,10 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from sqlalchemy.orm import Session
 
 from config import RISK_CONFIG, RiskConfig
+from db.repositories import RiskRepository
 
 logger = logging.getLogger("inversion_helper.risk")
 
@@ -62,7 +64,8 @@ class RiskCheck:
 
 
 class RiskManager:
-    def __init__(self, config: RiskConfig | None = None):
+    def __init__(self, config: RiskConfig | None = None, session: Session | None = None,
+                 file_path: str | None = None):
         self.config = config or RISK_CONFIG
         self._trade_history: list[dict] = []
         self._daily_pnl: list[float] = []
@@ -75,9 +78,15 @@ class RiskManager:
         self._account_liquidated: bool = False
         self._price_history: pd.DataFrame | None = None
         self._correlation_matrix: pd.DataFrame | None = None
-        self._file_path = Path(__file__).resolve().parent.parent / "data" / "risk_state.json"
-        self._alert_callback = None  # función(level, event, msg) para notificaciones externas
-        self.load()
+        self._file_path = Path(file_path) if file_path else Path(__file__).resolve().parent.parent / "data" / "risk_state.json"
+        self._alert_callback = None
+        self._repo: RiskRepository | None = None
+        self._use_db = session is not None
+        if session is not None:
+            self._repo = RiskRepository(session)
+            self._load_from_db()
+        else:
+            self.load()
 
     def set_alert_callback(self, callback):
         """Registra un callback para notificaciones externas (Telegram, etc.)."""
@@ -89,6 +98,25 @@ class RiskManager:
                 self._alert_callback(level, event, msg)
             except Exception:
                 pass
+
+    def _load_from_db(self) -> None:
+        if self._repo is None:
+            return
+        try:
+            state = self._repo.get_state()
+            self._consecutive_losses = state.get("consecutive_losses", 0)
+            self._initial_portfolio_value = state.get("initial_portfolio_value", self._portfolio_value)
+            cb = state.get("circuit_breaker_until")
+            if cb:
+                self._circuit_breaker_until = datetime.fromisoformat(cb)
+            self._portfolio_value = state.get("portfolio_value", 100_000.0)
+            self._account_liquidated = state.get("account_liquidated", False)
+            if not self._initial_portfolio_value or self._initial_portfolio_value <= 0:
+                self._initial_portfolio_value = self._portfolio_value
+            self._trade_history = self._repo.get_trade_records()
+            self._daily_pnl = self._repo.get_daily_pnl()
+        except Exception as exc:
+            logger.warning("No se pudo cargar estado de riesgo desde DB: %s", exc)
 
     def load(self) -> None:
         try:
@@ -110,6 +138,18 @@ class RiskManager:
             logger.warning("No se pudo cargar estado de riesgo: %s", exc)
 
     def save(self) -> None:
+        if self._use_db and self._repo is not None:
+            try:
+                self._repo.save_state(
+                    portfolio_value=self._portfolio_value,
+                    initial_portfolio_value=self._initial_portfolio_value,
+                    consecutive_losses=self._consecutive_losses,
+                    circuit_breaker_until=self._circuit_breaker_until,
+                    account_liquidated=self._account_liquidated,
+                )
+            except Exception as exc:
+                logger.warning("No se pudo guardar estado de riesgo en DB: %s", exc)
+            return
         try:
             self._file_path.parent.mkdir(parents=True, exist_ok=True)
             data = {
@@ -159,21 +199,54 @@ class RiskManager:
         else:
             self._consecutive_losses = 0
         self._daily_pnl.append(pnl_usd)
-        self.save()
+        if self._use_db and self._repo is not None:
+            try:
+                self._repo.add_trade_record(ticker, side, pnl_pct, pnl_usd)
+                self._repo.add_daily_pnl(pnl_usd)
+                self._repo.save_state(
+                    portfolio_value=self._portfolio_value,
+                    initial_portfolio_value=self._initial_portfolio_value,
+                    consecutive_losses=self._consecutive_losses,
+                    circuit_breaker_until=self._circuit_breaker_until,
+                    account_liquidated=self._account_liquidated,
+                )
+            except Exception as exc:
+                logger.warning("No se pudo guardar trade en DB: %s", exc)
+        else:
+            self.save()
 
     def reset_daily(self) -> None:
         today = date.today()
         if today != self._current_date:
             self._current_date = today
             self._daily_pnl.clear()
-            self.save()
+            if self._use_db and self._repo is not None:
+                try:
+                    self._repo.clear_daily_pnl()
+                except Exception as exc:
+                    logger.warning("No se pudo limpiar daily PnL en DB: %s", exc)
+            else:
+                self.save()
 
     def reset_weekly(self) -> None:
         self._trade_history.clear()
         self._daily_pnl.clear()
         self._consecutive_losses = 0
         self._circuit_breaker_until = None
-        self.save()
+        if self._use_db and self._repo is not None:
+            try:
+                self._repo.clear_all_trades()
+                self._repo.save_state(
+                    portfolio_value=self._portfolio_value,
+                    initial_portfolio_value=self._initial_portfolio_value,
+                    consecutive_losses=self._consecutive_losses,
+                    circuit_breaker_until=None,
+                    account_liquidated=self._account_liquidated,
+                )
+            except Exception as exc:
+                logger.warning("No se pudo resetear riesgo en DB: %s", exc)
+        else:
+            self.save()
 
     def kelly_suggestion(self, fractional: float = 0.25) -> dict[str, Any]:
         """Kelly Criterion basado en el historial real de trades (out-of-sample implícito)."""
