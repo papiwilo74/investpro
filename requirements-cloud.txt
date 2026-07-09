@@ -27,6 +27,12 @@ requests>=2.31
 xgboost>=2.0
 vaderSentiment>=3.3
 
+# Base de datos
+sqlalchemy>=2.0
+
+# Autenticación JWT
+python-jose[cryptography]>=3.5
+
 # Configuración
 pydantic>=2.7
 pydantic-settings>=2.4
