@@ -942,7 +942,7 @@ const Components = {
         ${items.join('')}
       </div>
     `;
-  }
+  },
 
   ensembleCard(status) {
     if (!status || !status.weights) {
