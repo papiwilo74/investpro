@@ -26,8 +26,12 @@ MODEL_DIR = Path(__file__).resolve().parent.parent / "ml" / "models"
 MODEL_PATH = MODEL_DIR / "lstm_price.pth"
 
 
-class PriceLSTM(nn.Module):
+class PriceLSTM(nn.Module if TORCH_AVAILABLE else object):
     def __init__(self, input_size=1, hidden_size=HIDDEN, num_layers=N_LAYERS, output_size=1):
+        if not TORCH_AVAILABLE:
+            self.hidden_size = hidden_size
+            self.num_layers = num_layers
+            return
         super().__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -35,6 +39,8 @@ class PriceLSTM(nn.Module):
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
+        if not TORCH_AVAILABLE:
+            return None
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
         out, _ = self.lstm(x, (h0, c0))
@@ -100,6 +106,8 @@ def train_lstm(ticker: str = "SPY", period: str = "5y") -> bool:
 
 
 def _load_or_create_model():
+    if not TORCH_AVAILABLE:
+        return None
     model = PriceLSTM()
     model.eval()
     if MODEL_PATH.exists():
