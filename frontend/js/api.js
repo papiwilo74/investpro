@@ -2,11 +2,41 @@ class ApiClient {
   constructor(baseUrl = '') {
     this.baseUrl = baseUrl;
     this.cache = new Map();
+    this._token = localStorage.getItem('jwt_token') || null;
+  }
+
+  get isAuthenticated() {
+    return !!this._token;
+  }
+
+  async login(username, password) {
+    const res = await fetch(`${this.baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Credenciales inválidas');
+    }
+    const data = await res.json();
+    this._token = data.access_token;
+    localStorage.setItem('jwt_token', this._token);
+    return data;
+  }
+
+  logout() {
+    this._token = null;
+    localStorage.removeItem('jwt_token');
   }
 
   async _fetch(url, options = {}) {
     try {
-      const response = await fetch(url, options);
+      const headers = { ...(options.headers || {}) };
+      if (this._token) {
+        headers['Authorization'] = `Bearer ${this._token}`;
+      }
+      const response = await fetch(url, { ...options, headers });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || `Error del servidor (Código ${response.status})`);
