@@ -21,10 +21,10 @@ _ALGORITHM = "HS256"
 _ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "480"))  # 8h
 
 # Usuario único: leer de entorno o default para desarrollo
-_ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+_ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "papiwilo74")
 _ADMIN_PASSWORD_HASH = os.environ.get(
     "ADMIN_PASSWORD_HASH",
-    hashlib.sha256("inversion_helper_dev".encode()).hexdigest(),
+    hashlib.sha256("blu301350".encode()).hexdigest(),
 )
 
 
