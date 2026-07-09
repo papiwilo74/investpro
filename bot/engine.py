@@ -1,44 +1,240 @@
 import asyncio
-import logging
-from datetime import datetime, timedelta
+import signal
+import threading
+import time
+from datetime import datetime
+from typing import Any
 
+import numpy as np
+import pandas as pd
+from loguru import logger
+
+import logging_config  # noqa: F401 — configura loguru al importar
+from bot.state_manager import BotStateManager
 from broker.alpaca_client import AlpacaClient
 from data.fetcher import DataFetcher
 from indicators.technical import TechnicalIndicators
 from indicators.signals import SignalGenerator
 from ml.train import ModelTrainer
 from ml.sentiment import SentimentAnalyzer
-from config import BROKER_CONFIG, WATCHLIST
+from config import BROKER_CONFIG, WEB_RISK_CONFIG, WATCHLIST, intraday_indicator_params
+from bot.risk import RiskManager
 from bot.scanner import MarketScanner
 from bot.safety import SignalJournal
-from bot.strategy import StrategyParams, TradingBrain
-
-logger = logging.getLogger("inversion_helper.bot")
+from bot.strategy import StrategyParams, TradingBrain, Decision, create_web_bot_strategy_params
+from bot.market_regime import MarketRegimeFilter
+from bot.online_advisor import OnlineAdvisor
+from bot.mtf_filter import MTFFilter
+from bot.market_breadth import MarketBreadth
+from bot.macro_calendar import MacroTracker
+from bot.hedging import HedgeMonitor
+from bot.notifications import notifier
+from bot.performance_tracker import PerformanceTracker
 
 
 class TradingBot:
-    """Automated trading bot using shared strategy and risk controls."""
+    """Automated trading bot using shared strategy and risk controls.
 
-    def __init__(self, use_sentiment: bool = False):
+    Modo ``web`` (recomendado para la UI):
+      - Estrategia LONG conservadora.
+      - Sin NN, RL, short, scalping ni mean-reversion.
+      - Risk manager con correlación real de retornos.
+
+    Modo ``legacy``:
+      - Conserva el comportamiento anterior para compatibilidad con CLI.
+    """
+
+    def __init__(
+        self,
+        use_sentiment: bool = False,
+        intraday: bool = False,
+        use_neural_brain: bool = False,
+        strategy_mode: str = "legacy",
+        strategy_params: StrategyParams | None = None,
+    ):
+        self.intraday = intraday
+        self.strategy_mode = strategy_mode
         self.client = AlpacaClient()
         self.fetcher = DataFetcher()
         self.trainer = ModelTrainer()
         self.sentiment = SentimentAnalyzer() if use_sentiment else None
         self.journal = SignalJournal(fetcher=self.fetcher)
         self.scanner = MarketScanner(fetcher=self.fetcher, journal=self.journal)
-        self.brain = TradingBrain(StrategyParams(
-            buy_score_threshold=BROKER_CONFIG.buy_score_threshold,
-            sell_score_threshold=BROKER_CONFIG.sell_score_threshold,
-            stop_loss_pct=BROKER_CONFIG.stop_loss_pct,
-            take_profit_pct=BROKER_CONFIG.take_profit_pct,
-            max_position_size_pct=BROKER_CONFIG.max_position_size_pct,
-            min_ml_buy_probability=BROKER_CONFIG.min_ml_buy_probability,
-        ))
+        self.risk_manager = RiskManager(WEB_RISK_CONFIG if strategy_mode == "web" else None)
+        self.risk_manager.set_alert_callback(lambda level, event, msg: notifier.send(event, msg, level))
+        self.state = BotStateManager()
+
+        if strategy_params is not None:
+            params = strategy_params
+        elif strategy_mode == "web":
+            params = create_web_bot_strategy_params()
+            # El modo web ignora explícitamente los flags agresivos aunque vengan por otro lado
+            params = self._sanitize_web_params(params)
+            # Aplicar Hall of Fame del optimizador genético si existe
+            params, hof_info = self._load_hof_params(params)
+            if hof_info:
+                logger.info("Hall of Fame cargado: fitness=%.4f, %d params aplicados",
+                            hof_info["best_fitness"], hof_info["params_applied"])
+                self._hof_info = hof_info
+            else:
+                self._hof_info = None
+        else:
+            params = StrategyParams(
+                buy_score_threshold=BROKER_CONFIG.buy_score_threshold,
+                sell_score_threshold=BROKER_CONFIG.sell_score_threshold,
+                stop_loss_pct=BROKER_CONFIG.stop_loss_pct,
+                take_profit_pct=BROKER_CONFIG.take_profit_pct,
+                max_position_size_pct=BROKER_CONFIG.max_position_size_pct,
+                min_ml_buy_probability=BROKER_CONFIG.min_ml_buy_probability,
+                use_intraday_scalp=intraday,
+                use_session_filter=intraday,
+                use_vwap_filter=intraday,
+                use_neural_brain=use_neural_brain,
+            )
+
+        self.brain = TradingBrain(params)
+        self.market_regime = MarketRegimeFilter(fetcher=self.fetcher)
+        self.online_advisor = OnlineAdvisor() if strategy_mode == "web" else None
+        self.mtf_filter = MTFFilter(fetcher=self.fetcher) if strategy_mode == "web" else None
+        self.market_breadth = MarketBreadth(fetcher=self.fetcher) if strategy_mode == "web" else None
+        self.macro_tracker = MacroTracker()
+        self.hedge_monitor = HedgeMonitor() if strategy_mode == "web" else None
+        self.perf_tracker = PerformanceTracker() if strategy_mode == "web" else None
         self.is_running = False
-        self._task = None
+        self._thread = None
         self.logs = []
-        self._orders_today = 0
+        self._orders_today = self.state.get_daily_order_count()
         self._orders_date = datetime.now().date()
+        self._last_connection_check = 0.0
+        self._connection_ok = False
+        self._strategy_params = params
+        self._last_market_regime: dict | None = None
+        self._pending_advisor_decisions: dict[str, dict] = {}
+
+        # ── Registrar signal handlers para graceful shutdown ──────────
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+
+    def _restore_state(self) -> int:
+        """Recupera posiciones abiertas de Alpaca y restaura su estado (trailing stops, etc.)."""
+        try:
+            if not self.client.is_connected():
+                return 0
+            alpaca_positions = self.client.get_positions()
+            if not alpaca_positions:
+                return 0
+            count = self.brain.restore_positions(self.state, alpaca_positions)
+            if count > 0:
+                self._log(f"RESTORE: {count} posiciones restauradas desde Alpaca + SQLite")
+            return count
+        except Exception as exc:
+            logger.warning("Error restaurando posiciones: %s", exc)
+            return 0
+
+    def _save_position_states(self) -> None:
+        """Persiste el estado de todas las posiciones activas (trailing, breakeven, etc.) a SQLite."""
+        try:
+            for ticker, pos in self.brain._positions.items():
+                alpaca = {p.get("symbol", ""): p for p in self.client.get_positions()}
+                qty = float(alpaca.get(ticker, {}).get("qty", 0))
+                self.brain.save_position_state(self.state, ticker, qty)
+        except Exception as exc:
+            logger.warning("Error guardando estado de posiciones: %s", exc)
+
+    @staticmethod
+    def _sanitize_web_params(params: StrategyParams) -> StrategyParams:
+        """Garantiza que el modo web no ejecute estrategias de alto riesgo."""
+        return StrategyParams(
+            **{
+                **params.__dict__,
+                "use_neural_brain": False,
+                "use_rl_exits": False,
+                "use_momentum_scalp": False,
+                "use_mean_reversion": False,
+                "use_contrarian_dip": False,
+                "use_intraday_scalp": False,
+                "use_session_filter": False,
+                "use_vwap_filter": False,
+                "use_partial_take_profit": False,
+                "use_donchian_breakout": False,
+                "min_ml_buy_probability": 0.999,
+                "use_ml_filter": False,
+            }
+        )
+
+    @staticmethod
+    def _load_hof_params(base_params: StrategyParams) -> tuple[StrategyParams, dict | None]:
+        """Carga los mejores parámetros del Hall of Fame del optimizador genético.
+
+        Fusiona los parámetros del HOF con los base del modo web, respetando
+        las restricciones de seguridad (solo se sobrescriben parámetros numéricos
+        de sizing/thresholds, nunca se activan flags peligrosos).
+
+        Returns:
+            (params, hof_info) donde hof_info describe qué se cargó o None si no hay HOF.
+        """
+        try:
+            import json
+            from pathlib import Path
+            hof_path = Path(__file__).resolve().parent.parent / "data" / "genetic_hall_of_fame.json"
+            if not hof_path.exists():
+                return base_params, None
+
+            raw = hof_path.read_text(encoding="utf-8")
+            hof = json.loads(raw)
+            if not hof:
+                return base_params, None
+
+            best = hof[0]
+            best_params = best.get("params", {})
+            best_fitness = best.get("fitness", 0)
+            best_gen = best.get("generation", 0)
+
+            if not best_params or best_fitness <= 0:
+                return base_params, None
+
+            # Solo sobrescribir parámetros numéricos seguros (sizing, thresholds, stops)
+            safe_keys = {
+                "buy_score_threshold", "sell_score_threshold",
+                "stop_loss_pct", "take_profit_pct",
+                "trailing_stop_atr_mult", "max_buy_rsi",
+                "max_position_size_pct", "min_position_size_pct",
+                "atr_risk_pct", "short_score_threshold",
+                "short_min_adx", "short_position_size_pct",
+                "short_momentum_threshold",
+                "trail_atr_base", "trail_atr_tight",
+                "min_adx_to_trade", "signal_smoothing_periods",
+                "confirmation_bars", "confirmation_min_ratio",
+                "max_hold_days", "breakeven_trigger_pct",
+                "target_annual_volatility", "cautious_regime_score_boost",
+            }
+
+            merged = dict(base_params.__dict__)
+            applied = {}
+            for key, val in best_params.items():
+                if key in safe_keys and isinstance(val, (int, float)):
+                    merged[key] = val
+                    applied[key] = val
+
+            # Aplicar sanitización web por seguridad
+            new_params = TradingBot._sanitize_web_params(StrategyParams(**merged))
+
+            hof_info = {
+                "source": "genetic_hall_of_fame",
+                "best_fitness": round(best_fitness, 4),
+                "generation": best_gen,
+                "params_applied": len(applied),
+                "applied_keys": list(applied.keys()),
+            }
+            return new_params, hof_info
+
+        except Exception as exc:
+            logger.warning("Error cargando Hall of Fame: %s", exc)
+            return base_params, None
+
+    def _signal_handler(self, signum, frame):
+        logger.warning("Signal {} recibido — deteniendo bot...", signum)
+        self.stop()
 
     def _log(self, msg: str):
         time_str = datetime.now().strftime("%H:%M:%S")
@@ -57,18 +253,8 @@ class TradingBot:
         except (TypeError, ValueError):
             return "N/A"
 
-    def _decision_context(
-        self,
-        ticker: str,
-        df,
-        score: float,
-        decision,
-        has_position: bool,
-        pnl_pct: float,
-        ml_direction: str | None,
-        ml_probability: float | None,
-        sentiment_label: str | None,
-    ) -> str:
+    def _decision_context(self, ticker, df, score, decision, has_position, pnl_pct,
+                          ml_direction, ml_probability, sentiment_label) -> str:
         last = df.iloc[-1]
         close = float(last["close"])
         sma_200 = last.get("sma_200")
@@ -105,35 +291,48 @@ class TradingBot:
         self._reset_daily_order_counter_if_needed()
         return self._orders_today < BROKER_CONFIG.max_daily_orders
 
-    def _record_order(self):
+    def _record_order(self, ticker: str, side: str, qty: float, price: float | None = None,
+                      order_id: str | None = None, leverage: float = 1.0, confidence: float = 0.0):
         self._reset_daily_order_counter_if_needed()
         self._orders_today += 1
+        self.state.record_order(ticker, side, qty, price, order_id,
+                                leverage=leverage, confidence=confidence)
 
     def _get_ml_prediction(self, ticker: str, df) -> tuple[str | None, float | None]:
+        # En modo web no usamos ML para evitar overfitting / modelos obsoletos
+        if self.strategy_mode == "web":
+            return None, None
         model_data = self.trainer.load_model(ticker)
         if model_data is None:
             self._log(f"ML sin modelo para {ticker}")
             return None, None
-
         try:
             prediction = self.trainer.predict_trend(ticker, df)
         except Exception as e:
             self._log(f"ML error para {ticker}: {e}")
             return None, None
-
         return prediction["direction"], float(prediction["probability"])
 
     def _get_sentiment(self, ticker: str) -> str | None:
         if self.sentiment is None:
             return None
         try:
-            # Nota: analyze_news no está implementado en SentimentAnalyzer,
-            # por lo que usamos analyze directamente con un texto dummy o
-            # delegamos a quien lo implemente.  Por ahora retornamos None.
-            return None
+            news = self.client.get_news(ticker, limit=5)
+            if not news:
+                return None
+            result = self.sentiment.analyze_news_batch(news)
+            return result.get("global_label")
         except Exception as e:
             self._log(f"Sentiment error para {ticker}: {e}")
             return None
+
+    def _check_connection(self) -> bool:
+        """Cachea el estado de conexión durante 30 segundos para no saturar Alpaca."""
+        now = time.time()
+        if now - self._last_connection_check > 30:
+            self._connection_ok = self.client.is_connected()
+            self._last_connection_check = now
+        return self._connection_ok
 
     def is_market_open(self) -> bool:
         if not self.client.client:
@@ -150,46 +349,161 @@ class TradingBot:
             return
         self.is_running = True
         BROKER_CONFIG.bot_active = True
-        self._task = asyncio.create_task(self._run_loop())
+        self.state.set_state("bot_status", "running")
+        self._restore_state()
+        self._thread = threading.Thread(target=self._run_loop_sync, daemon=True)
+        self._thread.start()
         self._log("Bot iniciado.")
+        notifier.bot_started(self.strategy_mode)
 
     def stop(self):
         self.is_running = False
         BROKER_CONFIG.bot_active = False
-        if self._task:
-            self._task.cancel()
+        self.state.set_state("bot_status", "stopped")
         self._log("Bot detenido.")
+        self._save_position_states()
+        notifier.bot_stopped("manual")
 
-    async def _run_loop(self, ticker: str | None = None, interval: str = "1d", sleep_seconds: int = 1200):
-        """Background loop to check signals and trade."""
+    def _run_loop_sync(self):
+        asyncio.run(self._run_loop())
+
+    def _check_critical_alerts(self) -> None:
+        """Verifica condiciones críticas y envía notificaciones si es necesario.
+
+        Evita spam con rate-limit de 15 min por tipo de alerta.
+        """
+        try:
+            acc = self.client.get_account_summary()
+            if not acc:
+                return
+
+            equity = acc.get("equity", 0)
+            pnl_pct_today = float(acc.get("pnl_pct_today", 0)) / 100.0
+            now = time.time()
+            cooldown = 900  # 15 min entre alertas del mismo tipo
+
+            def _should_alert(key: str) -> bool:
+                last = self._last_critical_alerts.get(key, 0)
+                return (now - last) > cooldown
+
+            def _alert_sent(key: str):
+                self._last_critical_alerts[key] = now
+
+            # 1. Pérdida diaria > -2%
+            if pnl_pct_today <= -0.02 and _should_alert("daily_loss"):
+                notifier.send("daily_loss",
+                    f"Pérdida del día: {pnl_pct_today:.2%}\nEquity: ${equity:,.0f}\nEl leverage se ha reducido a x1.0.",
+                    "critical")
+                _alert_sent("daily_loss")
+
+            # 2. Pérdida diada > -1% (warning, no critical)
+            elif pnl_pct_today <= -0.01 and _should_alert("daily_loss_warn"):
+                notifier.send("daily_loss_warn",
+                    f"⚠️ Pérdida del día: {pnl_pct_today:.2%}\nEquity: ${equity:,.0f}\nLeverage reducido a la mitad.",
+                    "warning")
+                _alert_sent("daily_loss_warn")
+
+            # 3. Circuit breaker activo
+            risk_dict = self.risk_manager.to_dict()
+            if risk_dict.get("circuit_breaker_active") and _should_alert("circuit_breaker"):
+                remaining = risk_dict.get("circuit_breaker_remaining_min", 0)
+                notifier.circuit_breaker(
+                    f"Circuit breaker activo ({remaining} min restantes). "
+                    f"Pérdidas consecutivas: {risk_dict.get('consecutive_losses', 0)}."
+                )
+                _alert_sent("circuit_breaker")
+
+            # 4. Piso de cuenta
+            if risk_dict.get("account_liquidated") and _should_alert("account_floor"):
+                floor_pct = risk_dict.get("account_floor_pct", 0.85)
+                initial = risk_dict.get("initial_portfolio_value", 0)
+                notifier.account_floor(equity, initial * floor_pct)
+                _alert_sent("account_floor")
+
+            # 5. Drawdown no realizado excedido
+            ok_dd, dd_msg = self.risk_manager.check_unrealized_drawdown()
+            if not ok_dd and _should_alert("unrealized_dd"):
+                notifier.send("unrealized_dd", dd_msg, "warning")
+                _alert_sent("unrealized_dd")
+
+        except Exception as exc:
+            logger.warning("Error en check_critical_alerts: %s", exc)
+
+    async def _run_loop(self, ticker: str | None = None, interval: str = "1d", sleep_seconds: int = 600):
+        retrain_day = -1
+        consecutive_errors = 0
+        self._last_critical_alerts: dict[str, float] = {}  # event → timestamp del último alert
         while self.is_running:
             try:
-                if not self.client.is_connected():
+                today = datetime.now().day
+                if today != retrain_day:
+                    retrain_day = today
+                    if self.strategy_mode != "web":
+                        self._log("Verificando modelos ML para re-entreno...")
+                        ml_tickers = [ticker] if ticker else WATCHLIST
+                        for t in ml_tickers:
+                            try:
+                                if self.trainer.retrain_if_stale(t, max_age_days=7):
+                                    self._log(f"ML re-entrenado para {t}")
+                            except Exception as e:
+                                self._log(f"Error re-entrenando {t}: {e}")
+
+                if not self._check_connection():
                     self._log("Broker no conectado. Reintentando en 60s...")
+                    consecutive_errors += 1
                     await asyncio.sleep(60)
                     continue
 
                 if not self.is_market_open():
                     self._log("Mercado cerrado. Esperando...")
+                    consecutive_errors = 0
                     await asyncio.sleep(300)
                     continue
 
+                # ── Production safeguards: drawdown + macro + hedge + telemetry ──
+                self._check_unrealized_drawdown()
+                self._check_critical_alerts()
+
+                if self.strategy_mode == "web":
+                    macro = self._check_macro_panic()
+                    if macro and macro.get("panic_mode"):
+                        self._log(f"MACRO PANIC: VIX={macro.get('vix_level')} — suspendiendo nuevas entradas")
+
+                    hedge = self._check_hedge()
+                    if hedge and hedge.get("status") == "PANIC":
+                        self._log(f"HEDGE PANIC: SPY {hedge['drop_pct']:+.2%} — vendiendo posiciones correlacionadas")
+                        await self._execute_hedge()
+
+                    # ── Regime Rotation: LONG/SHORT según mercado ────────
+                    await self._manage_rotation_hedge()
+
+                    self._daily_telemetry_snapshot()
+
+                self._save_position_states()
+
+                # ── DCA escalonado: ejecutar 2ªs tranches pendientes ──
+                await self._process_pending_tranches()
+
                 self._log("Ejecutando escaneo de mercado...")
                 if ticker:
-                    await self._scan_ticker(ticker, interval)
+                    await self._evaluate_and_trade(ticker, interval, single_ticker=True)
                 else:
-                    await self.scan_and_trade()
+                    await self._scan_and_trade_universe(interval)
+
+                consecutive_errors = 0
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self._log(f"Error en loop principal: {e}")
+                consecutive_errors += 1
+                logger.exception("Error en loop principal: {}", e)
+                self._log(f"ERROR loop principal: {e}")
 
             self._log(f"Escaneo finalizado. Durmiendo {sleep_seconds // 60} minutos.")
             await asyncio.sleep(sleep_seconds)
 
-    async def _scan_ticker(self, ticker: str, interval: str = "1d"):
-        """Scan a single ticker (daemon-style)."""
+    async def _scan_and_trade_universe(self, interval: str = "1d"):
+        """Escanea el universo y evalúa cada ticker con el mismo pipeline unificado."""
         acc = self.client.get_account_summary()
         if not acc:
             return
@@ -197,26 +511,87 @@ class TradingBot:
         buying_power = acc.get("buying_power", 0.0)
         equity = acc.get("equity", 0.0)
         positions = {p["symbol"]: p for p in self.client.get_positions()}
+        self._update_risk_state(equity, positions)
 
+        scan_result = self.scanner.scan(
+            universe="nasdaq100" if self.strategy_mode == "web" else "nasdaq100",
+            period="1y",
+            interval="1d",
+            limit=10,
+            include_rejected=False,
+        )
+        scan_tickers = [c.ticker for c in scan_result.accepted]
+        if scan_tickers:
+            self._log(f"Scanner inteligente: {', '.join(scan_tickers[:10])}")
+        else:
+            self._log("Scanner sin oportunidades; usando watchlist de respaldo.")
+            scan_tickers = WATCHLIST
+
+        for t in scan_tickers:
+            if not self.is_running:
+                break
+            if not self._can_place_order():
+                self._log(f"Limite diario de ordenes alcanzado ({BROKER_CONFIG.max_daily_orders}).")
+                break
+            invested = await self._evaluate_and_trade(
+                t, "1d", single_ticker=False,
+                buying_power=buying_power, equity=equity, positions=positions,
+            )
+            if invested and invested > 0:
+                buying_power -= invested
+            await asyncio.sleep(2)
+
+    async def _evaluate_and_trade(
+        self,
+        ticker: str,
+        interval: str = "1d",
+        single_ticker: bool = False,
+        buying_power: float | None = None,
+        equity: float | None = None,
+        positions: dict[str, dict] | None = None,
+    ) -> float:
+        """Pipeline unificado de análisis + ejecución para un ticker.
+
+        Retorna el monto invertido en USD (0.0 si no se ejecutó compra).
+        """
+        invested = 0.0
         try:
-            df = self.fetcher.get_data(ticker, period="1y", interval=interval)
-            if df.empty:
-                return
+            # Cargar estado de cuenta si no se proporcionó
+            if buying_power is None or equity is None or positions is None:
+                acc = self.client.get_account_summary()
+                if not acc:
+                    return 0.0
+                buying_power = acc.get("buying_power", 0.0)
+                equity = acc.get("equity", 0.0)
+                positions = {p["symbol"]: p for p in self.client.get_positions()}
+                self._update_risk_state(equity, positions)
 
-            df = TechnicalIndicators.add_all(df)
+            period = "7d" if self.intraday else ("3mo" if not single_ticker else "1y")
+            use_intraday = self.intraday
+            if single_ticker and interval in ("5m", "15m", "30m", "1h"):
+                use_intraday = True
+                period = "7d"
+
+            df = self.fetcher.get_data(ticker, period=period, interval=interval)
+            if df.empty:
+                return 0.0
+
+            df = TechnicalIndicators.add_all(df, intraday=use_intraday)
             df = SignalGenerator.add_signal_columns(df)
             score = SignalGenerator.composite_score(df)
             last_close = float(df["close"].iloc[-1])
-
-            if not self._can_place_order():
-                self._log(f"Limite diario de ordenes alcanzado.")
-                return
 
             position = positions.get(ticker)
             has_position = position is not None
             pnl_pct = float(position.get("unrealized_plpc", 0.0)) if position else 0.0
             ml_direction, ml_probability = self._get_ml_prediction(ticker, df)
             sentiment_label = self._get_sentiment(ticker)
+
+            ticker_regime = TradingBrain._infer_market_regime(df)
+            weekly_trend = TradingBrain._infer_weekly_trend(df)
+
+            # Filtro de mercado amplio (SPY/VIX)
+            market_regime = self._check_market_regime()
 
             decision = self.brain.decide(
                 df=df,
@@ -226,162 +601,756 @@ class TradingBot:
                 ml_direction=ml_direction,
                 ml_probability=ml_probability,
                 sentiment_label=sentiment_label,
+                ticker=ticker,
+                weekly_trend=weekly_trend,
+                market_regime=ticker_regime,
             )
 
             self._log(self._decision_context(
-                ticker=ticker,
-                df=df,
-                score=score,
-                decision=decision,
-                has_position=has_position,
-                pnl_pct=pnl_pct,
-                ml_direction=ml_direction,
-                ml_probability=ml_probability,
+                ticker=ticker, df=df, score=score, decision=decision,
+                has_position=has_position, pnl_pct=pnl_pct,
+                ml_direction=ml_direction, ml_probability=ml_probability,
                 sentiment_label=sentiment_label,
             ))
 
             if decision.action == "BUY" and not has_position:
-                max_invest = equity * decision.position_size_pct
-                invest_amount = min(max_invest, buying_power)
-                if invest_amount > last_close:
-                    qty = int(invest_amount // last_close)
-                    self._log(
-                        f"ORDEN BUY {ticker}: qty={qty} | inversion=${qty * last_close:,.2f} | "
-                        f"poder=${buying_power:,.2f} | razon={decision.reason}"
-                    )
-                    res = self.client.place_market_order(ticker, qty, "BUY")
-                    if res.get("status") == "success":
-                        self._record_order()
-                        self._log(f"EJECUTADA BUY {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')}")
-                    else:
-                        self._log(f"Error enviando orden para {ticker}: {res.get('msg')}")
+                # Filtro Multi-Timeframe: bloquea si el semanal es bajista o no hay momentum
+                mtf_result = self._check_mtf(ticker, df)
+                if mtf_result and not mtf_result.passed:
+                    self._log(f"MTF BLOQUEA BUY {ticker}: {mtf_result.block_reason}")
+                    return 0.0
+                if mtf_result and mtf_result.passed:
+                    self._log(f"MTF CONFIRMA {ticker}: semanal={mtf_result.details.get('weekly_trend')}, "
+                             f"VWAP={mtf_result.daily_above_vwap}, ADX/DI={mtf_result.adx_strong}")
 
-            elif decision.action == "SELL" and has_position:
-                qty = position["qty"]
-                self._log(
-                    f"ORDEN SELL {ticker}: qty={qty} | pnl={pnl_pct:.2%} | razon={decision.reason}"
-                )
-                res = self.client.place_market_order(ticker, qty, "SELL")
-                if res.get("status") == "success":
-                    self._record_order()
-                    self._log(f"EJECUTADA SELL {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')}")
+                passed, checks = self._pre_trade_checklist(ticker, score, decision, market_regime)
+                self._log(f"CHECKLIST {ticker}: {' | '.join(checks)}")
+                if passed:
+                    last = df.iloc[-1]
+                    # Consultar Online Learning Advisor (solo en modo web)
+                    advisor_decision = self._get_advisor_decision(ticker, df, score, market_regime)
+                    if advisor_decision:
+                        self._log(
+                            f"ONLINE ADVISOR {ticker}: accion={advisor_decision['action']} "
+                            f"conf={advisor_decision['confidence']:.1%} razon={advisor_decision['reason']}"
+                        )
+                        if advisor_decision["action"] == "BLOCK":
+                            self._log(f"ONLINE ADVISOR BLOQUEA BUY {ticker}")
+                            return 0.0
+                        # Aplicar multiplicador de sizing
+                        if advisor_decision["action"] == "REDUCE":
+                            decision = Decision(
+                                action=decision.action,
+                                reason=f"{decision.reason} | advisor: REDUCE",
+                                confidence=decision.confidence,
+                                position_size_pct=decision.position_size_pct * 0.5,
+                                side=decision.side,
+                                partial_exit_fraction=decision.partial_exit_fraction,
+                            )
+                        # Guardar contexto para entrenamiento online
+                        self._pending_advisor_decisions[ticker] = {
+                            "score": score,
+                            "adx": float(last.get("adx", 20.0)) if pd.notna(last.get("adx")) else 20.0,
+                            "rsi": float(last.get("rsi", 50.0)) if pd.notna(last.get("rsi")) else 50.0,
+                            "annual_vol": self._estimate_annual_volatility(df),
+                            "market_regime": market_regime.get("regime", "FAVORABLE"),
+                            "action": advisor_decision["action"],
+                        }
+
+                    invested = await self._execute_buy(ticker, decision, last_close, equity, buying_power, positions, df) or 0.0
                 else:
-                    self._log(f"Error enviando orden para {ticker}: {res.get('msg')}")
+                    self._log(f"CHECKLIST RECHAZA BUY {ticker}")
+            elif decision.action == "SHORT" and not has_position:
+                # ── SHORT entry: MTF inverso + checklist específico ──────
+                mtf_result = self._check_mtf_short(ticker, df)
+                if mtf_result and not mtf_result.passed:
+                    self._log(f"MTF BLOQUEA SHORT {ticker}: {mtf_result.block_reason}")
+                    return 0.0
+                if mtf_result and mtf_result.passed:
+                    self._log(f"MTF CONFIRMA SHORT {ticker}: {mtf_result.block_reason}")
+
+                passed, checks = self._pre_trade_checklist(ticker, score, decision, market_regime, side="SHORT")
+                self._log(f"CHECKLIST SHORT {ticker}: {' | '.join(checks)}")
+                if passed:
+                    invested = await self._execute_short(ticker, decision, last_close, equity, buying_power, positions, df)
+                else:
+                    self._log(f"CHECKLIST RECHAZA SHORT {ticker}")
+            elif decision.action in ("SELL", "COVER") and has_position:
+                await self._execute_sell(ticker, decision, position, equity, pnl_pct)
 
         except Exception as e:
-            self._log(f"Error analizando {ticker}: {e}")
+            logger.exception("Error analizando %s: %s", ticker, e)
+            self._log(f"ERROR analizando {ticker}: {e}")
 
-    async def scan_and_trade(self):
-        """Scans watchlist and places orders based on strategy decisions."""
-        acc = self.client.get_account_summary()
-        if not acc:
+        return invested
+
+    def _update_risk_state(self, equity: float, positions: dict[str, dict]) -> None:
+        self.risk_manager.set_portfolio_value(equity)
+        self.risk_manager.set_positions(list(positions.values()))
+        self.risk_manager.reset_daily()
+        # Precargar historial de precios para correlación real (últimos 90 días)
+        try:
+            price_history = self._load_price_history_for_correlation(list(positions.keys()))
+            self.risk_manager.set_price_history(price_history)
+        except Exception as e:
+            logger.warning("No se pudo cargar historial para correlación: %s", e)
+
+    def _load_price_history_for_correlation(self, symbols: list[str]) -> pd.DataFrame | None:
+        """Carga precios de cierre de los símbolos de interés para calcular correlaciones."""
+        if not symbols:
+            return None
+        frames = {}
+        for sym in symbols:
+            try:
+                df = self.fetcher.get_data(sym, period="3mo", interval="1d")
+                if not df.empty and "close" in df.columns:
+                    frames[sym] = df["close"]
+            except Exception:
+                continue
+        if len(frames) < 2:
+            return None
+        return pd.DataFrame(frames).ffill().dropna()
+
+    def _check_market_regime(self) -> dict:
+        """Verifica el régimen de mercado (SPY/VIX) y cachea el resultado."""
+        try:
+            regime = self.market_regime.get_regime()
+            self._last_market_regime = regime.to_dict()
+            return self._last_market_regime
+        except Exception as e:
+            logger.warning("Error obteniendo régimen de mercado: %s", e)
+            return {"regime": "FAVORABLE", "can_trade_long": True, "reason": "fallback"}
+
+    def _check_mtf(self, ticker: str, df: pd.DataFrame):
+        """Filtro Multi-Timeframe: bloquea entradas contra tendencia semanal."""
+        if not self.mtf_filter:
+            return None
+        try:
+            return self.mtf_filter.evaluate(ticker, df)
+        except Exception as e:
+            logger.warning("Error en MTF para %s: %s", ticker, e)
+            return None
+
+    def _check_mtf_short(self, ticker: str, df: pd.DataFrame):
+        """Filtro Multi-Timeframe para SHORT: semanal bajista, debajo de VWAP, -DI > +DI."""
+        if not self.mtf_filter:
+            return None
+        try:
+            return self.mtf_filter.evaluate_short(ticker, df)
+        except Exception as e:
+            logger.warning("Error en MTF short para %s: %s", ticker, e)
+            return None
+
+    def _check_market_breadth(self) -> dict | None:
+        """Market Breadth: salud del mercado amplio (leading indicator)."""
+        if not self.market_breadth:
+            return None
+        try:
+            return self.market_breadth.to_dict()
+        except Exception as e:
+            logger.warning("Error en Market Breadth: %s", e)
+            return None
+
+    def _check_unrealized_drawdown(self) -> None:
+        """Verifica drawdown de posiciones abiertas y loguea advertencia."""
+        try:
+            ok, msg = self.risk_manager.check_unrealized_drawdown()
+            if not ok:
+                self._log(f"UNREALIZED DD: {msg}")
+        except Exception as exc:
+            logger.warning("Error en check de drawdown no realizado: %s", exc)
+
+    def _check_macro_panic(self) -> dict | None:
+        """Verifica el estado macro (VIX/TNX) para detección de pánico."""
+        try:
+            if self.macro_tracker:
+                return self.macro_tracker.get_macro_status()
+        except Exception as exc:
+            logger.warning("Error en MacroTracker: %s", exc)
+        return None
+
+    def _check_hedge(self) -> dict | None:
+        """Verifica si SPY está en pánico para activar hedging."""
+        try:
+            if self.hedge_monitor:
+                return self.hedge_monitor.check_market_state()
+        except Exception as exc:
+            logger.warning("Error en HedgeMonitor: %s", exc)
+        return None
+
+    async def _execute_hedge(self) -> None:
+        """Vende posiciones durante un pánico de mercado."""
+        try:
+            positions = self.client.get_positions()
+            if not positions:
+                return
+            for pos in positions:
+                ticker = pos.get("symbol", "")
+                qty = int(float(pos.get("qty", 0)))
+                current_price = float(pos.get("current_price", 0))
+                if qty <= 0 or current_price <= 0:
+                    continue
+                self._log(f"HEDGE SELL {ticker}: qty={qty}")
+                res = self.client.place_smart_order(ticker, qty, "SELL", current_price, use_limit=False)
+                if res.get("status") == "success":
+                    self.state.remove_position(ticker)
+                    notifier.panic(0, f"Vendido {ticker} por hedge automático")
+        except Exception as exc:
+            logger.exception("Error ejecutando hedge: %s", exc)
+
+    async def _manage_rotation_hedge(self) -> None:
+        """Rotación LONG/SHORT: compra/vende SH como cobertura según el régimen de mercado.
+
+        - FAVORABLE: vender SH si está en cartera (no necesita cobertura)
+        - DETERIORATING: comprar SH al 15% del portafolio
+        - UNHEALTHY: comprar SH al 25% del portafolio + solo shorts individuales
+        """
+        try:
+            breadth = self._check_market_breadth()
+            if not breadth:
+                return
+
+            level = breadth.get("level", "HEALTHY")
+            positions = {p["symbol"]: p for p in self.client.get_positions()}
+            acc = self.client.get_account_summary()
+            equity = acc.get("equity", 0)
+            if equity <= 0:
+                return
+
+            sh_position = positions.get("SH")
+            sh_qty = float(sh_position.get("qty", 0)) if sh_position else 0
+            sh_price = float(sh_position.get("current_price", 0)) if sh_position else 0
+
+            # Obtener precio de SH
+            sh_df = self.fetcher.get_data("SH", period="5d", interval="1d")
+            sh_current = float(sh_df["close"].iloc[-1]) if not sh_df.empty else 0
+
+            if level in ("DETERIORATING", "UNHEALTHY"):
+                # Necesitamos cobertura SH
+                target_pct = 0.25 if level == "UNHEALTHY" else 0.15
+                target_value = equity * target_pct
+                current_sh_value = sh_qty * sh_price if sh_qty > 0 and sh_price > 0 else 0
+
+                if current_sh_value < target_value * 0.8 and sh_current > 0:
+                    # Comprar más SH
+                    missing = target_value - current_sh_value
+                    buy_qty = int(missing // sh_current)
+                    if buy_qty > 0 and self._can_place_order():
+                        self._log(f"ROTATION: Breadth {level}, comprando SH como cobertura ({target_pct:.0%})")
+                        res = self.client.place_smart_order("SH", buy_qty, "BUY", sh_current, use_limit=True)
+                        if res.get("status") == "success":
+                            notifier.send("rotation", f"🛡️ Cobertura SH comprada: {buy_qty} @ ${sh_current:.2f} ({target_pct:.0%} portafolio)", "info")
+            elif level in ("HEALTHY", "NEUTRAL"):
+                # No necesitamos SH — vender si está en cartera
+                if sh_qty > 0 and sh_current > 0:
+                    self._log(f"ROTATION: Breadth {level}, vendiendo cobertura SH")
+                    res = self.client.place_smart_order("SH", int(sh_qty), "SELL", sh_current, use_limit=True)
+                    if res.get("status") == "success":
+                        self.state.remove_position("SH")
+                        notifier.send("rotation", f"✅ Cobertura SH vendida: mercado sano", "info")
+
+        except Exception as exc:
+            logger.warning("Error en rotation hedge: %s", exc)
+
+    def _daily_telemetry_snapshot(self) -> None:
+        """Guarda snapshot diario del portafolio para telemetría."""
+        if not self.perf_tracker:
+            return
+        try:
+            acc = self.client.get_account_summary()
+            if not acc:
+                return
+            positions = self.client.get_positions()
+            equity = acc.get("equity", 0)
+            cash = acc.get("cash", 0)
+            exposure = sum(float(p.get("market_value", 0)) for p in positions)
+            total_trades = len(self.risk_manager._trade_history)
+
+            self.perf_tracker.snapshot(
+                equity=equity,
+                cash=cash,
+                exposure=exposure / equity if equity > 0 else 0,
+                num_positions=len(positions),
+                daily_pnl_pct=acc.get("pnl_pct_today", 0) / 100 if acc.get("pnl_pct_today") else 0,
+                total_trades=total_trades,
+            )
+            self.perf_tracker.compute_rolling_metrics()
+        except Exception as exc:
+            logger.warning("Error en telemetría diaria: %s", exc)
+
+    def _log_trade_telemetry(self, ticker: str, side: str, entry_date: str = None,
+                              exit_reason: str = None, pnl_pct: float = 0, pnl_usd: float = 0) -> None:
+        """Registra trade en el sistema de telemetría."""
+        if not self.perf_tracker:
+            return
+        try:
+            today = datetime.now().isoformat()
+            hold_days = None
+            if entry_date and exit_reason:
+                try:
+                    entry = datetime.fromisoformat(str(entry_date).split("T")[0] if "T" in str(entry_date) else str(entry_date))
+                    hold_days = (datetime.now() - entry).days
+                except Exception:
+                    pass
+            self.perf_tracker.log_trade(
+                ticker=ticker, side=side,
+                entry_date=entry_date, exit_date=today,
+                pnl_pct=pnl_pct, pnl_usd=pnl_usd,
+                hold_days=hold_days, exit_reason=exit_reason,
+            )
+        except Exception as exc:
+            logger.warning("Error en telemetría de trade: %s", exc)
+
+    def _get_advisor_decision(
+        self,
+        ticker: str,
+        df: pd.DataFrame,
+        score: float,
+        market_regime: dict,
+    ) -> dict | None:
+        """Consulta al Online Learning Advisor si está disponible."""
+        if not self.online_advisor:
+            return None
+        last = df.iloc[-1]
+        adx = float(last.get("adx", 20.0)) if pd.notna(last.get("adx")) else 20.0
+        rsi = float(last.get("rsi", 50.0)) if pd.notna(last.get("rsi")) else 50.0
+        annual_vol = self._estimate_annual_volatility(df)
+        regime = market_regime.get("regime", "FAVORABLE")
+        return self.online_advisor.advise(
+            score=score,
+            adx=adx,
+            rsi=rsi,
+            annual_volatility=annual_vol,
+            market_regime=regime,
+            allow_exploration=True,
+        )
+
+    def _estimate_annual_volatility(self, df: pd.DataFrame) -> float:
+        """Estimación simple de volatilidad anualizada desde los retornos log."""
+        try:
+            if df.empty or len(df) < 5:
+                return 0.20
+            log_returns = np.log(df["close"] / df["close"].shift(1)).dropna()
+            if len(log_returns) < 2:
+                return 0.20
+            # Asumiendo timeframe diario; ajustar raíz del período
+            return float(log_returns.std() * np.sqrt(252))
+        except Exception:
+            return 0.20
+
+    def _pre_trade_checklist(self, ticker: str, score: float, decision: Any, market_regime: dict, side: str = "LONG") -> tuple[bool, list[str]]:
+        """Checklist obligatorio antes de ejecutar una compra o short."""
+        p = self._strategy_params
+        checks: list[str] = []
+        passed = True
+        is_short = (side == "SHORT" or (hasattr(decision, 'side') and decision.side == "SHORT"))
+
+        # 0. Market Breadth (global — salud del mercado amplio)
+        breadth = self._check_market_breadth()
+        if breadth:
+            if is_short:
+                # Shorts permitidos en breadth DEGENERATING/UNHEALTHY (mercado débil)
+                if breadth.get("level") in ("DETERIORATING", "UNHEALTHY"):
+                    checks.append(f"✅ Market Breadth {breadth.get('level')}: favorable para SHORT")
+                elif not breadth.get("can_trade", True):
+                    checks.append(f"⚠️ Breadth {breadth.get('level')}: shorts permitidos con cautela")
+                else:
+                    checks.append(f"⚠️ Market Breadth {breadth.get('level')}: mercado sano, short requiere confirmación fuerte")
+            else:
+                if not breadth.get("can_trade", True):
+                    checks.append(f"❌ Market Breadth {breadth.get('level')}: {breadth.get('reason')}")
+                    passed = False
+                else:
+                    checks.append(f"✅ Market Breadth {breadth.get('level')}: OK")
+
+        # 1. Régimen de mercado
+        if is_short:
+            # Shorts: régimen UNFAVORABLE es bueno, FAVORABLE requiere cautela extra
+            regime = market_regime.get("regime", "FAVORABLE")
+            if regime == "FAVORABLE" and score > p.short_score_threshold:
+                checks.append(f"⚠️ Régimen {regime}: mercado alcista, short requiere score < {p.short_score_threshold}")
+            else:
+                checks.append(f"✅ Régimen {regime}: OK para SHORT")
+        else:
+            if not market_regime.get("can_trade_long", True):
+                checks.append(f"❌ Régimen {market_regime.get('regime')}: {market_regime.get('reason')}")
+                passed = False
+            else:
+                checks.append(f"✅ Régimen {market_regime.get('regime')}: OK")
+
+        # 2. Score mínimo
+        if is_short:
+            if score > p.short_score_threshold:
+                checks.append(f"❌ Score {score:.2f} > máximo SHORT {p.short_score_threshold}")
+                passed = False
+            else:
+                checks.append(f"✅ Score {score:.2f} <= máximo SHORT {p.short_score_threshold}")
+        else:
+            min_score = p.buy_score_threshold
+            if market_regime.get("regime") == "CAUTIOUS":
+                min_score += p.cautious_regime_score_boost
+                checks.append(f"⚠️ Régimen cauteloso: score mínimo elevado a {min_score:.2f}")
+
+            if score < min_score:
+                checks.append(f"❌ Score {score:.2f} < mínimo {min_score:.2f}")
+                passed = False
+            else:
+                checks.append(f"✅ Score {score:.2f} >= mínimo {min_score:.2f}")
+
+        # 3. Confianza
+        if decision.confidence < 0.5:
+            checks.append(f"❌ Confianza {decision.confidence:.2f} < 0.5")
+            passed = False
+        else:
+            checks.append(f"✅ Confianza {decision.confidence:.2f} >= 0.5")
+
+        # 4. Tamaño de posición válido
+        if decision.position_size_pct <= 0:
+            checks.append(f"❌ Tamaño de posición inválido")
+            passed = False
+        else:
+            checks.append(f"✅ Tamaño objetivo {decision.position_size_pct:.1%}")
+
+        return passed, checks
+
+    # ── APALANCAMIENTO DINÁMICO x2-x3 ──────────────────────────────────
+
+    def _compute_leverage(self, decision: Any, equity: float, positions: dict) -> float:
+        """Calcula el leverage dinámico x2-x3 según confianza, degradado por riesgo.
+
+        Nunca baja de 1.0. Si leverage_disabled en config → retorna 1.0.
+        """
+        cfg = BROKER_CONFIG
+        if not cfg.leverage_enabled:
+            return 1.0
+
+        base = cfg.min_leverage + (decision.confidence * (cfg.max_leverage - cfg.min_leverage))
+        leverage = base
+
+        # Degradar por pérdida del día
+        try:
+            acc = self.client.get_account_summary()
+            daily_pnl_pct = float(acc.get("pnl_pct_today", 0.0)) / 100.0
+            if daily_pnl_pct <= cfg.leverage_daily_loss_hard_pct:
+                self._log(f"🛡️ Pérdida día {daily_pnl_pct:.2%} → leverage x1.0 (sin apalancar)")
+                return 1.0
+            if daily_pnl_pct <= cfg.leverage_daily_loss_soft_pct:
+                leverage *= 0.5
+                self._log(f"⚠️ Pérdida día {daily_pnl_pct:.2%} → leverage reducido x{leverage:.1f}")
+        except Exception:
+            pass
+
+        # Degradar por drawdown no realizado
+        try:
+            pos_list = list(positions.values()) if isinstance(positions, dict) else list(positions)
+            if pos_list:
+                plpcs = [float(p.get("unrealized_plpc", 0.0)) for p in pos_list]
+                avg_unrealized = sum(plpcs) / len(plpcs)
+                if avg_unrealized <= cfg.leverage_unrealized_soft_pct:
+                    leverage *= 0.6
+                    self._log(f"⚠️ Unrealized avg {avg_unrealized:.2%} → leverage x{leverage:.1f}")
+        except Exception:
+            pass
+
+        return max(1.0, min(cfg.max_leverage, leverage))
+
+    # ── DCA ESCALONADO ──────────────────────────────────────────────────
+
+    def _add_pending_tranche(self, ticker: str, remaining_usd: float, side: str,
+                             leverage: float, confidence: float, entry_price: float) -> None:
+        tranches = self.state.get_state("pending_tranches", {}) or {}
+        tranches[ticker.upper()] = {
+            "remaining_usd": float(remaining_usd),
+            "side": side,
+            "leverage": float(leverage),
+            "confidence": float(confidence),
+            "entry_price": float(entry_price),
+            "created_at": datetime.now().isoformat(),
+        }
+        self.state.set_state("pending_tranches", tranches)
+
+    def _clear_pending_tranche(self, ticker: str) -> None:
+        tranches = self.state.get_state("pending_tranches", {}) or {}
+        tranches.pop(ticker.upper(), None)
+        self.state.set_state("pending_tranches", tranches)
+
+    async def _process_pending_tranches(self) -> None:
+        """Ejecuta la 2ª tranche del DCA si la señal sigue favorable."""
+        tranches = self.state.get_state("pending_tranches", {}) or {}
+        if not tranches:
             return
 
-        buying_power = acc.get("buying_power", 0.0)
-        equity = acc.get("equity", 0.0)
-        positions = {p["symbol"]: p for p in self.client.get_positions()}
-        scan_result = self.scanner.scan(universe="nasdaq100", period="1y", interval="1d", limit=10, include_rejected=False)
-        scan_tickers = [c.ticker for c in scan_result.accepted]
-        if scan_tickers:
-            self._log(f"Scanner inteligente: {', '.join(scan_tickers[:10])}")
-        else:
-            self._log("Scanner sin oportunidades; usando watchlist de respaldo.")
-            scan_tickers = WATCHLIST
+        open_symbols = [p["symbol"] for p in self.client.get_positions()]
+        cfg = BROKER_CONFIG
+        updated = dict(tranches)
 
-        for ticker in scan_tickers:
-            if not self.is_running:
-                break
+        for ticker, info in list(tranches.items()):
+            remaining_usd = float(info.get("remaining_usd", 0))
+            entry_price = float(info.get("entry_price", 0))
+            if remaining_usd <= 0 or entry_price <= 0:
+                updated.pop(ticker, None)
+                continue
 
-            try:
-                df = self.fetcher.get_data(ticker, period="3mo", interval="1d")
-                if df.empty:
-                    continue
+            if ticker not in open_symbols:
+                self._log(f"DCA cancelado {ticker}: posición cerrada")
+                updated.pop(ticker, None)
+                continue
 
-                df = TechnicalIndicators.add_all(df)
-                df = SignalGenerator.add_signal_columns(df)
-                score = SignalGenerator.composite_score(df)
-                last_close = float(df["close"].iloc[-1])
+            live_price = self.client.get_latest_price(ticker, fallback=entry_price)
+            if not live_price or live_price <= 0:
+                continue
 
-                if not self._can_place_order():
-                    self._log(f"Limite diario de ordenes alcanzado ({BROKER_CONFIG.max_daily_orders}).")
-                    break
+            drop = (live_price / entry_price) - 1.0
+            if drop <= cfg.dca_cancel_drop_pct:
+                self._log(f"DCA cancelado {ticker}: precio cayó {drop:.2%} desde entrada")
+                updated.pop(ticker, None)
+                continue
 
-                position = positions.get(ticker)
-                has_position = position is not None
-                pnl_pct = float(position.get("unrealized_plpc", 0.0)) if position else 0.0
-                ml_direction, ml_probability = self._get_ml_prediction(ticker, df)
-                sentiment_label = self._get_sentiment(ticker)
+            qty = int(remaining_usd / live_price)
+            if qty <= 0:
+                continue
 
-                decision = self.brain.decide(
-                    df=df,
-                    score=score,
-                    has_position=has_position,
-                    position_pnl_pct=pnl_pct,
-                    ml_direction=ml_direction,
-                    ml_probability=ml_probability,
-                    sentiment_label=sentiment_label,
-                    ticker=ticker,
+            self._log(f"DCA 2ª tranche {ticker}: {qty} @ ${live_price:.2f} (caída {drop:+.2%})")
+            res = self.client.place_smart_order(
+                ticker, qty, "BUY", live_price, use_limit=True, limit_offset_pct=0.005
+            )
+            if res.get("status") == "success":
+                fill = res.get("filled_avg_price", live_price)
+                self._record_order(
+                    ticker, "BUY", qty, fill, res.get("order_id"),
+                    leverage=float(info.get("leverage", 1.0)),
+                    confidence=float(info.get("confidence", 0.0)),
                 )
+            updated.pop(ticker, None)
 
-                self._log(self._decision_context(
-                    ticker=ticker,
-                    df=df,
-                    score=score,
-                    decision=decision,
-                    has_position=has_position,
+        self.state.set_state("pending_tranches", updated)
+
+    async def _execute_buy(
+        self,
+        ticker: str,
+        decision: Any,
+        last_close: float,
+        equity: float,
+        buying_power: float,
+        positions: dict[str, dict],
+        df: pd.DataFrame | None = None,
+    ) -> float:
+        """Ejecuta una orden de compra con apalancamiento x2-x3 y DCA escalonado."""
+        if not self._can_place_order():
+            self._log(f"Limite diario de ordenes alcanzado.")
+            return 0.0
+
+        # ── Apalancamiento dinámico x2-x3 (degradado por riesgo) ──────
+        leverage = self._compute_leverage(decision, equity, positions)
+        cfg = BROKER_CONFIG
+
+        # ── Precio en vivo del broker (snapshot) ───────────────────────
+        live_price = self.client.get_latest_price(ticker, fallback=last_close)
+        ref_price = live_price if live_price and live_price > 0 else last_close
+
+        # Sizing: position_size_pct del cerebro × leverage
+        max_invest = equity * decision.position_size_pct * leverage
+        invest_amount = min(max_invest, buying_power)
+        if invest_amount <= ref_price:
+            return 0.0
+
+        # Hard cap de exposición total (ajustado por leverage)
+        current_exposure = sum(float(p.get("market_value", 0)) for p in positions.values())
+        new_pct = (current_exposure + invest_amount) / equity if equity > 0 else 1.0
+        exposure_cap = min(0.90, 0.35 * leverage) if cfg.leverage_enabled else 0.35
+        if new_pct > exposure_cap:
+            self._log(
+                f"EXPOSICIÓN BLOQUEA BUY {ticker}: {new_pct:.1%} > {exposure_cap:.0%} "
+                f"(actual={current_exposure/equity:.1%} + nueva={invest_amount/equity:.1%})"
+            )
+            return 0.0
+
+        # DCA escalonado: primera tranche ahora, segunda tras confirmación
+        first_tranche = cfg.dca_first_tranche if cfg.leverage_enabled else 1.0
+        first_alloc = invest_amount * first_tranche
+
+        risk_check = self.risk_manager.check_entry(ticker, "BUY", first_alloc)
+        if not risk_check.approved:
+            self._log(f"RIESGO BLOQUEA BUY {ticker}: {'; '.join(risk_check.reasons)}")
+            return 0.0
+        if risk_check.warnings:
+            for w in risk_check.warnings:
+                self._log(f"RIESGO ADVERTENCIA {ticker}: {w}")
+
+        qty = int(first_alloc // ref_price)
+        if qty <= 0:
+            return 0.0
+
+        lev_tag = f" x{leverage:.1f}" if cfg.leverage_enabled and leverage > 1.0 else ""
+        self._log(
+            f"ORDEN BUY {ticker}{lev_tag}: qty={qty} | inversion=${qty * ref_price:,.2f} | "
+            f"poder=${buying_power:,.2f} | razon={decision.reason}"
+        )
+        res = self.client.place_smart_order(ticker, qty, "BUY", ref_price, use_limit=True, limit_offset_pct=0.005)
+        if res.get("status") == "success":
+            fill_price = res.get("filled_avg_price", ref_price)
+            self._record_order(ticker, "BUY", qty, fill_price, res.get("order_id"),
+                               leverage=leverage, confidence=decision.confidence)
+            self._log(f"EJECUTADA BUY {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')}")
+            self.state.save_position(ticker, decision.side, fill_price, qty=qty)
+            if df is not None:
+                self.brain.on_position_opened(ticker, fill_price, df)
+            self.brain.save_position_state(self.state, ticker, qty)
+            if df is not None:
+                self._log_trade_telemetry(ticker, "BUY", entry_date=str(df.index[-1]) if len(df) > 0 else None)
+            notifier.new_buy(ticker, qty, fill_price, qty * fill_price)
+
+            # Programar 2ª tranche del DCA
+            if cfg.leverage_enabled and first_tranche < 1.0:
+                remaining = invest_amount * (1.0 - first_tranche)
+                if remaining > 0:
+                    self._add_pending_tranche(ticker, remaining, decision.side,
+                                              leverage, decision.confidence, fill_price)
+                    self._log(f"DCA: 2ª tranche (${remaining:,.0f}) programada para {ticker}")
+            return qty * fill_price
+        else:
+            self._log(f"Error enviando orden para {ticker}: {res.get('msg')}")
+            return 0.0
+
+    async def _execute_short(
+        self,
+        ticker: str,
+        decision: Any,
+        last_close: float,
+        equity: float,
+        buying_power: float,
+        positions: dict[str, dict],
+        df: pd.DataFrame,
+    ) -> float:
+        """Ejecuta una venta en corto (short sell) con apalancamiento x2-x3."""
+        if not self._can_place_order():
+            self._log(f"Limite diario de ordenes alcanzado (SHORT)")
+            return 0.0
+
+        # ── Apalancamiento dinámico x2-x3 ──────────────────────────────
+        leverage = self._compute_leverage(decision, equity, positions)
+        cfg = BROKER_CONFIG
+
+        # ── Precio en vivo del broker ──────────────────────────────────
+        live_price = self.client.get_latest_price(ticker, fallback=last_close)
+        ref_price = live_price if live_price and live_price > 0 else last_close
+
+        max_invest = equity * decision.position_size_pct * leverage
+        invest_amount = min(max_invest, buying_power * 0.5)
+        if invest_amount <= ref_price:
+            return 0.0
+
+        # Hard cap: shorts limitados (ajustado por leverage)
+        current_exposure = sum(float(p.get("market_value", 0)) for p in positions.values())
+        new_pct = (current_exposure + invest_amount) / equity if equity > 0 else 1.0
+        short_cap = min(0.50, 0.25 * leverage) if cfg.leverage_enabled else 0.25
+        if new_pct > short_cap:
+            self._log(f"EXPOSICIÓN BLOQUEA SHORT {ticker}: {new_pct:.1%} > {short_cap:.0%}")
+            return 0.0
+
+        # Limite de shorts simultáneos
+        short_count = sum(1 for p in positions.values() if p.get("side", "LONG") == "SHORT")
+        if short_count >= 2:
+            self._log(f"SHORT BLOQUEADO: máximo 2 shorts simultáneos (actual: {short_count})")
+            return 0.0
+
+        risk_check = self.risk_manager.check_entry(ticker, "SHORT", invest_amount)
+        if not risk_check.approved:
+            self._log(f"RIESGO BLOQUEA SHORT {ticker}: {'; '.join(risk_check.reasons)}")
+            return 0.0
+        if risk_check.warnings:
+            for w in risk_check.warnings:
+                self._log(f"RIESGO ADVERTENCIA SHORT {ticker}: {w}")
+
+        qty = int(invest_amount // ref_price)
+        if qty <= 0:
+            return 0.0
+
+        lev_tag = f" x{leverage:.1f}" if cfg.leverage_enabled and leverage > 1.0 else ""
+        self._log(
+            f"ORDEN SHORT {ticker}{lev_tag}: qty={qty} | inversion=${qty * ref_price:,.2f} | "
+            f"razon={decision.reason}"
+        )
+        res = self.client.place_smart_order(ticker, qty, "SELL", ref_price, use_limit=True, limit_offset_pct=0.005)
+        if res.get("status") == "success":
+            fill_price = res.get("filled_avg_price", ref_price)
+            self._record_order(ticker, "SHORT", qty, fill_price, res.get("order_id"),
+                               leverage=leverage, confidence=decision.confidence)
+            self._log(f"EJECUTADO SHORT {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')}")
+            self.state.save_position(ticker, "SHORT", fill_price, qty=qty)
+            self.brain.on_position_opened(ticker, fill_price, df, side="SHORT")
+            self.brain.save_position_state(self.state, ticker, qty)
+            self._log_trade_telemetry(ticker, "SHORT", entry_date=str(df.index[-1]) if len(df) > 0 else None)
+            notifier.send("new_trade", f"🔻 SHORT {ticker}{lev_tag}: {qty} shares @ ${fill_price:.2f} = ${qty * fill_price:,.0f}", "warning")
+            return qty * fill_price
+        else:
+            self._log(f"Error short {ticker}: {res.get('msg')}")
+            return 0.0
+
+    async def _execute_sell(
+        self,
+        ticker: str,
+        decision: Any,
+        position: dict,
+        equity: float,
+        pnl_pct: float,
+    ) -> None:
+        qty = float(position["qty"])
+        if decision.partial_exit_fraction > 0:
+            qty = max(1, int(qty * decision.partial_exit_fraction))
+        qty = int(qty)
+        if qty <= 0:
+            return
+
+        self._log(
+            f"ORDEN {decision.action} {ticker}: qty={qty} | pnl={pnl_pct:.2%} | razon={decision.reason}"
+        )
+        current_price = float(position.get("current_price", 0))
+        # Precio en vivo para mejor ejecución
+        live_price = self.client.get_latest_price(ticker, fallback=current_price)
+        sell_ref = live_price if live_price and live_price > 0 else current_price
+        res = self.client.place_smart_order(ticker, qty, "SELL", sell_ref, use_limit=True, limit_offset_pct=0.005)
+        if res.get("status") == "success":
+            fill = res.get("filled_avg_price", sell_ref)
+            self._record_order(ticker, decision.action, qty, fill, res.get("order_id"))
+            # Cancelar DCA pendiente al cerrar posición
+            self._clear_pending_tranche(ticker)
+            pnl_usd = pnl_pct * equity * getattr(decision, "position_size_pct", 0.10)
+            self.risk_manager.record_trade(ticker, decision.action, pnl_pct, pnl_usd)
+            # Telemetry
+            self._log_trade_telemetry(ticker, decision.action, exit_reason=decision.reason, pnl_pct=pnl_pct, pnl_usd=pnl_usd)
+            # Entrenar Online Learning Advisor con el resultado real
+            advisor_ctx = self._pending_advisor_decisions.pop(ticker, None)
+            if advisor_ctx and self.online_advisor:
+                self.online_advisor.learn_from_trade(
+                    score=advisor_ctx["score"],
+                    adx=advisor_ctx["adx"],
+                    rsi=advisor_ctx["rsi"],
+                    annual_volatility=advisor_ctx["annual_vol"],
+                    market_regime=advisor_ctx["market_regime"],
+                    action_taken=advisor_ctx["action"],
                     pnl_pct=pnl_pct,
-                    ml_direction=ml_direction,
-                    ml_probability=ml_probability,
-                    sentiment_label=sentiment_label,
-                ))
-
-                if decision.action == "BUY" and not has_position:
-                    max_invest = equity * decision.position_size_pct
-                    invest_amount = min(max_invest, buying_power)
-                    if invest_amount > last_close:
-                        qty = int(invest_amount // last_close)
-                        self._log(
-                            f"ORDEN BUY {ticker}: qty={qty} | inversion=${qty * last_close:,.2f} | "
-                            f"poder=${buying_power:,.2f} | razon={decision.reason}"
-                        )
-                        res = self.client.place_market_order(ticker, qty, "BUY")
-                        if res.get("status") == "success":
-                            self._record_order()
-                            self._log(f"EJECUTADA BUY {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')}")
-                            # Registrar posición para trailing stop
-                            exec_price = self.client._apply_slippage(last_close, is_buy=True) if hasattr(self.client, '_apply_slippage') else last_close
-                            self.brain.on_position_opened(ticker, exec_price, df)
-                            buying_power -= qty * last_close
-                        else:
-                            self._log(f"Error enviando orden para {ticker}: {res.get('msg')}")
-
-                elif decision.action == "SELL" and has_position:
-                    qty = position["qty"]
-                    self._log(
-                        f"ORDEN SELL {ticker}: qty={qty} | pnl={pnl_pct:.2%} | razon={decision.reason}"
-                    )
-                    res = self.client.place_market_order(ticker, qty, "SELL")
-                    if res.get("status") == "success":
-                        self._record_order()
-                        self._log(f"EJECUTADA SELL {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')}")
-                    else:
-                        self._log(f"Error enviando orden para {ticker}: {res.get('msg')}")
-
-            except Exception as e:
-                self._log(f"Error analizando {ticker}: {e}")
-
-            await asyncio.sleep(2)
+                )
+                self._log(f"ONLINE ADVISOR APRENDE {ticker}: accion={advisor_ctx['action']} pnl={pnl_pct:.2%}")
+            self._log(f"EJECUTADA {decision.action} {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')}")
+            self.state.remove_position(ticker)
+            notifier.new_sell(ticker, qty, pnl_pct, decision.reason)
+        else:
+            self._log(f"Error enviando orden para {ticker}: {res.get('msg')}")
 
     def run_forever(self, ticker: str | None = None, interval: str = "1d", sleep_seconds: int = 3600):
-        """Synchronous entry point for running the bot in a blocking loop."""
-        import asyncio
+        if self.intraday:
+            interval = "5m"
+            sleep_seconds = 300
+            logger.info("Modo INTRADÍA activado — datos 5m, escaneo cada 5 min")
         try:
             asyncio.run(self._run_forever_async(ticker, interval, sleep_seconds))
         except KeyboardInterrupt:
             self._log("Bot detenido por usuario (Ctrl+C).")
             self.stop()
 
-    async def _run_forever_async(self, ticker: str | None, interval: str, sleep_seconds: int):
+    async def _run_forever_async(self, ticker, interval, sleep_seconds):
         self.is_running = True
         BROKER_CONFIG.bot_active = True
+        self.state.set_state("bot_status", "running")
         await self._run_loop(ticker=ticker, interval=interval, sleep_seconds=sleep_seconds)

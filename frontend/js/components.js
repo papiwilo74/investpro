@@ -342,6 +342,482 @@ const Components = {
     return wrapper;
   },
 
+  botConfigCard(config) {
+    if (!config) {
+      return `
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-blue-500">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Configuración del Bot</span>
+          <p class="text-sm font-medium text-slate-500 mt-2">No disponible.</p>
+        </div>
+      `;
+    }
+    const modeLabel = config.strategy_mode === 'web' ? 'Web Conservador' : config.strategy_mode;
+    const isConservative = config.strategy_mode === 'web';
+    const disabledFeatures = [];
+    if (!config.use_neural_brain) disabledFeatures.push('NN');
+    if (!config.use_rl_exits) disabledFeatures.push('RL');
+    if (!config.use_short_selling) disabledFeatures.push('Short');
+    if (!config.use_momentum_scalp) disabledFeatures.push('Scalp');
+    if (!config.use_mean_reversion) disabledFeatures.push('MeanRev');
+    if (!config.use_contrarian_dip) disabledFeatures.push('Dip');
+    if (!config.use_intraday_scalp) disabledFeatures.push('Intraday');
+
+    return `
+      <div class="glass rounded-2xl p-5 border-l-4 ${isConservative ? 'border-l-emerald-500' : 'border-l-amber-500'} shadow-premium">
+        <div class="flex justify-between items-start mb-3">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Configuración del Bot</span>
+          <span class="text-xs font-extrabold ${isConservative ? 'text-emerald-500' : 'text-amber-500'}">${modeLabel}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs mb-3">
+          <div><span class="text-slate-400">Buy Score</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${config.buy_score_threshold.toFixed(2)}</span></div>
+          <div><span class="text-slate-400">Stop Loss</span><br><span class="font-bold text-rose-500">${(config.stop_loss_pct * 100).toFixed(1)}%</span></div>
+          <div><span class="text-slate-400">Take Profit</span><br><span class="font-bold text-emerald-500">${(config.take_profit_pct * 100).toFixed(1)}%</span></div>
+          <div><span class="text-slate-400">Max Pos</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${(config.max_position_size_pct * 100).toFixed(0)}%</span></div>
+        </div>
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-2">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Desactivado</span>
+          <div class="flex flex-wrap gap-1">
+            ${disabledFeatures.map(f => `<span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold">${f}</span>`).join('')}
+            ${disabledFeatures.length === 0 ? '<span class="text-xs text-slate-500">Ninguno</span>' : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  marketRegimeCard(regime) {
+    if (!regime) {
+      return `
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-slate-500">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Régimen de Mercado</span>
+          <p class="text-sm font-medium text-slate-500 mt-2">Sin datos.</p>
+        </div>
+      `;
+    }
+    const canTrade = regime.can_trade_long;
+    const borderColor = regime.regime === 'FAVORABLE' ? 'border-l-emerald-500' : (regime.regime === 'CAUTIOUS' ? 'border-l-amber-500' : 'border-l-rose-500');
+    const badgeColor = canTrade ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400';
+    const badgeText = canTrade ? 'OPERABLE' : 'BLOQUEADO';
+
+    return `
+      <div class="glass rounded-2xl p-5 border-l-4 ${borderColor} shadow-premium">
+        <div class="flex justify-between items-start mb-3">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Régimen de Mercado</span>
+          <span class="text-xs font-extrabold px-2 py-0.5 rounded ${badgeColor}">${badgeText}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs mb-3">
+          <div><span class="text-slate-400">SPY Trend</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${regime.spy_trend}</span></div>
+          <div><span class="text-slate-400">VIX Level</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${regime.vix_level}</span></div>
+          <div><span class="text-slate-400">SPY Price</span><br><span class="font-bold text-slate-800 dark:text-slate-100">$${regime.spy_price ? regime.spy_price.toFixed(2) : 'N/A'}</span></div>
+          <div><span class="text-slate-400">VIX</span><br><span class="font-bold ${regime.vix_value >= 28 ? 'text-rose-500' : 'text-slate-800 dark:text-slate-100'}">${regime.vix_value ? regime.vix_value.toFixed(2) : 'N/A'}</span></div>
+        </div>
+        <p class="text-[10px] text-slate-500 leading-tight">${regime.reason}</p>
+      </div>
+    `;
+  },
+
+  kellyCard(kelly) {
+    if (!kelly || !kelly.total_trades) {
+      return `
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-purple-500">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kelly Criterion</span>
+          <p class="text-sm font-medium text-slate-500 mt-2">Sin datos de trades aún. El Kelly se calcula automáticamente con el historial de operaciones.</p>
+        </div>
+      `;
+    }
+    return `
+      <div class="glass rounded-2xl p-5 border-l-4 border-l-purple-500 shadow-premium">
+        <div class="flex justify-between items-start mb-3">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kelly Criterion</span>
+          <span class="text-xs font-extrabold text-purple-500">${(kelly.kelly_pct * 100).toFixed(1)}%</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div><span class="text-slate-400">Win Rate</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${(kelly.win_rate * 100).toFixed(1)}%</span></div>
+          <div><span class="text-slate-400">Avg Win</span><br><span class="font-bold text-emerald-500">+${(kelly.avg_win_pct * 100).toFixed(2)}%</span></div>
+          <div><span class="text-slate-400">Avg Loss</span><br><span class="font-bold text-rose-500">-${(kelly.avg_loss_pct * 100).toFixed(2)}%</span></div>
+          <div><span class="text-slate-400">Odds Ratio</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${kelly.odds_ratio.toFixed(2)}x</span></div>
+          <div><span class="text-slate-400">Total Trades</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${kelly.total_trades}</span></div>
+        </div>
+      </div>
+    `;
+  },
+
+  onlineAdvisorCard(advisor) {
+    if (!advisor || advisor.status === 'disabled') {
+      return `
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-indigo-500">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Online Learning Advisor</span>
+          <p class="text-sm font-medium text-slate-500 mt-2">No activo en este modo.</p>
+        </div>
+      `;
+    }
+    const perf = advisor.performance || {};
+    const isLearning = advisor.status === 'learning';
+    const statusBadge = isLearning
+      ? '<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] font-bold">APRENDIENDO</span>'
+      : '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-bold">ACTIVO</span>';
+    const added = advisor.value_added_pct || 0;
+    const addedColor = added >= 0 ? 'text-emerald-500' : 'text-rose-500';
+
+    const recentRows = (advisor.recent_trades || []).map(t => `
+      <div class="flex justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800 last:border-0">
+        <span class="text-slate-500">${t.action}</span>
+        <span class="font-bold ${t.pnl_pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${t.pnl_pct >= 0 ? '+' : ''}${(t.pnl_pct * 100).toFixed(2)}%</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="glass rounded-2xl p-5 border-l-4 border-l-indigo-500 shadow-premium">
+        <div class="flex justify-between items-start mb-3">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Online Learning Advisor</span>
+          ${statusBadge}
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-xs mb-3">
+          <div><span class="text-slate-400">Trades Vistos</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${advisor.trades_seen || 0}</span></div>
+          <div><span class="text-slate-400">Estados Aprendidos</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${advisor.states_learned || 0}</span></div>
+          <div><span class="text-slate-400">Epsilon</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${advisor.epsilon || 0}</span></div>
+          <div><span class="text-slate-400">Valor Añadido</span><br><span class="font-bold ${addedColor}">${added >= 0 ? '+' : ''}${(added * 100).toFixed(2)}%</span></div>
+        </div>
+        ${perf.all ? `
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-2 mt-1">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Performance por Acción</span>
+          <div class="grid grid-cols-3 gap-2 text-xs mb-2">
+            <div><span class="text-slate-400">ALLOW</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${perf.allowed ? (perf.allowed.win_rate * 100).toFixed(0) + '% WR' : '-'}</span></div>
+            <div><span class="text-slate-400">REDUCE</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${perf.reduced ? (perf.reduced.win_rate * 100).toFixed(0) + '% WR' : '-'}</span></div>
+            <div><span class="text-slate-400">BLOCK</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${perf.blocked ? (perf.blocked.win_rate * 100).toFixed(0) + '% WR' : '-'}</span></div>
+          </div>
+        </div>` : ''}
+        ${recentRows ? `
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-2 mt-1">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Últimos Trades</span>
+          ${recentRows}
+        </div>` : ''}
+      </div>
+    `;
+  },
+
+  mlStatusCard(models) {
+    if (!models || models.length === 0) {
+      return `
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-cyan-500">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Modelos ML</span>
+          <p class="text-sm font-medium text-slate-500 mt-2">No hay modelos entrenados. Ejecuta --train-ml para entrenar.</p>
+        </div>
+      `;
+    }
+    const rows = models.map(m => {
+      const ageStr = m.age_hours < 24 ? `${m.age_hours.toFixed(0)}h` : `${(m.age_hours / 24).toFixed(1)}d`;
+      return `
+        <tr class="border-b border-slate-100 dark:border-slate-800">
+          <td class="px-3 py-2 font-bold text-slate-700 dark:text-slate-300">${m.ticker}</td>
+          <td class="px-3 py-2 text-emerald-500 font-semibold">${(m.accuracy * 100).toFixed(1)}%</td>
+          <td class="px-3 py-2 text-blue-500 font-semibold">${(m.precision * 100).toFixed(1)}%</td>
+          <td class="px-3 py-2 text-slate-500">${ageStr}</td>
+        </tr>
+      `;
+    }).join('');
+    return `
+      <div class="glass rounded-2xl p-5 border-l-4 border-l-cyan-500 shadow-premium">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 block">Modelos ML — Auto-retrain cada 7 días</span>
+        <table class="w-full text-xs text-left">
+          <thead><tr class="text-slate-400"><th class="px-3 py-2">Ticker</th><th class="px-3 py-2">Accuracy</th><th class="px-3 py-2">Precision</th><th class="px-3 py-2">Edad</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  mtfCard(mtf) {
+    if (!mtf || mtf.available === false) {
+      return `
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-teal-500">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">MTF Filter</span>
+          <p class="text-sm font-medium text-slate-500 mt-2">No activo en este modo.</p>
+        </div>
+      `;
+    }
+    const passed = mtf.passed;
+    const borderColor = passed ? 'border-l-teal-500' : 'border-l-rose-500';
+    const badge = passed
+      ? '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] font-bold">CONFIRMADO</span>'
+      : '<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 text-[10px] font-bold">BLOQUEADO</span>';
+
+    const d = mtf.details || {};
+    return `
+      <div class="glass rounded-2xl p-5 border-l-4 ${borderColor} shadow-premium">
+        <div class="flex justify-between items-start mb-3">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">MTF ${mtf.ticker || ''}</span>
+          ${badge}
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+          <div><span class="text-slate-400">Semanal</span><br><span class="font-bold ${mtf.weekly_bullish ? 'text-emerald-500' : 'text-rose-500'}">${d.weekly_trend || 'N/A'}</span></div>
+          <div><span class="text-slate-400">Precio vs VWAP</span><br><span class="font-bold ${mtf.daily_above_vwap ? 'text-emerald-500' : 'text-rose-500'}">${d.daily_price_vs_vwap_pct != null ? (d.daily_price_vs_vwap_pct >= 0 ? '+' : '') + d.daily_price_vs_vwap_pct + '%' : 'N/A'}</span></div>
+          <div><span class="text-slate-400">ADX / +DI / -DI</span><br><span class="font-bold text-slate-800 dark:text-slate-100">${d.daily_adx != null ? d.daily_adx + ' / ' + d.daily_plus_di + ' / ' + d.daily_minus_di : 'N/A'}</span></div>
+          <div><span class="text-slate-400">SMA20 vs SMA50</span><br><span class="font-bold ${mtf.short_term_uptrend ? 'text-emerald-500' : 'text-rose-500'}">${d.daily_sma_aligned ? 'ALCISTA' : 'BAJISTA'}</span></div>
+        </div>
+        ${!passed ? `<p class="text-[10px] text-rose-500 leading-tight">${mtf.block_reason}</p>` : ''}
+      </div>
+    `;
+  },
+
+  marketBreadthCard(breadth) {
+    if (!breadth || breadth.available === false) {
+      return `
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-violet-500">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Market Breadth</span>
+          <p class="text-sm font-medium text-slate-500 mt-2">No activo en este modo.</p>
+        </div>
+      `;
+    }
+    const canTrade = breadth.can_trade;
+    const level = breadth.level;
+    const borderColor =
+      level === 'HEALTHY' ? 'border-l-emerald-500' :
+      level === 'NEUTRAL' ? 'border-l-blue-500' :
+      level === 'DETERIORATING' ? 'border-l-amber-500' :
+      'border-l-rose-500';
+    const badgeColor = canTrade
+      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+      : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400';
+    const badgeText = canTrade ? level : 'BLOQUEADO';
+
+    const fiSign = breadth.force_index_10d >= 0 ? '+' : '';
+    const fiColor = breadth.force_index_10d >= 0 ? 'text-emerald-500' : 'text-rose-500';
+
+    return `
+      <div class="glass rounded-2xl p-5 border-l-4 ${borderColor} shadow-premium">
+        <div class="flex justify-between items-start mb-3">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Market Breadth</span>
+          <span class="text-xs font-extrabold px-2 py-0.5 rounded ${badgeColor}">${badgeText}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+          <div><span class="text-slate-400">% SPY vs SMA50</span><br><span class="font-bold ${breadth.pct_above_sma50 >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${(breadth.pct_above_sma50 * 100).toFixed(2)}%</span></div>
+          <div><span class="text-slate-400">RSP/SPY</span><br><span class="font-bold ${breadth.rsp_vs_spy_trend === 'ABOVE_SMA20' ? 'text-emerald-500' : 'text-rose-500'}">${breadth.rsp_vs_spy_trend}</span></div>
+          <div><span class="text-slate-400">QQQ/SPY</span><br><span class="font-bold ${breadth.qqq_vs_spy_trend === 'ABOVE_SMA20' ? 'text-emerald-500' : 'text-rose-500'}">${breadth.qqq_vs_spy_trend}</span></div>
+          <div><span class="text-slate-400">Force Index 10d</span><br><span class="font-bold ${fiColor}">${fiSign}${(breadth.force_index_10d / 1e6).toFixed(1)}M</span></div>
+        </div>
+        <p class="text-[10px] text-slate-500 leading-tight">${breadth.reason}</p>
+      </div>
+    `;
+  },
+
+  riskCard(risk) {
+    if (!risk) {
+      return `
+        <div class="glass rounded-2xl p-5 border-l-4 border-l-red-500">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Risk Manager</span>
+          <p class="text-sm font-medium text-slate-500 mt-2">Sin datos de riesgo disponibles.</p>
+        </div>
+      `;
+    }
+    const dailyBreached = risk.daily_loss_breached;
+    const cbActive = risk.circuit_breaker_active;
+    const dailyColor = dailyBreached ? 'text-rose-500' : (risk.daily_pnl_pct >= 0 ? 'text-emerald-500' : 'text-amber-500');
+    const cbBadge = cbActive
+      ? '<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 text-[10px] font-bold">ACTIVO</span>'
+      : '<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-400 dark:bg-slate-800 text-[10px] font-bold">INACTIVO</span>';
+
+    const sectorRows = Object.entries(risk.sector_exposures || {}).map(([sector, exp]) => {
+      const expPct = (exp * 100).toFixed(1);
+      const isHigh = exp >= 0.20;
+      return `
+        <div class="flex justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800 last:border-0">
+          <span class="text-slate-500">${sector}</span>
+          <span class="font-bold ${isHigh ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}">${expPct}%</span>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="glass rounded-2xl p-5 border-l-4 ${dailyBreached || cbActive ? 'border-l-red-500' : 'border-l-emerald-500'} shadow-premium">
+        <div class="flex justify-between items-start mb-3">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Risk Manager</span>
+          <span class="text-[10px] font-bold ${dailyColor}">${(risk.daily_pnl_pct * 100).toFixed(2)}% hoy</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-xs mb-3">
+          <div>
+            <span class="text-slate-400">Pérdidas Consecutivas</span><br>
+            <span class="font-bold ${risk.consecutive_losses >= risk.consecutive_loss_limit ? 'text-rose-500' : 'text-slate-800 dark:text-slate-100'}">${risk.consecutive_losses} / ${risk.consecutive_loss_limit}</span>
+          </div>
+          <div>
+            <span class="text-slate-400">Circuit Breaker</span><br>
+            <span class="font-bold">${cbBadge}${cbActive ? ' (' + risk.circuit_breaker_remaining_min + ' min)' : ''}</span>
+          </div>
+          <div>
+            <span class="text-slate-400">VaR 95%</span><br>
+            <span class="font-bold ${risk.var_daily_95pct <= risk.var_limit ? 'text-rose-500' : 'text-slate-800 dark:text-slate-100'}">${(risk.var_daily_95pct * 100).toFixed(2)}%</span>
+          </div>
+          <div>
+            <span class="text-slate-400">Exposición Total</span><br>
+            <span class="font-bold text-slate-800 dark:text-slate-100">${(risk.total_exposure_pct * 100).toFixed(1)}%</span>
+          </div>
+        </div>
+        ${sectorRows ? `
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-2 mt-1">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Exposición por Sector</span>
+          ${sectorRows}
+        </div>` : ''}
+        ${risk.performance && risk.performance.total_trades > 0 ? `
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-2 mt-1">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Performance Real</span>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div><span class="text-slate-400">Win Rate</span><br><span class="font-bold ${risk.performance.win_rate >= 0.5 ? 'text-emerald-500' : 'text-rose-500'}">${(risk.performance.win_rate * 100).toFixed(1)}%</span></div>
+            <div><span class="text-slate-400">Profit Factor</span><br><span class="font-bold ${risk.performance.profit_factor >= 1.2 ? 'text-emerald-500' : 'text-slate-700 dark:text-slate-300'}">${risk.performance.profit_factor}</span></div>
+            <div><span class="text-slate-400">Expectancy</span><br><span class="font-bold ${risk.performance.expectancy_pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${(risk.performance.expectancy_pct * 100).toFixed(2)}%</span></div>
+            <div><span class="text-slate-400">Max Loss Streak</span><br><span class="font-bold ${risk.performance.max_consecutive_losses >= 3 ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300'}">${risk.performance.max_consecutive_losses}</span></div>
+          </div>
+        </div>` : ''}
+        ${risk.total_trades_risk_logged > 0 && (!risk.performance || risk.performance.total_trades === 0) ? `
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-2 mt-1">
+          <span class="text-[10px] text-slate-400">Trades registrados en Risk Manager: ${risk.total_trades_risk_logged}</span>
+        </div>` : ''}
+      </div>
+    `;
+  },
+
+  validationReport(report) {
+    if (!report || !report.verdict) {
+      return `<div class="text-sm text-slate-500">No se pudo generar el reporte.</div>`;
+    }
+
+    const verdictColor = report.verdict === 'APROBADO' ? 'emerald' : (report.verdict === 'CONDICIONAL' ? 'amber' : 'rose');
+    const verdictIcon = report.verdict === 'APROBADO' ? '✓' : (report.verdict === 'CONDICIONAL' ? '⚠' : '✗');
+    const verdictColors = { emerald: '#10b981', amber: '#f59e0b', rose: '#ef4444' };
+    const verdictBg = { emerald: 'bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20', amber: 'bg-amber-50 dark:bg-amber-500/5 border-amber-200 dark:border-amber-500/20', rose: 'bg-rose-50 dark:bg-rose-500/5 border-rose-200 dark:border-rose-500/20' };
+
+    const wfoRows = report.walk_forward.map(w => {
+      const sc = w.sharpe_oos >= 0.5 ? 'text-emerald-500' : (w.sharpe_oos >= 0 ? 'text-amber-500' : 'text-rose-500');
+      const rc = w.overfit_ratio >= 0.7 ? 'text-emerald-500' : (w.overfit_ratio >= 0.5 ? 'text-amber-500' : 'text-rose-500');
+      return `
+        <tr class="border-b border-slate-100 dark:border-slate-800">
+          <td class="px-3 py-2 font-bold">${w.window_idx}</td>
+          <td class="px-3 py-2 text-xs text-slate-500">${w.train_range}</td>
+          <td class="px-3 py-2 text-xs text-slate-500">${w.test_range}</td>
+          <td class="px-3 py-2 font-bold text-emerald-500">${w.sharpe_is.toFixed(2)}</td>
+          <td class="px-3 py-2 font-bold ${sc}">${w.sharpe_oos.toFixed(2)}</td>
+          <td class="px-3 py-2 font-bold ${rc}">${w.overfit_ratio.toFixed(2)}</td>
+          <td class="px-3 py-2 text-xs text-slate-500">${w.best_params ? Object.entries(w.best_params).map(([k,v]) => `${k}=${v}`).join(', ').substring(0, 40) : '-'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const flagItems = report.overfit_flags.map(f =>
+      `<div class="flex items-start gap-2 text-sm py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0">
+        <span class="mt-0.5 ${f.includes('overfitting') || f.includes('generaliza') ? 'text-rose-500' : 'text-emerald-500'}">${f.includes('overfitting') || f.includes('generaliza') ? '⚠' : '✓'}</span>
+        <span class="text-slate-700 dark:text-slate-300">${f}</span>
+      </div>`
+    ).join('');
+
+    const mc = report.monte_carlo;
+    const mcHtml = mc ? `
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div class="bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Retorno P50</span>
+          <div class="text-xl font-extrabold ${mc.p50_return_pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${mc.p50_return_pct >= 0 ? '+' : ''}${mc.p50_return_pct.toFixed(2)}%</div>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Drawdown P50</span>
+          <div class="text-xl font-extrabold text-rose-500">${mc.p50_max_drawdown_pct.toFixed(2)}%</div>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prob. Pérdida</span>
+          <div class="text-xl font-extrabold ${mc.prob_negative_return_pct > 25 ? 'text-rose-500' : 'text-emerald-500'}">${mc.prob_negative_return_pct.toFixed(1)}%</div>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Retorno P5 (peor caso)</span>
+          <div class="text-lg font-extrabold text-rose-500">${mc.p5_return_pct.toFixed(2)}%</div>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Retorno P95 (mejor caso)</span>
+          <div class="text-lg font-extrabold text-emerald-500">+${mc.p95_return_pct.toFixed(2)}%</div>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prob. Sharpe > 1</span>
+          <div class="text-lg font-extrabold ${mc.prob_sharpe_above_1_pct > 50 ? 'text-emerald-500' : 'text-amber-500'}">${mc.prob_sharpe_above_1_pct.toFixed(1)}%</div>
+        </div>
+      </div>
+    ` : '<p class="text-sm text-slate-500">No hay suficientes trades para Monte Carlo.</p>';
+
+    const fmt = (v, mult = 1, dec = 2) => v != null ? (v * mult).toFixed(dec) : '∞';
+
+    const isHtml = report.is_metrics ? Object.entries({
+      'Retorno Total': fmt(report.is_metrics.retorno_total, 100) + '%',
+      'Sharpe': fmt(report.is_metrics.sharpe_ratio),
+      'Max Drawdown': fmt(report.is_metrics.max_drawdown, 100) + '%',
+      'Win Rate': fmt(report.is_metrics.win_rate, 100, 1) + '%',
+      'Profit Factor': fmt(report.is_metrics.profit_factor),
+      'Trades': report.is_metrics.total_trades,
+    }).map(([k, v]) => `
+      <div class="flex justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800">
+        <span class="text-slate-500">${k}</span>
+        <span class="font-bold text-slate-800 dark:text-slate-100">${v}</span>
+      </div>
+    `).join('') : '';
+
+    const oosHtml = report.oos_metrics ? Object.entries({
+      'Retorno Total': fmt(report.oos_metrics.retorno_total, 100) + '%',
+      'Sharpe': fmt(report.oos_metrics.sharpe_ratio),
+      'Max Drawdown': fmt(report.oos_metrics.max_drawdown, 100) + '%',
+      'Win Rate': fmt(report.oos_metrics.win_rate, 100, 1) + '%',
+      'Profit Factor': fmt(report.oos_metrics.profit_factor),
+      'Trades': report.oos_metrics.total_trades,
+    }).map(([k, v]) => `
+      <div class="flex justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800">
+        <span class="text-slate-500">${k}</span>
+        <span class="font-bold text-slate-800 dark:text-slate-100">${v}</span>
+      </div>
+    `).join('') : '';
+
+    return `
+      <div class="${verdictBg[verdictColor]} border rounded-2xl p-5 mb-6">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="text-3xl font-extrabold" style="color: ${verdictColors[verdictColor]}">${verdictIcon}</div>
+          <div>
+            <div class="text-xl font-extrabold" style="color: ${verdictColors[verdictColor]}">${report.verdict}</div>
+            <div class="text-xs text-slate-500">Veredicto de validación estadística · ${report.total_data_years} años · ${report.walk_forward.length} ventanas</div>
+          </div>
+        </div>
+        <div class="space-y-1">${flagItems}</div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-5 mb-6">
+        <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Walk-Forward Optimization (${report.walk_forward.length} ventanas)</h4>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="bg-slate-50 dark:bg-slate-950 text-slate-400">
+                <th class="px-3 py-2 font-semibold">#</th>
+                <th class="px-3 py-2 font-semibold">Train</th>
+                <th class="px-3 py-2 font-semibold">Test</th>
+                <th class="px-3 py-2 font-semibold">Sharpe IS</th>
+                <th class="px-3 py-2 font-semibold">Sharpe OOS</th>
+                <th class="px-3 py-2 font-semibold">OOS/IS</th>
+                <th class="px-3 py-2 font-semibold">Params</th>
+              </tr>
+            </thead>
+            <tbody>${wfoRows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-5 mb-6">
+        <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Monte Carlo (${mc ? mc.n_simulations : 0} simulaciones)</h4>
+        ${mcHtml}
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-5">
+          <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">In-Sample (Entrenamiento)</h4>
+          <div class="space-y-1">${isHtml}</div>
+        </div>
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-5">
+          <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Out-of-Sample (Validación Final)</h4>
+          <div class="space-y-1">${oosHtml}</div>
+        </div>
+      </div>
+    `;
+  },
+
   newsCard(title, publisher, link, time, sentimentLabel) {
     let colorClass = 'bg-slate-50 border-slate-200 dark:bg-slate-950 dark:border-slate-800';
     let textClass = 'text-slate-500';
@@ -377,6 +853,94 @@ const Components = {
           </span>
         </div>
       </a>
+    `;
+  },
+
+  geneticReport(result) {
+    if (!result) return '<div class="text-sm text-slate-500">No hay resultados.</div>';
+    const best = result.best_individual || {};
+    const wfo = result.wfo_result || result.wfo_validation || {};
+    const params = best.params || result.best_params || {};
+    const bm = result.best_metrics || {};
+    const history = result.fitness_history || [];
+    const verdict = wfo.verdict || (result.is_approved_by_wfo ? 'APROBADO' : 'N/A');
+    const verdictColor = verdict === 'APROBADO' ? 'text-emerald-600' : (verdict === 'RECHAZADO' ? 'text-rose-600' : 'text-amber-600');
+    const fitnessVals = history.map(h => typeof h === 'number' ? h : 0).filter(v => !isNaN(v));
+    const fitnessSpark = fitnessVals.length > 1
+      ? `<svg viewBox="0 0 ${fitnessVals.length * 12} 32" class="w-full h-10 mt-2" preserveAspectRatio="none">
+           <polyline fill="none" stroke="#10b981" stroke-width="2"
+             points="${fitnessVals.map((v, i) => {
+               const min = Math.min(...fitnessVals), max = Math.max(...fitnessVals);
+               const norm = max > min ? (v - min) / (max - min) : 0.5;
+               return `${i * 12},${32 - norm * 28 - 2}`;
+             }).join(' ')}"/>
+         </svg>` : '';
+    return `
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h3 class="text-lg font-bold">Optimización Genética</h3>
+            <p class="text-xs text-slate-500">${result.generations_used || result.total_generations || 'N/A'} generaciones · población ${result.population_used || 'N/A'} · ${result.total_evaluations || 'N/A'} evaluaciones</p>
+          </div>
+          <div class="text-right">
+            <div class="text-2xl font-bold text-emerald-500">${best.fitness != null ? Number(best.fitness).toFixed(4) : 'N/A'}</div>
+            <div class="text-[10px] text-slate-400 uppercase tracking-wider">Fitness (Sharpe-ajustado)</div>
+            <div class="text-xs font-bold ${verdictColor} mt-1">WFO: ${verdict}</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-slate-50 dark:bg-slate-950 rounded-xl">
+          ${this._metricBox('Sharpe IS', best.in_sample_sharpe ?? bm.sharpe_ratio, 'text-indigo-600')}
+          ${this._metricBox('Return IS', (best.in_sample_return ?? bm.retorno_total) != null ? ((Number(best.in_sample_return ?? bm.retorno_total)) * 100).toFixed(2) + '%' : '-', 'text-indigo-600')}
+          ${this._metricBox('Max DD', bm.max_drawdown != null ? (Number(bm.max_drawdown) * 100).toFixed(2) + '%' : (best.max_drawdown != null ? (Number(best.max_drawdown) * 100).toFixed(2) + '%' : '-'), 'text-rose-600')}
+          ${this._metricBox('Win Rate', (best.win_rate ?? bm.win_rate) != null ? ((Number(best.win_rate ?? bm.win_rate)) * 100).toFixed(0) + '%' : '-', 'text-emerald-600')}
+          ${wfo.avg_sharpe != null ? this._metricBox('Sharpe OOS (WFO)', Number(wfo.avg_sharpe).toFixed(3), 'text-amber-600') : ''}
+          ${wfo.avg_ratio_oos_is != null ? this._metricBox('Ratio OOS/IS', Number(wfo.avg_ratio_oos_is).toFixed(3), 'text-amber-600') : ''}
+          ${this._metricBox('Profit Factor', best.profit_factor ?? bm.profit_factor, 'text-violet-600')}
+          ${this._metricBox('Trades', best.total_trades ?? bm.total_trades, 'text-slate-600')}
+        </div>
+        ${fitnessSpark ? `<div class="mb-6 p-4 bg-slate-50 dark:bg-slate-950 rounded-xl"><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Evolución del Fitness</h4>${fitnessSpark}</div>` : ''}
+        ${this._paramsTable(params)}
+        ${wfo.overfit_flags ? this._overfitFlags(wfo) : ''}
+        <div class="text-[10px] text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-4 mt-4">
+          Duración: ${result.elapsed_seconds != null ? Number(result.elapsed_seconds).toFixed(1) + 's' : 'N/A'} · Hall of Fame: ${result.hall_of_fame ? result.hall_of_fame.length : 0} individuos guardados en disco
+        </div>
+      </div>
+    `;
+  },
+
+  _metricBox(label, value, color) {
+    const val = value !== null && value !== undefined ? (typeof value === 'number' ? value.toFixed(4) : value) : '-';
+    return `<div class="text-center"><div class="text-lg font-bold ${color}">${val}</div><div class="text-[10px] text-slate-400 uppercase tracking-wider">${label}</div></div>`;
+  },
+
+  _paramsTable(params) {
+    if (!params || !Object.keys(params).length) return '';
+    const rows = Object.entries(params).map(([k, v]) => {
+      const val = typeof v === 'number' ? v.toFixed(4) : v;
+      return `<tr><td class="px-3 py-1.5 text-xs text-slate-500">${k}</td><td class="px-3 py-1.5 text-xs text-slate-900 dark:text-white font-mono text-right">${val}</td></tr>`;
+    }).join('');
+    return `
+      <div class="mb-4">
+        <h4 class="text-sm font-bold mb-2">Parámetros Óptimos</h4>
+        <div class="max-h-48 overflow-y-auto">
+          <table class="w-full text-sm"><tbody>${rows}</tbody></table>
+        </div>
+      </div>
+    `;
+  },
+
+  _overfitFlags(wfo) {
+    if (!wfo.overfit_flags) return '';
+    const flags = wfo.overfit_flags;
+    const items = [];
+    if (flags.oos_is_ratio !== undefined) items.push(`<div class="flex justify-between py-1"><span class="text-xs text-slate-500">Ratio OOS/IS</span><span class="text-xs font-mono ${flags.oos_is_ratio >= 0.5 ? 'text-emerald-600' : 'text-rose-600'}">${flags.oos_is_ratio.toFixed(3)} ${flags.oos_is_ratio >= 0.5 ? '✓' : '✗'}</span></div>`);
+    if (flags.sharpe_inflation !== undefined) items.push(`<div class="flex justify-between py-1"><span class="text-xs text-slate-500">Inflación Sharpe</span><span class="text-xs font-mono ${flags.sharpe_inflation < 2.0 ? 'text-emerald-600' : 'text-rose-600'}">${flags.sharpe_inflation.toFixed(2)}x ${flags.sharpe_inflation < 2.0 ? '✓' : '✗'}</span></div>`);
+    if (flags.consistency_score !== undefined) items.push(`<div class="flex justify-between py-1"><span class="text-xs text-slate-500">Consistencia</span><span class="text-xs font-mono ${flags.consistency_score >= 0.5 ? 'text-emerald-600' : 'text-rose-600'}">${(flags.consistency_score * 100).toFixed(0)}% ${flags.consistency_score >= 0.5 ? '✓' : '✗'}</span></div>`);
+    return `
+      <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 mb-4">
+        <h4 class="text-sm font-bold mb-2">Overfit Flags (WFO)</h4>
+        ${items.join('')}
+      </div>
     `;
   }
 };

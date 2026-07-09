@@ -13,7 +13,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-from config import INDICATOR_PARAMS, SIGNAL_WEIGHTS_TREND, SIGNAL_WEIGHTS_RANGE
+from config import INDICATOR_PARAMS, SIGNAL_WEIGHTS_TREND, SIGNAL_WEIGHTS_RANGE, SIGNAL_WEIGHTS_MOMENTUM
 
 
 # ── Tipos ─────────────────────────────────────────────────────────────
@@ -98,6 +98,29 @@ class SignalGenerator:
             ema_change = df["ema_12"].pct_change(5)  # Cambio 5 días
             df["sig_ema"] = (ema_change * 20).clip(-1.0, 1.0)  # 5% -> 1.0
 
+        # Momentum (ROC 10 días) ──────────────────────────────────────
+        # Factor de momentum: los activos con momentum positivo tienden a continuar
+        df["sig_momentum"] = 0.0
+        if "close" in df.columns:
+            roc = df["close"].pct_change(10)
+            df["sig_momentum"] = np.tanh(roc * 10)  # 10% change → ~0.76
+
+        # Volumen (confirmación de rupturas) ──────────────────────────
+        df["sig_volume"] = 0.0
+        if "volume" in df.columns:
+            avg_vol = df["volume"].rolling(20).mean().replace(0, np.nan)
+            vol_ratio = df["volume"] / avg_vol
+            df["sig_volume"] = (vol_ratio - 1.0).clip(-1.0, 1.0)
+
+        # OBV (On-Balance Volume) divergencia ────────────────────────
+        # Señal de divergencia: OBV subiendo mientras precio lateral = alcista
+        df["sig_obv"] = 0.0
+        if "volume" in df.columns and "close" in df.columns:
+            obv = (df["volume"] * (~(df["close"].diff() <= 0) * 2 - 1)).cumsum()
+            obv_sma = obv.rolling(20).mean().replace(0, np.nan)
+            obv_ratio = obv / obv_sma
+            df["sig_obv"] = ((obv_ratio - 1.0) * 5).clip(-1.0, 1.0)
+
         # ADX / Régimen de mercado ─────────────────────────────────────
         # Adaptar pesos según si hay tendencia fuerte o rango
         adx = df.get("adx", pd.Series(50.0, index=df.index))
@@ -105,28 +128,37 @@ class SignalGenerator:
         range_mask = adx <= INDICATOR_PARAMS.adx_range_threshold
         w_t = SIGNAL_WEIGHTS_TREND
         w_r = SIGNAL_WEIGHTS_RANGE
+        w_m = SIGNAL_WEIGHTS_MOMENTUM
 
         df["w_rsi"] = w_t["rsi"]
         df["w_macd"] = w_t["macd"]
         df["w_bollinger"] = w_t["bollinger"]
         df["w_sma_cross"] = w_t["sma_cross"]
+        df["w_momentum"] = w_t["momentum"]
+        df["w_volume"] = w_t["volume"]
+        df["w_obv"] = w_t["obv"]
 
         df.loc[range_mask, "w_rsi"] = w_r["rsi"]
         df.loc[range_mask, "w_macd"] = w_r["macd"]
         df.loc[range_mask, "w_bollinger"] = w_r["bollinger"]
         df.loc[range_mask, "w_sma_cross"] = w_r["sma_cross"]
+        df.loc[range_mask, "w_momentum"] = w_r["momentum"]
+        df.loc[range_mask, "w_volume"] = w_r["volume"]
+        df.loc[range_mask, "w_obv"] = w_r["obv"]
 
-        # Composite ────────────────────────────────────────────────────
-        # Normalizar pesos para que sumen 1.0
-        total_weight = df["w_rsi"] + df["w_macd"] + df["w_bollinger"] + df["w_sma_cross"]
-        total_weight = total_weight.replace(0, np.nan).fillna(1.0)
+        strong_trend_mask = adx >= 35
+        df.loc[strong_trend_mask, "w_momentum"] = df.loc[strong_trend_mask, "w_momentum"] * 1.5
 
-        df["sig_composite"] = (
-            df["sig_rsi"]     * (df["w_rsi"] / total_weight)
-            + df["sig_macd"]  * (df["w_macd"] / total_weight)
-            + df["sig_bb"]    * (df["w_bollinger"] / total_weight)
-            + df["sig_sma"]   * (df["w_sma_cross"] / total_weight)
-        )
+        w_all = ["w_rsi", "w_macd", "w_bollinger", "w_sma_cross", "w_momentum", "w_volume", "w_obv"]
+        total_weight = df[w_all].sum(axis=1).replace(0, np.nan).fillna(1.0)
+
+        df["sig_composite"] = 0.0
+        mappings = [("sig_rsi", "w_rsi"), ("sig_macd", "w_macd"), ("sig_bb", "w_bollinger"),
+                    ("sig_sma", "w_sma_cross"), ("sig_momentum", "w_momentum"),
+                    ("sig_volume", "w_volume"), ("sig_obv", "w_obv")]
+        for col, wcol in mappings:
+            safe_signal = df[col].fillna(0.0)
+            df["sig_composite"] += safe_signal * (df[wcol] / total_weight)
 
         # Cruces como señales binarias auxiliares (para UI legible)
         # MACD crossover event

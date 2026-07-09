@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+.env
+logs/
+data/*.sqlite3
+data/*.json
+data/*.pkl
+data/cache/
+*.log
+node_modules/
+frontend/node_modules/

@@ -1,32 +1,32 @@
 {
   "ticker": "MSFT",
   "metrics": {
-    "accuracy": 0.5841584158415841,
-    "precision": 0.25,
-    "recall": 0.2,
-    "f1": 0.2222222222222222,
+    "accuracy": 0.6534653465346535,
+    "precision": 0.4375,
+    "recall": 0.21212121212121213,
+    "f1": 0.2857142857142857,
     "train_size": 400,
     "test_size": 101
   },
   "feature_importances": {
-    "feat_return_1d": 0.02745039016008377,
-    "feat_return_3d": 0.035986579954624176,
-    "feat_return_5d": 0.0385376401245594,
-    "feat_return_10d": 0.04845183342695236,
-    "feat_volatility_5d": 0.05171516165137291,
-    "feat_volatility_10d": 0.0818730965256691,
-    "feat_rsi": 0.06670863181352615,
-    "feat_macd_diff": 0.08436591178178787,
-    "feat_bollinger_pct_b": 0.042087506502866745,
-    "feat_dist_sma_20": 0.07919106632471085,
-    "feat_dist_sma_50": 0.05197363719344139,
-    "feat_dist_sma_200": 0.03691568970680237,
-    "feat_dist_vwap": 0.04802644997835159,
-    "feat_cmf": 0.04744849354028702,
-    "feat_vol_change": 0.02738439291715622,
-    "feat_macro_spy_return": 0.03433126583695412,
-    "feat_macro_spy_trend": 0.09551794081926346,
-    "feat_macro_vix": 0.10203424841165543
+    "feat_return_1d": 0.03368174657225609,
+    "feat_return_3d": 0.0365312322974205,
+    "feat_return_5d": 0.03691742569208145,
+    "feat_return_10d": 0.05448277294635773,
+    "feat_volatility_5d": 0.05970558524131775,
+    "feat_volatility_10d": 0.07892292737960815,
+    "feat_rsi": 0.061443209648132324,
+    "feat_macd_diff": 0.0805666446685791,
+    "feat_bollinger_pct_b": 0.02357490547001362,
+    "feat_dist_sma_20": 0.09407564252614975,
+    "feat_dist_sma_50": 0.06626087427139282,
+    "feat_dist_sma_200": 0.04836643114686012,
+    "feat_dist_vwap": 0.05092695727944374,
+    "feat_cmf": 0.03466195613145828,
+    "feat_vol_change": 0.03449056297540665,
+    "feat_macro_spy_return": 0.029531553387641907,
+    "feat_macro_spy_trend": 0.07133933901786804,
+    "feat_macro_vix": 0.10452014952898026
   },
   "features_list": [
     "feat_return_1d",
@@ -51,7 +51,7 @@
   "best_params": {
     "learning_rate": 0.1,
     "max_depth": 7,
-    "n_estimators": 100
+    "n_estimators": 200
   },
   "optimized": true
 }

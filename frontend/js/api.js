@@ -93,8 +93,64 @@ class ApiClient {
     return this._fetch(`/api/broker/bot/status`);
   }
 
+  async getBotConfig() {
+    return this._fetch(`/api/broker/bot/config`);
+  }
+
   async toggleBot() {
     return this._fetch(`/api/broker/bot/toggle`, { method: 'POST' });
+  }
+
+  async getRiskKelly() {
+    return this._fetch(`/api/broker/risk/kelly`);
+  }
+
+  async getMarketRegime() {
+    return this._fetch(`/api/broker/market/regime`);
+  }
+
+  async getAdvisorStatus() {
+    return this._fetch(`/api/broker/advisor/status`);
+  }
+
+  async resetAdvisor() {
+    return this._fetch(`/api/broker/advisor/reset`, { method: 'POST' });
+  }
+
+  async getMTFStatus(ticker) {
+    return this._fetch(`/api/broker/mtf/${ticker}`);
+  }
+
+  async getMarketBreadth() {
+    return this._fetch(`/api/broker/market/breadth`);
+  }
+
+  async getKellyStats() {
+    return this._fetch(`/api/broker/kelly`);
+  }
+
+  async getMLModelsStatus() {
+    return this._fetch(`/api/broker/ml/status`);
+  }
+
+  async getRiskStatus() {
+    return this._fetch(`/api/broker/risk`);
+  }
+
+  async validateStrategy(ticker, period = '2y', interval = '1d', trainMonths = 18, testMonths = 6, nSimulations = 1000) {
+    return this._fetch(`/api/backtest/${ticker}/validate?period=${period}&interval=${interval}&train_months=${trainMonths}&test_months=${testMonths}&n_simulations=${nSimulations}`);
+  }
+
+  async runGeneticOptimization(tickers, period = '1y', generations = 8, populationSize = 20, workers = 4, useWfo = true) {
+    return this._fetch(`/api/backtest/genetic?tickers=${encodeURIComponent(tickers)}&period=${period}&generations=${generations}&population_size=${populationSize}&workers=${workers}&use_wfo=${useWfo}`, { method: 'POST' });
+  }
+
+  async getGeneticJobStatus(jobId) {
+    return this._fetch(`/api/backtest/genetic/${jobId}`);
+  }
+
+  async cancelGeneticJob(jobId) {
+    return this._fetch(`/api/backtest/genetic/${jobId}/cancel`, { method: 'POST' });
   }
 }
 

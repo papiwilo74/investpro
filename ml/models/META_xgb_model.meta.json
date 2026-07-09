@@ -1,32 +1,32 @@
 {
   "ticker": "META",
   "metrics": {
-    "accuracy": 0.4752475247524752,
-    "precision": 0.32051282051282054,
-    "recall": 1.0,
-    "f1": 0.4854368932038835,
+    "accuracy": 0.6732673267326733,
+    "precision": 0.4489795918367347,
+    "recall": 0.7857142857142857,
+    "f1": 0.5714285714285714,
     "train_size": 400,
     "test_size": 101
   },
   "feature_importances": {
-    "feat_return_1d": 0.0343049094080925,
-    "feat_return_3d": 0.0,
-    "feat_return_5d": 0.023533310741186142,
-    "feat_return_10d": 0.0,
-    "feat_volatility_5d": 0.10236053913831711,
-    "feat_volatility_10d": 0.060910098254680634,
-    "feat_rsi": 0.11624288558959961,
-    "feat_macd_diff": 0.11767000705003738,
-    "feat_bollinger_pct_b": 0.0,
-    "feat_dist_sma_20": 0.10781826078891754,
-    "feat_dist_sma_50": 0.0,
-    "feat_dist_sma_200": 0.1318456381559372,
-    "feat_dist_vwap": 0.0,
-    "feat_cmf": 0.09195289760828018,
-    "feat_vol_change": 0.0,
-    "feat_macro_spy_return": 0.0,
-    "feat_macro_spy_trend": 0.09380573779344559,
-    "feat_macro_vix": 0.1195557713508606
+    "feat_return_1d": 0.04941417649388313,
+    "feat_return_3d": 0.0453738272190094,
+    "feat_return_5d": 0.045866407454013824,
+    "feat_return_10d": 0.06257425993680954,
+    "feat_volatility_5d": 0.05512292683124542,
+    "feat_volatility_10d": 0.061450108885765076,
+    "feat_rsi": 0.04953876882791519,
+    "feat_macd_diff": 0.07184797525405884,
+    "feat_bollinger_pct_b": 0.05228274315595627,
+    "feat_dist_sma_20": 0.04397878423333168,
+    "feat_dist_sma_50": 0.0436025969684124,
+    "feat_dist_sma_200": 0.08967411518096924,
+    "feat_dist_vwap": 0.05492037162184715,
+    "feat_cmf": 0.0777520015835762,
+    "feat_vol_change": 0.02194405533373356,
+    "feat_macro_spy_return": 0.0333004854619503,
+    "feat_macro_spy_trend": 0.06452664732933044,
+    "feat_macro_vix": 0.07682974636554718
   },
   "features_list": [
     "feat_return_1d",
@@ -49,9 +49,9 @@
     "feat_macro_vix"
   ],
   "best_params": {
-    "learning_rate": 0.01,
+    "learning_rate": 0.05,
     "max_depth": 3,
-    "n_estimators": 50
+    "n_estimators": 200
   },
   "optimized": true
 }

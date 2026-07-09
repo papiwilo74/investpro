@@ -90,19 +90,10 @@ class LSTMPredictor:
             
             # En un entorno real, cargaríamos los pesos (self.model.load_state_dict(...))
             
-            # HACK SIMULADO si el modelo no está entrenado:
-            momentum = norm_closes[-1] - norm_closes[0]
-            pred_val = 0.5 + (momentum * 0.5) 
-            
-            confidence = abs(pred_val - 0.5) * 2
-            
-            if pred_val > 0.55:
-                result["prediction"] = "ALCISTA"
-                result["confidence"] = confidence
-            elif pred_val < 0.45:
-                result["prediction"] = "BAJISTA"
-                result["confidence"] = confidence
-                
+            # EXPERIMENTAL: modelo no entrenado - retornar no disponible
+            result["prediction"] = "NOT_AVAILABLE"
+            result["confidence"] = 0.0
+            result["status"] = "MODEL_NOT_TRAINED"
             return result
             
         except Exception as e:

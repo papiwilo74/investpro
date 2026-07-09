@@ -1,1 +1,1 @@
-web: python main.py --daemon --ticker AAPL
+web: python main.py --web --port $PORT

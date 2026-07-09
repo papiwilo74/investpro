@@ -1,32 +1,32 @@
 {
   "ticker": "NVDA",
   "metrics": {
-    "accuracy": 0.43564356435643564,
-    "precision": 0.3389830508474576,
-    "recall": 0.5263157894736842,
-    "f1": 0.41237113402061853,
+    "accuracy": 0.44554455445544555,
+    "precision": 0.3620689655172414,
+    "recall": 0.525,
+    "f1": 0.42857142857142855,
     "train_size": 400,
     "test_size": 101
   },
   "feature_importances": {
-    "feat_return_1d": 0.0,
-    "feat_return_3d": 0.0,
+    "feat_return_1d": 0.04654352366924286,
+    "feat_return_3d": 0.021332314237952232,
     "feat_return_5d": 0.0,
-    "feat_return_10d": 0.10486018657684326,
-    "feat_volatility_5d": 0.08018654584884644,
-    "feat_volatility_10d": 0.059773072600364685,
-    "feat_rsi": 0.023791873827576637,
-    "feat_macd_diff": 0.07258804142475128,
-    "feat_bollinger_pct_b": 0.18775615096092224,
-    "feat_dist_sma_20": 0.05805201455950737,
-    "feat_dist_sma_50": 0.08969560265541077,
-    "feat_dist_sma_200": 0.11574593186378479,
-    "feat_dist_vwap": 0.0,
-    "feat_cmf": 0.014962984248995781,
-    "feat_vol_change": 0.0020830377470701933,
-    "feat_macro_spy_return": 0.0,
+    "feat_return_10d": 0.08797608315944672,
+    "feat_volatility_5d": 0.07475165277719498,
+    "feat_volatility_10d": 0.055498018860816956,
+    "feat_rsi": 0.07697334885597229,
+    "feat_macd_diff": 0.07668496668338776,
+    "feat_bollinger_pct_b": 0.13607145845890045,
+    "feat_dist_sma_20": 0.0862727165222168,
+    "feat_dist_sma_50": 0.06315281242132187,
+    "feat_dist_sma_200": 0.06460610777139664,
+    "feat_dist_vwap": 0.06639369577169418,
+    "feat_cmf": 0.016531003639101982,
+    "feat_vol_change": 0.0,
+    "feat_macro_spy_return": 0.013782949186861515,
     "feat_macro_spy_trend": 0.0,
-    "feat_macro_vix": 0.19050462543964386
+    "feat_macro_vix": 0.11342926323413849
   },
   "features_list": [
     "feat_return_1d",
@@ -49,7 +49,7 @@
     "feat_macro_vix"
   ],
   "best_params": {
-    "learning_rate": 0.01,
+    "learning_rate": 0.05,
     "max_depth": 3,
     "n_estimators": 50
   },

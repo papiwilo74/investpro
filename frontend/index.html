@@ -146,6 +146,7 @@
       <button class="tab flex-1 min-w-[90px] py-2.5 px-4 text-xs lg:text-sm font-bold rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all hover:bg-slate-200/50 dark:hover:bg-slate-800/50" data-tab="chart">Gráfico</button>
       <button class="tab flex-1 min-w-[90px] py-2.5 px-4 text-xs lg:text-sm font-bold rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all hover:bg-slate-200/50 dark:hover:bg-slate-800/50" data-tab="signals">Señales</button>
       <button class="tab flex-1 min-w-[90px] py-2.5 px-4 text-xs lg:text-sm font-bold rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all hover:bg-slate-200/50 dark:hover:bg-slate-800/50" data-tab="backtest">Backtest</button>
+      <button class="tab flex-1 min-w-[90px] py-2.5 px-4 text-xs lg:text-sm font-bold rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all hover:bg-slate-200/50 dark:hover:bg-slate-800/50" data-tab="validation">Validación</button>
       <button class="tab flex-1 min-w-[90px] py-2.5 px-4 text-xs lg:text-sm font-bold rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all hover:bg-slate-200/50 dark:hover:bg-slate-800/50" data-tab="ml">IA / ML</button>
       <button class="tab flex-1 min-w-[90px] py-2.5 px-4 text-xs lg:text-sm font-bold rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all hover:bg-slate-200/50 dark:hover:bg-slate-800/50" data-tab="news">Noticias</button>
       <button class="tab flex-1 min-w-[90px] py-2.5 px-4 text-xs lg:text-sm font-bold rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all hover:bg-slate-200/50 dark:hover:bg-slate-800/50" data-tab="broker">Broker</button>
@@ -192,6 +193,11 @@
         <!-- Renderizado dinámicamente -->
       </section>
       
+      <!-- Panel Validación -->
+      <section id="panel-validation" class="panel hidden flex flex-col gap-6">
+        <!-- Renderizado dinámicamente -->
+      </section>
+      
       <!-- Panel ML -->
       <section id="panel-ml" class="panel hidden flex flex-col gap-6">
         <!-- Renderizado dinámicamente -->
@@ -214,9 +220,9 @@
   <div id="toast-container" class="toast-container text-sm"></div>
 
   <!-- JS -->
-  <script src="/static/js/api.js"></script>
-  <script src="/static/js/charts.js"></script>
-  <script src="/static/js/components.js"></script>
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/api.js?v=6"></script>
+  <script src="/static/js/charts.js?v=6"></script>
+  <script src="/static/js/components.js?v=6"></script>
+  <script src="/static/js/app.js?v=6"></script>
 </body>
 </html>

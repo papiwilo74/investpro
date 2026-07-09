@@ -98,30 +98,7 @@ class VisualAnalyzer:
 
     def analyze_chart(self, df: pd.DataFrame) -> dict:
         """
-        Ejecuta inferencia visual sobre el DataFrame.
-        Retorna la probabilidad (0 a 1) y una etiqueta visual.
+        EXPERIMENTAL: requiere modelo pre-entrenado.
+        Sin pesos cargados, retorna NOT_AVAILABLE para no generar señales falsas.
         """
-        if not TORCH_AVAILABLE or self.model is None:
-            # Fallback simulado si PyTorch no está disponible
-            return {"visual_prob": 0.5, "visual_label": "NOT_AVAILABLE (Instalar torch)"}
-
-        try:
-            # 1. Convertir datos a imagen
-            img_matrix = self._df_to_image_matrix(df)
-            
-            # 2. Convertir a Tensor de PyTorch (Batch=1, Channels=1, H, W)
-            tensor_in = torch.tensor(img_matrix).unsqueeze(0).unsqueeze(0)
-            
-            # 3. Inferencia de la Red Neuronal
-            with torch.no_grad():
-                prob = self.model(tensor_in).item()
-                
-            label = "BULLISH_PATTERN" if prob > 0.6 else "BEARISH_PATTERN" if prob < 0.4 else "NEUTRAL"
-            
-            return {
-                "visual_prob": round(prob, 4),
-                "visual_label": label
-            }
-        except Exception as e:
-            print(f"[VISION] Error analizando gráfico: {e}")
-            return {"visual_prob": 0.5, "visual_label": "ERROR"}
+        return {"visual_prob": 0.5, "visual_label": "NOT_AVAILABLE", "status": "MODEL_NOT_TRAINED"}

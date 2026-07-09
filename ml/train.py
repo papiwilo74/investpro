@@ -19,6 +19,21 @@ from data.fetcher import DataFetcher
 from indicators.technical import TechnicalIndicators
 from ml.features import FeatureGenerator
 
+# ── Detectar GPU ───────────────────────────────────────────────────────
+_HAS_CUDA = False
+try:
+    import cupy as cp
+    _HAS_CUDA = cp.cuda.is_available()
+except Exception:
+    pass
+
+if not _HAS_CUDA:
+    try:
+        import torch
+        _HAS_CUDA = torch.cuda.is_available()
+    except Exception:
+        pass
+
 
 class _NumpyEncoder(json.JSONEncoder):
     """Codifica valores numpy/scipy a tipos nativos de Python para JSON."""
@@ -92,7 +107,8 @@ class ModelTrainer:
                 random_state=42,
                 n_jobs=-1,
                 eval_metric="logloss",
-                scale_pos_weight=scale_pos
+                scale_pos_weight=scale_pos,
+                device="cuda" if _HAS_CUDA else "cpu",
             )
             grid_search = GridSearchCV(
                 estimator=xgb_model,
@@ -113,7 +129,8 @@ class ModelTrainer:
                 random_state=42,
                 n_jobs=-1,
                 eval_metric="logloss",
-                scale_pos_weight=scale_pos
+                scale_pos_weight=scale_pos,
+                device="cuda" if _HAS_CUDA else "cpu",
             )
             model.fit(X_train, y_train)
             best_params = {
@@ -179,7 +196,7 @@ class ModelTrainer:
 
         # Preferir formato nativo
         if model_path.exists() and meta_path.exists():
-            model = XGBClassifier()
+            model = XGBClassifier(device="cuda" if _HAS_CUDA else "cpu")
             model.load_model(str(model_path))
             with open(meta_path, "r", encoding="utf-8") as f:
                 metadata = json.load(f)
@@ -235,6 +252,19 @@ class ModelTrainer:
             "prediction_date": latest_features.index[0].strftime("%Y-%m-%d"),
             "metrics": model_data["metrics"]
         }
+
+    def retrain_if_stale(self, ticker: str, max_age_days: int = 7, period: str = "2y") -> bool:
+        """Re-entrena si el modelo tiene más de max_age_days días. Retorna True si entrenó."""
+        ticker = ticker.upper()
+        base_path = self._get_model_path(ticker)
+        meta_path = base_path.with_suffix(".meta.json")
+        if meta_path.exists():
+            import time
+            age = time.time() - meta_path.stat().st_mtime
+            if age < max_age_days * 86400:
+                return False
+        self.train_and_save(ticker, period=period, optimize=False)
+        return True
 
     def get_test_predictions(self, ticker: str, df: pd.DataFrame) -> pd.DataFrame:
         """

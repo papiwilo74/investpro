@@ -230,6 +230,7 @@ class App {
       else if (this.state.activeTab === 'chart') await this.loadChartTab();
       else if (this.state.activeTab === 'signals') await this.loadSignalsTab();
       else if (this.state.activeTab === 'backtest') await this.loadBacktestTab();
+      else if (this.state.activeTab === 'validation') await this.loadValidationTab();
       else if (this.state.activeTab === 'portfolio') await this.loadPortfolioTab();
       else if (this.state.activeTab === 'ml') await this.loadMLTab();
       else if (this.state.activeTab === 'news') await this.loadNewsTab();
@@ -407,7 +408,224 @@ class App {
     this.charts.createAreaChart('backtest-equity-chart', data.equity_curve, '#3b82f6');
   }
 
-  // ── Pestaña 5: Portafolio ──────────────────────────────────────────
+  // ── Pestaña 5: Validación Walk-Forward ──────────────────────────
+  async loadValidationTab() {
+    const panel = document.getElementById('panel-validation');
+
+    panel.innerHTML = `
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none">
+        <h3 class="text-lg font-bold mb-2">Validación Estadística Walk-Forward + Monte Carlo</h3>
+        <p class="text-sm text-slate-500 mb-6">Evalúa si la estrategia tiene edge real o es overfitting.</p>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ticker</label>
+            <input type="text" id="val-ticker" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white font-bold uppercase" value="${this.state.ticker}">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Periodo</label>
+            <select id="val-period" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white">
+              <option value="1y">1 año</option>
+              <option value="2y" selected>2 años</option>
+              <option value="3y">3 años</option>
+              <option value="5y">5 años</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Meses Train</label>
+            <input type="number" id="val-train-months" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white" value="18" min="6" max="36">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Simulaciones MC</label>
+            <input type="number" id="val-n-sims" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white" value="500" min="100" max="5000">
+          </div>
+        </div>
+        <button id="run-validation-btn" class="w-full py-3.5 text-sm font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors shadow-md hover:shadow-lg">
+          Ejecutar Validación Estadística
+        </button>
+      </div>
+      <div id="validation-results" class="hidden"></div>
+
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none mt-6">
+        <h3 class="text-lg font-bold mb-2">Optimizador Genético</h3>
+        <p class="text-sm text-slate-500 mb-6">Evolución darwiniana de parámetros. Crea poblaciones, las cruza, muta y selecciona las mejores. Valida automáticamente con Walk-Forward.</p>
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tickers</label>
+            <input type="text" id="ga-tickers" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white font-bold" value="AAPL,MSFT,GOOGL,AMZN,NVDA">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Periodo</label>
+            <select id="ga-period" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white">
+              <option value="1y">1 año</option>
+              <option value="2y" selected>2 años</option>
+              <option value="3y">3 años</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Generaciones</label>
+            <input type="number" id="ga-gens" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white" value="8" min="2" max="30">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Población</label>
+            <input type="number" id="ga-pop" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white" value="20" min="5" max="80">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workers</label>
+            <input type="number" id="ga-workers" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white" value="8" min="1" max="16">
+          </div>
+        </div>
+        <button id="run-ga-btn" class="w-full py-3.5 text-sm font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-md hover:shadow-lg">
+          Ejecutar Optimización Genética
+        </button>
+      </div>
+      <div id="ga-results" class="hidden mt-6"></div>
+    `;
+
+    document.getElementById('run-validation-btn').addEventListener('click', async () => {
+      const resultsContainer = document.getElementById('validation-results');
+      resultsContainer.classList.remove('hidden');
+      resultsContainer.innerHTML = '<div class="bg-white dark:bg-slate-900 rounded-2xl p-12 text-center"><div class="skeleton h-6 w-1/3 rounded mx-auto mb-6"></div><p class="text-lg font-bold mb-2">Ejecutando validaci\u00f3n...</p></div>';
+      const ticker = document.getElementById('val-ticker').value.toUpperCase().trim() || this.state.ticker;
+      const period = document.getElementById('val-period').value;
+      const trainMonths = parseInt(document.getElementById('val-train-months').value) || 18;
+      const nSims = parseInt(document.getElementById('val-n-sims').value) || 500;
+      try {
+        const report = await this.api.validateStrategy(ticker, period, this.state.interval, trainMonths, 6, nSims);
+        resultsContainer.innerHTML = Components.validationReport(report);
+      } catch (e) {
+        resultsContainer.innerHTML = '<div class="bg-rose-50 dark:bg-rose-900/20 border-l-4 border-l-rose-500 rounded-xl p-5 text-sm">Error: ' + e.message + '</div>';
+      }
+    });
+
+    document.getElementById('run-ga-btn').addEventListener('click', async () => {
+      const gaContainer = document.getElementById('ga-results');
+      gaContainer.classList.remove('hidden');
+      const tickers = document.getElementById('ga-tickers').value;
+      const period = document.getElementById('ga-period').value;
+      const gens = parseInt(document.getElementById('ga-gens').value) || 8;
+      const pop = parseInt(document.getElementById('ga-pop').value) || 20;
+      const workers = parseInt(document.getElementById('ga-workers').value) || 8;
+
+      // Estado inicial: lanzando job
+      gaContainer.innerHTML = `
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-8 shadow-premium dark:shadow-none">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-lg font-bold">Optimización Genética</h3>
+              <p class="text-xs text-slate-500" id="ga-status-text">Iniciando...</p>
+            </div>
+            <button id="ga-cancel-btn" class="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-900/20 rounded-lg hover:bg-rose-100 transition">Cancelar</button>
+          </div>
+          <div class="mb-4">
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span id="ga-gen-label">Generación 0 / ${gens}</span>
+              <span id="ga-pct-label">0%</span>
+            </div>
+            <div class="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div id="ga-progress-bar" class="h-full rounded-full bg-emerald-500 transition-all duration-500" style="width: 0%;"></div>
+            </div>
+          </div>
+          <div id="ga-metrics-row" class="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl text-center text-xs"></div>
+          <p class="text-[10px] text-slate-400 mt-3">La optimización corre en background. Puedes seguir usando el resto de la app.</p>
+        </div>
+      `;
+
+      const statusText = document.getElementById('ga-status-text');
+      const genLabel = document.getElementById('ga-gen-label');
+      const pctLabel = document.getElementById('ga-pct-label');
+      const progressBar = document.getElementById('ga-progress-bar');
+      const metricsRow = document.getElementById('ga-metrics-row');
+
+      let cancelled = false;
+      const cancelBtn = document.getElementById('ga-cancel-btn');
+      cancelBtn.addEventListener('click', async () => {
+        cancelled = true;
+        if (window._gaJobId) {
+          try { await this.api.cancelGeneticJob(window._gaJobId); } catch (e) {}
+        }
+        statusText.textContent = 'Cancelando...';
+      });
+
+      try {
+        // 1. Lanzar el job (respuesta inmediata con job_id)
+        const launchRes = await this.api.runGeneticOptimization(tickers, period, gens, pop, workers);
+        const jobId = launchRes.job_id;
+        window._gaJobId = jobId;
+        statusText.textContent = 'Evolucionando población en background...';
+
+        // 2. Polling del estado cada 2 segundos
+        let pollErrors = 0;
+        const pollInterval = setInterval(async () => {
+          if (cancelled) {
+            clearInterval(pollInterval);
+            return;
+          }
+          try {
+            const jobStatus = await this.api.getGeneticJobStatus(jobId);
+            pollErrors = 0; // reset error counter on success
+            const status = jobStatus.status;
+            const progress = jobStatus.progress || {};
+
+            if (status === 'running' && progress.current_gen) {
+              const pct = progress.pct || 0;
+              genLabel.textContent = `Generación ${progress.current_gen} / ${progress.total_gens || gens}`;
+              pctLabel.textContent = `${pct}%`;
+              progressBar.style.width = `${pct}%`;
+              const gm = progress.gen_metrics || {};
+              metricsRow.innerHTML = `
+                <div><div class="text-base font-bold text-emerald-600">${(gm.best_fitness || 0).toFixed(3)}</div><div class="text-slate-400">Fitness</div></div>
+                <div><div class="text-base font-bold text-indigo-600">${(gm.sharpe || 0).toFixed(2)}</div><div class="text-slate-400">Sharpe</div></div>
+                <div><div class="text-base font-bold text-amber-600">${((gm.retorno || 0) * 100).toFixed(1)}%</div><div class="text-slate-400">Retorno</div></div>
+                <div><div class="text-base font-bold text-rose-600">${((gm.max_drawdown || 0) * 100).toFixed(1)}%</div><div class="text-slate-400">Max DD</div></div>
+              `;
+              statusText.textContent = `Evolucionando... ${pct}% · ${gm.elapsed_s || 0}s por generación`;
+            } else if (status === 'running') {
+              statusText.textContent = 'Cargando datos y preparando población...';
+            }
+
+            if (status === 'completed') {
+              clearInterval(pollInterval);
+              window._gaJobId = null;
+              gaContainer.innerHTML = Components.geneticReport(jobStatus.result);
+            } else if (status === 'failed') {
+              clearInterval(pollInterval);
+              window._gaJobId = null;
+              gaContainer.innerHTML = `<div class="bg-rose-50 dark:bg-rose-900/20 border-l-4 border-l-rose-500 rounded-xl p-5 text-sm">Error: ${jobStatus.error || 'Error desconocido'}</div>`;
+            } else if (status === 'cancelled') {
+              clearInterval(pollInterval);
+              window._gaJobId = null;
+              gaContainer.innerHTML = `<div class="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-l-amber-500 rounded-xl p-5 text-sm">Optimización cancelada por el usuario.</div>`;
+            }
+          } catch (e) {
+            pollErrors++;
+            // 404 = job no existe (servidor reiniciado o job expirado)
+            // Detener polling tras 2 errores 404 consecutivos
+            if (e.message && e.message.includes('no encontrado')) {
+              clearInterval(pollInterval);
+              window._gaJobId = null;
+              gaContainer.innerHTML = `<div class="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-l-amber-500 rounded-xl p-5 text-sm">El job ya no existe (el servidor fue reiniciado). <button id="ga-retry-btn" class="ml-2 px-3 py-1 text-xs font-bold text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200">Volver a optimizar</button></div>`;
+              document.getElementById('ga-retry-btn')?.addEventListener('click', () => {
+                document.getElementById('run-ga-btn')?.click();
+              });
+              return;
+            }
+            // Otros errores: tolerar hasta 5 consecutivos, luego parar
+            if (pollErrors >= 5) {
+              clearInterval(pollInterval);
+              window._gaJobId = null;
+              gaContainer.innerHTML = `<div class="bg-rose-50 dark:bg-rose-900/20 border-l-4 border-l-rose-500 rounded-xl p-5 text-sm">Error de conexión tras ${pollErrors} intentos. Pulsa "Optimizar" de nuevo.</div>`;
+            }
+          }
+        }, 2000);
+
+      } catch (e) {
+        window._gaJobId = null;
+        gaContainer.innerHTML = '<div class="bg-rose-50 dark:bg-rose-900/20 border-l-4 border-l-rose-500 rounded-xl p-5 text-sm">Error: ' + e.message + '</div>';
+      }
+    });
+  }
+
+  // ── Pestaña 6: Portafolio ──────────────────────────────────────────
   async loadPortfolioTab() {
     const panel = document.getElementById('panel-portfolio');
     
@@ -842,6 +1060,16 @@ class App {
           <div id="broker-positions-container"></div>
         </div>
         <div class="mt-6" id="broker-orders-container"></div>
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="broker-cards-container">
+          <div id="broker-config-container"></div>
+          <div id="broker-market-regime-container"></div>
+          <div id="broker-breadth-container"></div>
+          <div id="broker-mtf-container"></div>
+          <div id="broker-kelly-container"></div>
+          <div id="broker-advisor-container"></div>
+          <div id="broker-ml-container"></div>
+          <div id="broker-risk-container"></div>
+        </div>
       `;
 
       document.getElementById('toggle-bot-btn').addEventListener('click', async () => {
@@ -931,7 +1159,41 @@ class App {
           </div>
         `;
       });
-      
+
+      // Load Kelly, ML, Risk cards async
+      this.api.getBotConfig().then(config => {
+        const cCont = document.getElementById('broker-config-container');
+        if (cCont) cCont.innerHTML = Components.botConfigCard(config);
+      });
+      this.api.getMarketRegime().then(regime => {
+        const mCont = document.getElementById('broker-market-regime-container');
+        if (mCont) mCont.innerHTML = Components.marketRegimeCard(regime);
+      });
+      this.api.getRiskKelly().then(kelly => {
+        const kCont = document.getElementById('broker-kelly-container');
+        if (kCont) kCont.innerHTML = Components.kellyCard(kelly);
+      });
+      this.api.getMLModelsStatus().then(data => {
+        const mCont = document.getElementById('broker-ml-container');
+        if (mCont) mCont.innerHTML = Components.mlStatusCard(data?.models || []);
+      });
+      this.api.getRiskStatus().then(risk => {
+        const rCont = document.getElementById('broker-risk-container');
+        if (rCont) rCont.innerHTML = Components.riskCard(risk);
+      });
+      this.api.getAdvisorStatus().then(advisor => {
+        const aCont = document.getElementById('broker-advisor-container');
+        if (aCont) aCont.innerHTML = Components.onlineAdvisorCard(advisor);
+      });
+      this.api.getMarketBreadth().then(breadth => {
+        const bCont = document.getElementById('broker-breadth-container');
+        if (bCont) bCont.innerHTML = Components.marketBreadthCard(breadth);
+      });
+      this.api.getMTFStatus(this.state.ticker).then(mtf => {
+        const mCont = document.getElementById('broker-mtf-container');
+        if (mCont) mCont.innerHTML = Components.mtfCard(mtf);
+      });
+
     } catch(e) {
       panel.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 border-l-4 border-l-rose-500 rounded-2xl p-6 shadow-premium">Error al cargar datos del broker: ${e.message}</div>`;
     }

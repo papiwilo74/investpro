@@ -199,16 +199,16 @@ def _load_strategy_df(ticker: str, period: str, interval: str):
     return df
 
 
-def run_bot_backtest(ticker: str, period: str, interval: str) -> None:
+def run_bot_backtest(ticker: str, period: str, interval: str, leverage: float = 1.0) -> None:
     ticker = ticker.upper()
     print(f"\n{'=' * 60}")
     print(f"  BOT BACKTEST -- {ticker}")
-    print(f"  Periodo: {period} | Intervalo: {interval}")
+    print(f"  Periodo: {period} | Intervalo: {interval} | Apalancamiento: x{leverage:.1f}")
     print(f"{'=' * 60}\n")
 
     try:
         df = _load_strategy_df(ticker, period, interval)
-        result = BotBacktestEngine().run(df, ticker=ticker)
+        result = BotBacktestEngine(leverage=leverage).run(df, ticker=ticker)
         m = result.metrics
 
         print(f"  Capital inicial:    ${BACKTEST_PARAMS.initial_capital:>12,.2f}")
@@ -367,8 +367,8 @@ def main() -> None:
         description="Inversion Helper - Analisis tecnico, backtesting, optimizacion de portafolio y Machine Learning",
     )
     parser.add_argument(
-        "--ticker", "-t", default="AAPL",
-        help="Ticker symbol (default: AAPL)",
+        "--ticker", "-t", default=None,
+        help="Ticker symbol (default: todos los del scanner)",
     )
     parser.add_argument(
         "--period", "-p", default="1y",
@@ -376,7 +376,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--interval", "-i", default="1d",
-        help="Intervalo de datos: 1d, 1wk, 1mo (default: 1d)",
+        help="Intervalo: 1m, 5m, 15m, 1d, 1wk, 1mo (default: 1d)",
     )
     parser.add_argument(
         "--portfolio", "-pf", default=None,
@@ -401,6 +401,10 @@ def main() -> None:
     parser.add_argument(
         "--bot-backtest", action="store_true",
         help="Ejecutar backtest completo del bot con filtros y gestion de riesgo",
+    )
+    parser.add_argument(
+        "--leverage", type=float, default=1.0,
+        help="Apalancamiento aplicado al backtest del bot (ej: 2.0 o 3.0). Default: 1.0 (sin apalancar)",
     )
     parser.add_argument(
         "--optimize-bot", action="store_true",
@@ -447,6 +451,50 @@ def main() -> None:
         help="Ejecuta backtest masivo en decenas de acciones para probar consistencia estadística.",
     )
     parser.add_argument(
+        "--genetic-optimize", action="store_true",
+        help="Ejecutar optimización genética con multiprocessing",
+    )
+    parser.add_argument(
+        "--gen-generations", type=int, default=20,
+        help="Generaciones para optimización genética (default: 20)",
+    )
+    parser.add_argument(
+        "--gen-population", type=int, default=50,
+        help="Población por generación (default: 50)",
+    )
+    parser.add_argument(
+        "--gen-tickers", default="AAPL,MSFT,GOOGL,AMZN,NVDA",
+        help="Tickers para optimización genética separados por coma",
+    )
+    parser.add_argument(
+        "--gen-workers", type=int, default=None,
+        help="Workers (default: todos los núcleos CPU)",
+    )
+    parser.add_argument(
+        "--intraday", action="store_true",
+        help="Modo intradía: datos 5m, periodos cortos, scalping agresivo",
+    )
+    parser.add_argument(
+        "--nn", action="store_true",
+        help="Activar Neural Brain (red neuronal) en lugar de reglas manuales",
+    )
+    parser.add_argument(
+        "--train-nn", default=None,
+        help="Entrenar Neural Brain con backtest para tickers separados por coma (ej: AAPL,MSFT,GOOGL)",
+    )
+    parser.add_argument(
+        "--nn-epochs", type=int, default=50,
+        help="Épocas para entrenamiento supervisado de Neural Brain (default: 50)",
+    )
+    parser.add_argument(
+        "--nn-rl-epochs", type=int, default=20,
+        help="Épocas de fine-tuning RL para Neural Brain (default: 20)",
+    )
+    parser.add_argument(
+        "--stream", action="store_true",
+        help="Probar WebSocket streaming de Alpaca en tiempo real",
+    )
+    parser.add_argument(
         "--port", type=int, default=8000,
         help="Puerto para la Web App (default: 8000)",
     )
@@ -454,11 +502,13 @@ def main() -> None:
 
     if args.web:
         import uvicorn
+        port = args.port or int(os.environ.get("PORT", 8000))
+        host = os.environ.get("HOST", "0.0.0.0")
         print(f"\n{'=' * 60}")
         print(f"  INVERSION HELPER — Web App Premium")
-        print(f"  Abriendo en: http://localhost:{args.port}")
+        print(f"  Abriendo en: http://{host}:{port}")
         print(f"{'=' * 60}\n")
-        uvicorn.run("api.server:app", host="0.0.0.0", port=args.port, reload=True)
+        uvicorn.run("api.server:app", host=host, port=port, reload=False)
     elif args.app:
         app_path = Path(__file__).parent / "app" / "streamlit_app.py"
         subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path)])
@@ -469,20 +519,64 @@ def main() -> None:
     elif args.train_rl:
         from ml.rl_train import RLTrainer
         RLTrainer().train(args.train_rl, args.period)
+    elif args.train_nn:
+        from ml.neural_brain import train_from_backtest
+        tickers = [t.strip().upper() for t in args.train_nn.split(",") if t.strip()]
+        train_from_backtest(tickers, period=args.period, interval=args.interval,
+                            epochs=args.nn_epochs, rl_epochs=args.nn_rl_epochs)
     elif args.daemon:
         from bot.engine import TradingBot
-        bot = TradingBot()
-        bot.run_forever(ticker=args.ticker, interval=args.interval, sleep_seconds=3600)
+        bot = TradingBot(intraday=args.intraday, use_neural_brain=args.nn)
+        scan_ticker = args.ticker if args.ticker else None
+        bot.run_forever(ticker=scan_ticker, interval=args.interval, sleep_seconds=3600)
     elif args.bot_backtest:
-        run_bot_backtest(args.ticker, args.period, args.interval)
+        run_bot_backtest(args.ticker or "AAPL", args.period, args.interval, args.leverage)
     elif args.optimize_bot:
-        run_bot_optimization(args.ticker, args.period, args.interval)
+        run_bot_optimization(args.ticker or "AAPL", args.period, args.interval)
     elif args.paper_check:
         run_paper_check()
     elif args.scan_market:
         run_market_scan(args.universe, args.period, args.interval, args.scan_limit, args.record_paper_signals)
     elif args.paper_safety:
         run_paper_safety(update_outcomes=args.update_paper_outcomes)
+    elif args.genetic_optimize:
+        from portfolio.genetic_optimizer import GeneticOptimizer
+        tickers = [t.strip() for t in args.gen_tickers.split(",")]
+        period = "3mo" if args.intraday else args.period
+        interval = "5m" if args.intraday else "1d"
+        print(f"\n{'=' * 60}")
+        print(f"  OPTIMIZACIÓN GENÉTICA — {'INTRADÍA' if args.intraday else 'MULTIPROCESSING'}")
+        print(f"  Tickers: {', '.join(tickers)}")
+        print(f"  Periodo: {period} | Intervalo: {interval}")
+        print(f"  Generaciones: {args.gen_generations} | Población: {args.gen_population}")
+        print(f"{'=' * 60}\n")
+        optimizer = GeneticOptimizer(tickers=tickers, period=period, interval=interval)
+        optimizer.run(
+            generations=args.gen_generations,
+            population_size=args.gen_population,
+            workers=args.gen_workers,
+        )
+    elif args.stream:
+        import asyncio
+        from broker.alpaca_client import AlpacaStreamer
+
+        async def _print_data(data):
+            print(f"[{data['type'].upper()}] {data['ticker']:6s} | "
+                  f"precio={data.get('price', data.get('close', 'N/A'))}")
+
+        async def _run_stream():
+            streamer = AlpacaStreamer()
+            if streamer._missing:
+                print("Credenciales no configuradas. Revisa .env")
+                return
+            stream_ticker = args.ticker or "AAPL"
+            print(f"\nConectando a WebSocket de Alpaca para {stream_ticker}...")
+            streamer.on_trade(stream_ticker, _print_data)
+            streamer.on_quote(stream_ticker, _print_data)
+            print("Presiona Ctrl+C para detener.\n")
+            await streamer.start()
+
+        asyncio.run(_run_stream())
     elif args.global_backtest:
         from backtesting.global_engine import GlobalBacktester
         print(f"\\n{'=' * 60}")
@@ -528,8 +622,10 @@ def main() -> None:
                 print("  [+] VENTAJA MATEMÁTICA CONFIRMADA. (Edge positivo)")
         print(f"{'-' * 50}\\n")
     else:
-        run_pipeline(args.ticker, args.period, args.interval)
+        run_pipeline(args.ticker or "AAPL", args.period, args.interval)
 
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
     main()

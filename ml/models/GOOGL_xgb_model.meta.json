@@ -1,32 +1,32 @@
 {
   "ticker": "GOOGL",
   "metrics": {
-    "accuracy": 0.504950495049505,
-    "precision": 0.3541666666666667,
-    "recall": 0.4722222222222222,
-    "f1": 0.40476190476190477,
+    "accuracy": 0.40594059405940597,
+    "precision": 0.34285714285714286,
+    "recall": 0.631578947368421,
+    "f1": 0.4444444444444444,
     "train_size": 400,
     "test_size": 101
   },
   "feature_importances": {
-    "feat_return_1d": 0.04171903431415558,
-    "feat_return_3d": 0.03614874556660652,
-    "feat_return_5d": 0.04622916877269745,
-    "feat_return_10d": 0.048429980874061584,
-    "feat_volatility_5d": 0.043308332562446594,
-    "feat_volatility_10d": 0.06181317940354347,
-    "feat_rsi": 0.06293673068284988,
-    "feat_macd_diff": 0.054769307374954224,
-    "feat_bollinger_pct_b": 0.04998604208230972,
-    "feat_dist_sma_20": 0.04678057134151459,
-    "feat_dist_sma_50": 0.08396925032138824,
-    "feat_dist_sma_200": 0.0687486082315445,
-    "feat_dist_vwap": 0.03969890624284744,
-    "feat_cmf": 0.08001482486724854,
-    "feat_vol_change": 0.044330861419439316,
-    "feat_macro_spy_return": 0.05553138256072998,
-    "feat_macro_spy_trend": 0.09067025035619736,
-    "feat_macro_vix": 0.044914744794368744
+    "feat_return_1d": 0.04252557456493378,
+    "feat_return_3d": 0.0027403978165239096,
+    "feat_return_5d": 0.005156062077730894,
+    "feat_return_10d": 0.01735193282365799,
+    "feat_volatility_5d": 0.08123906701803207,
+    "feat_volatility_10d": 0.10426676273345947,
+    "feat_rsi": 0.13683007657527924,
+    "feat_macd_diff": 0.1042405217885971,
+    "feat_bollinger_pct_b": 0.0,
+    "feat_dist_sma_20": 0.052216365933418274,
+    "feat_dist_sma_50": 0.08794861286878586,
+    "feat_dist_sma_200": 0.09603551775217056,
+    "feat_dist_vwap": 0.0,
+    "feat_cmf": 0.11478367447853088,
+    "feat_vol_change": 0.04028959944844246,
+    "feat_macro_spy_return": 0.0,
+    "feat_macro_spy_trend": 0.10265002399682999,
+    "feat_macro_vix": 0.011725849471986294
   },
   "features_list": [
     "feat_return_1d",
@@ -49,9 +49,9 @@
     "feat_macro_vix"
   ],
   "best_params": {
-    "learning_rate": 0.1,
-    "max_depth": 5,
-    "n_estimators": 100
+    "learning_rate": 0.01,
+    "max_depth": 3,
+    "n_estimators": 50
   },
   "optimized": true
 }

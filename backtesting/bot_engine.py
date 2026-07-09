@@ -18,6 +18,7 @@ class BotBacktestResult:
     trades: list[Trade]
     metrics: dict
     params: StrategyParams
+    leverage: float = 1.0
 
 
 class BotBacktestEngine:
@@ -28,10 +29,14 @@ class BotBacktestEngine:
         self,
         strategy_params: StrategyParams | None = None,
         backtest_params: BacktestParams | None = None,
+        leverage: float = 1.0,
     ) -> None:
         self.strategy_params = strategy_params or StrategyParams()
         self.backtest_params = backtest_params or BACKTEST_PARAMS
         self.brain = TradingBrain(self.strategy_params)
+        # Apalancamiento aplicado al capital invertido en cada entrada.
+        # 1.0 = sin apalancar (backtest clásico). 2.0-3.0 = modo Hedge Fund.
+        self.leverage = max(1.0, float(leverage))
 
     def _apply_slippage(self, price: float, is_buy: bool) -> float:
         factor = 1 + self.backtest_params.slippage_pct if is_buy else 1 - self.backtest_params.slippage_pct
@@ -94,7 +99,6 @@ class BotBacktestEngine:
                     weekly_trends[j] = "BEARISH"
 
         for i in range(len(df)):
-            row = df.iloc[: i + 1]
             date = df.index[i]
             close = float(df["close"].iloc[i])
             score = float(scores.iloc[i])
@@ -102,7 +106,8 @@ class BotBacktestEngine:
             has_position = shares != 0.0
 
             decision = self.brain.decide(
-                df=row,
+                df=df,
+                current_index=i,
                 score=score,
                 has_position=has_position,
                 position_pnl_pct=0.0,
@@ -119,7 +124,10 @@ class BotBacktestEngine:
             # ── Abrir LONG o DIP ───────────────────────────────────
             if decision.action == "BUY" and not has_position:
                 exec_price = self._apply_slippage(close, is_buy=True)
-                invest_amount = capital * decision.position_size_pct
+                # El sizing del cerebro + apalancamiento configurado (modo Hedge Fund)
+                invest_amount = capital * decision.position_size_pct * self.leverage
+                # En backtest permitimos "comprar a crédito" (capital puede ir negativo)
+                # para reflejar el margen del apalancamiento real.
                 qty = int(invest_amount / exec_price)
                 if qty > 0:
                     cost = exec_price * qty
@@ -129,15 +137,18 @@ class BotBacktestEngine:
                     entry_price = exec_price
                     entry_date = date
                     current_side = decision.side  # "LONG" o "DIP"
-                    self.brain.on_position_opened(ticker, exec_price, row, side=current_side)
+                    self.brain.on_position_opened(ticker=ticker, entry_price=exec_price, df=df, current_index=i, side=current_side)
 
             # ── Cerrar LONG / DIP ──────────────────────────────────
             elif decision.action == "SELL" and has_position and shares > 0:
                 exec_price = self._apply_slippage(close, is_buy=False)
-                revenue = exec_price * shares
-                comm = self._commission(exec_price, shares)
-                pnl = revenue - (entry_price * shares) - comm
-                pnl_pct = pnl / (entry_price * shares)
+                sell_qty = shares
+                if decision.partial_exit_fraction > 0:
+                    sell_qty = max(1, int(shares * decision.partial_exit_fraction))
+                revenue = exec_price * sell_qty
+                comm = self._commission(exec_price, sell_qty)
+                pnl = revenue - (entry_price * sell_qty) - comm
+                pnl_pct = pnl / (entry_price * sell_qty)
 
                 trades.append(Trade(
                     entry_date=entry_date,
@@ -145,7 +156,7 @@ class BotBacktestEngine:
                     side=current_side,
                     entry_price=entry_price,
                     exit_price=exec_price,
-                    shares=shares,
+                    shares=sell_qty,
                     pnl=pnl,
                     pnl_pct=pnl_pct,
                     commission=comm,
@@ -153,31 +164,31 @@ class BotBacktestEngine:
                 ))
 
                 capital += revenue - comm
-                shares = 0.0
-                entry_price = 0.0
-                current_side = "LONG"
-                self.brain._positions.pop(ticker, None)
+                shares -= sell_qty
+                if shares <= 0:
+                    shares = 0.0
+                    entry_price = 0.0
+                    current_side = "LONG"
+                    self.brain._positions.pop(ticker, None)
 
             # ── Abrir SHORT ────────────────────────────────────────
             elif decision.action == "SHORT" and not has_position:
                 exec_price = self._apply_slippage(close, is_buy=False)
-                invest_amount = capital * decision.position_size_pct
+                invest_amount = capital * decision.position_size_pct * self.leverage
                 qty = int(invest_amount / exec_price)
                 if qty > 0:
-                    # En short: recibimos el dinero ahora, devolvemos más tarde
                     comm = self._commission(exec_price, qty)
-                    capital -= comm  # Solo comisión al abrir
-                    shares = -float(qty)  # Negativo = short
+                    capital -= comm
+                    shares = -float(qty)
                     entry_price = exec_price
                     entry_date = date
                     current_side = "SHORT"
-                    self.brain.on_position_opened(ticker, exec_price, row, side="SHORT")
+                    self.brain.on_position_opened(ticker=ticker, entry_price=exec_price, df=df, current_index=i, side="SHORT")
 
             # ── Cubrir SHORT (COVER) ───────────────────────────────
             elif decision.action == "COVER" and has_position and shares < 0:
                 exec_price = self._apply_slippage(close, is_buy=True)
                 short_qty = abs(shares)
-                # P&L short = (precio_entrada - precio_actual) * cantidad
                 pnl = (entry_price - exec_price) * short_qty
                 comm = self._commission(exec_price, short_qty)
                 pnl_pct = pnl / (entry_price * short_qty)
@@ -215,8 +226,9 @@ class BotBacktestEngine:
         equity = pd.Series(equity_values, index=equity_dates, name="equity")
         metrics = PerformanceMetrics.summary(equity, trades)
         metrics["buy_hold_return"] = self._buy_hold_return(df)
+        metrics["leverage"] = self.leverage
 
-        return BotBacktestResult(equity, trades, metrics, self.strategy_params)
+        return BotBacktestResult(equity, trades, metrics, self.strategy_params, leverage=self.leverage)
 
     @staticmethod
     def _buy_hold_return(df: pd.DataFrame) -> float:

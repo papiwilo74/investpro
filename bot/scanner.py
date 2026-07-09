@@ -1,6 +1,12 @@
-"""Market scanner for ranking liquid trading opportunities."""
+"""Market scanner for ranking liquid trading opportunities.
+
+Usa descargas paralelas (ThreadPoolExecutor) y procesamiento multi-hilo
+para aprovechar CPU multi-core (i7-13650HX: 14 cores / 20 hilos) y GPU (RTX 4060).
+"""
 from __future__ import annotations
 
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Iterable
 
@@ -64,6 +70,9 @@ class ScanResult:
     accepted: list[ScanCandidate]
     rejected: list[ScanCandidate]
     errors: dict[str, str]
+    scan_elapsed: float = 0.0
+    scan_parallel: bool = True
+    scan_ticker_count: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -74,6 +83,9 @@ class ScanResult:
             "accepted": [c.to_dict() for c in self.accepted],
             "rejected": [c.to_dict() for c in self.rejected],
             "errors": self.errors,
+            "scan_elapsed": round(self.scan_elapsed, 2),
+            "scan_parallel": self.scan_parallel,
+            "scan_ticker_count": self.scan_ticker_count,
         }
 
 
@@ -114,6 +126,7 @@ class MarketScanner:
         interval: str = "1d",
         limit: int = 15,
         include_rejected: bool = True,
+        parallel: bool = True,
     ) -> ScanResult:
         if isinstance(universe, str) or universe is None:
             universe_name = universe or self.config.default_universe
@@ -123,22 +136,23 @@ class MarketScanner:
             tickers = [t.upper().strip() for t in universe if t.strip()]
 
         tickers = tickers[: self.config.max_scan_tickers]
-        accepted: list[ScanCandidate] = []
-        rejected: list[ScanCandidate] = []
         errors: dict[str, str] = {}
 
-        for ticker in tickers:
-            try:
-                candidate = self.evaluate_ticker(ticker, period=period, interval=interval)
-                if candidate.accepted:
-                    accepted.append(candidate)
-                elif include_rejected:
-                    rejected.append(candidate)
-            except Exception as exc:
-                errors[ticker] = str(exc)
+        t0 = time.perf_counter()
+
+        if parallel and len(tickers) > 5:
+            candidates, errors = self._scan_parallel(tickers, period, interval)
+        else:
+            candidates, errors = self._scan_sequential(tickers, period, interval)
+
+        elapsed = time.perf_counter() - t0
+
+        accepted = [c for c in candidates if c.accepted]
+        rejected = [c for c in candidates if not c.accepted]
 
         accepted.sort(key=lambda c: c.rank_score, reverse=True)
         rejected.sort(key=lambda c: c.rank_score, reverse=True)
+
         if self.journal:
             for candidate in accepted[:limit]:
                 self.journal.record_signal(
@@ -151,12 +165,157 @@ class MarketScanner:
                     confidence=candidate.rank_score,
                 )
 
-        return ScanResult(
+        result = ScanResult(
             universe=universe_name,
             scanned=len(tickers),
             accepted=accepted[:limit],
             rejected=rejected[:limit] if include_rejected else [],
             errors=errors,
+            scan_elapsed=round(elapsed, 2),
+            scan_parallel=parallel,
+            scan_ticker_count=len(tickers),
+        )
+        return result
+
+    def _scan_sequential(
+        self, tickers: list[str], period: str, interval: str
+    ) -> tuple[list[ScanCandidate], dict[str, str]]:
+        candidates: list[ScanCandidate] = []
+        errors: dict[str, str] = {}
+        for ticker in tickers:
+            try:
+                candidates.append(self.evaluate_ticker(ticker, period=period, interval=interval))
+            except Exception as exc:
+                errors[ticker] = str(exc)
+        return candidates, errors
+
+    def _scan_parallel(
+        self, tickers: list[str], period: str, interval: str
+    ) -> tuple[list[ScanCandidate], dict[str, str]]:
+        """Pipeline paralelo: descarga batch → procesamiento multi-hilo."""
+        candidates: list[ScanCandidate] = []
+        errors: dict[str, str] = {}
+
+        # Fase 1: Descargar todo en paralelo (~10 tickers a la vez es óptimo para evitar rate-limit)
+        workers = min(14, len(tickers))
+        data = self.fetcher.fetch_batch(tickers, period=period, interval=interval, max_workers=workers)
+
+        if not data:
+            return candidates, {t: "fetch_batch no retornó datos" for t in tickers}
+
+        for ticker in tickers:
+            if ticker not in data:
+                errors[ticker] = "sin datos (fetch_batch)"
+                continue
+
+        # Fase 2: Procesar indicadores + señales en paralelo
+        def _process_one(ticker: str, df: pd.DataFrame):
+            try:
+                df = TechnicalIndicators.add_all(df)
+                df = SignalGenerator.add_signal_columns(df)
+                return self._build_candidate(ticker, df)
+            except Exception as exc:
+                raise RuntimeError(f"{ticker}: {exc}") from exc
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(_process_one, ticker, df): ticker
+                for ticker, df in data.items()
+            }
+            for future in as_completed(futures):
+                ticker = futures[future]
+                try:
+                    candidates.append(future.result())
+                except Exception as exc:
+                    errors[ticker] = str(exc)
+
+        return candidates, errors
+
+    def _build_candidate(self, ticker: str, df: pd.DataFrame) -> ScanCandidate:
+        """Construye ScanCandidate desde un DataFrame ya procesado (indicadores + señales)."""
+        if len(df) < 60:
+            raise ValueError("historial insuficiente para evaluar tendencia")
+
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
+        close = float(last["close"])
+        prev_close = float(prev["close"])
+        avg_volume = int(df["volume"].tail(20).mean())
+        atr = self._float_or_zero(last.get("atr"))
+        atr_pct = atr / close if close > 0 else 0.0
+        adx = self._float_or_zero(last.get("adx"))
+        rsi = self._float_or_none(last.get("rsi"))
+        signal_score = SignalGenerator.composite_score(df)
+        trend_score = self._trend_score(last, close)
+        liquidity_score = min(1.0, avg_volume / 5_000_000)
+        volatility_score = self._volatility_score(atr_pct)
+        rank_score = (
+            signal_score * 0.40
+            + trend_score * 0.25
+            + liquidity_score * 0.20
+            + volatility_score * 0.15
+        )
+
+        reasons: list[str] = []
+        warnings: list[str] = []
+        accepted = True
+
+        if close < self.config.min_price:
+            accepted = False
+            warnings.append(f"precio bajo (${close:.2f} < ${self.config.min_price:.2f})")
+        else:
+            reasons.append(f"precio operable (${close:.2f})")
+
+        if avg_volume < self.config.min_avg_volume:
+            accepted = False
+            warnings.append(f"volumen bajo ({avg_volume:,} < {self.config.min_avg_volume:,})")
+        else:
+            reasons.append(f"liquidez OK ({avg_volume:,} acciones/dia)")
+
+        if atr_pct < self.config.min_atr_pct:
+            accepted = False
+            warnings.append(f"volatilidad muy baja (ATR {atr_pct:.2%})")
+        elif atr_pct > self.config.max_atr_pct:
+            accepted = False
+            warnings.append(f"volatilidad excesiva (ATR {atr_pct:.2%})")
+        else:
+            reasons.append(f"volatilidad saludable (ATR {atr_pct:.2%})")
+
+        if adx < self.config.min_adx:
+            accepted = False
+            warnings.append(f"tendencia debil (ADX {adx:.1f})")
+        else:
+            reasons.append(f"tendencia medible (ADX {adx:.1f})")
+
+        if signal_score < self.config.min_score:
+            accepted = False
+            warnings.append(f"score tecnico bajo ({signal_score:+.2f})")
+        else:
+            reasons.append(f"score tecnico positivo ({signal_score:+.2f})")
+
+        if trend_score < self.config.min_trend_score:
+            accepted = False
+            warnings.append(f"estructura de tendencia negativa ({trend_score:+.2f})")
+        elif trend_score > 0:
+            reasons.append(f"estructura alcista ({trend_score:+.2f})")
+
+        change_pct = (close / prev_close - 1.0) if prev_close else 0.0
+        return ScanCandidate(
+            ticker=ticker,
+            accepted=accepted,
+            rank_score=float(rank_score),
+            signal_score=float(signal_score),
+            trend_score=float(trend_score),
+            liquidity_score=float(liquidity_score),
+            volatility_score=float(volatility_score),
+            close=close,
+            change_pct=float(change_pct),
+            avg_volume=avg_volume,
+            atr_pct=float(atr_pct),
+            adx=adx,
+            rsi=rsi,
+            reasons=reasons,
+            warnings=warnings,
         )
 
     def evaluate_ticker(self, ticker: str, period: str = "1y", interval: str = "1d") -> ScanCandidate:

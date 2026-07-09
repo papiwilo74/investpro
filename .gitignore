@@ -29,15 +29,24 @@ update_daemon.py
 temp.py
 
 # ══════════════════════════════════════════════════════════
-#  DATOS Y MODELOS (PESADOS)
+#  DATOS Y MODELOS (PESADOS / GENERADOS EN RUNTIME)
 # ══════════════════════════════════════════════════════════
 *.sqlite3
 *.h5
 *.pkl
 *.pt
 *.pth
+*.parquet
 data/cache/
-ml/models/*.pt
+data/*.json
+data/*.sqlite3
+data/*.log
+logs/
+*.log
+config/optimal_params.json
+rl_qtable.pkl
+data/genetic_hall_of_fame.json
+ml/models/*.zip
 ml/models/*.pkl
 
 # ══════════════════════════════════════════════════════════

@@ -1,32 +1,32 @@
 {
   "ticker": "AAPL",
   "metrics": {
-    "accuracy": 0.39603960396039606,
-    "precision": 0.2765957446808511,
-    "recall": 0.325,
-    "f1": 0.2988505747126437,
+    "accuracy": 0.49504950495049505,
+    "precision": 0.4166666666666667,
+    "recall": 0.46511627906976744,
+    "f1": 0.43956043956043955,
     "train_size": 400,
     "test_size": 101
   },
   "feature_importances": {
-    "feat_return_1d": 0.03409473970532417,
-    "feat_return_3d": 0.03884781152009964,
-    "feat_return_5d": 0.029878128319978714,
-    "feat_return_10d": 0.06674791872501373,
-    "feat_volatility_5d": 0.05891279876232147,
-    "feat_volatility_10d": 0.07699916511774063,
-    "feat_rsi": 0.039126209914684296,
-    "feat_macd_diff": 0.04992835596203804,
-    "feat_bollinger_pct_b": 0.03183858096599579,
-    "feat_dist_sma_20": 0.044718220829963684,
-    "feat_dist_sma_50": 0.0866459459066391,
-    "feat_dist_sma_200": 0.06919877976179123,
-    "feat_dist_vwap": 0.05310298874974251,
-    "feat_cmf": 0.07678414136171341,
-    "feat_vol_change": 0.036241043359041214,
-    "feat_macro_spy_return": 0.03511326387524605,
-    "feat_macro_spy_trend": 0.09451892226934433,
-    "feat_macro_vix": 0.07730290293693542
+    "feat_return_1d": 0.034428730607032776,
+    "feat_return_3d": 0.028068337589502335,
+    "feat_return_5d": 0.03025849722325802,
+    "feat_return_10d": 0.0673101544380188,
+    "feat_volatility_5d": 0.043719056993722916,
+    "feat_volatility_10d": 0.08277715742588043,
+    "feat_rsi": 0.04233640432357788,
+    "feat_macd_diff": 0.046506013721227646,
+    "feat_bollinger_pct_b": 0.04679961875081062,
+    "feat_dist_sma_20": 0.05625733360648155,
+    "feat_dist_sma_50": 0.09747299551963806,
+    "feat_dist_sma_200": 0.08887112140655518,
+    "feat_dist_vwap": 0.03311421722173691,
+    "feat_cmf": 0.061880212277173996,
+    "feat_vol_change": 0.033360693603754044,
+    "feat_macro_spy_return": 0.031927451491355896,
+    "feat_macro_spy_trend": 0.11284706741571426,
+    "feat_macro_vix": 0.06206493079662323
   },
   "features_list": [
     "feat_return_1d",
@@ -51,7 +51,7 @@
   "best_params": {
     "learning_rate": 0.1,
     "max_depth": 5,
-    "n_estimators": 100
+    "n_estimators": 200
   },
   "optimized": true
 }

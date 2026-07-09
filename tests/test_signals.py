@@ -15,10 +15,10 @@ class TestSignalGenerator:
 
         df = SignalGenerator.add_signal_columns(df)
         assert "sig_rsi" in df.columns
-        # RSI > 70 debe ser señal de venta (-1)
-        assert df["sig_rsi"].iloc[5] == -1
-        # RSI < 30 debe ser señal de compra (1)
-        assert df["sig_rsi"].iloc[15] == 1
+        # RSI > 70 debe ser negativo (señal de venta)
+        assert df["sig_rsi"].iloc[5] < 0
+        # RSI < 30 debe ser positivo (señal de compra)
+        assert df["sig_rsi"].iloc[15] > 0
 
     def test_add_signal_columns_macd_crossover(self):
         dates = pd.date_range("2023-01-01", periods=10, freq="D")
@@ -30,10 +30,14 @@ class TestSignalGenerator:
 
         df = SignalGenerator.add_signal_columns(df)
         assert "sig_macd" in df.columns
-        # Cruce alcista en índice 6
-        assert df["sig_macd"].iloc[6] == 1
-        # Cruce bajista en índice 3
-        assert df["sig_macd"].iloc[3] == -1
+        # MACD > signal en filas con std > 0 = señal positiva
+        assert pd.notna(df["sig_macd"].iloc[1]) and df["sig_macd"].iloc[1] > 0
+        # MACD < signal = señal negativa (bajista)
+        assert df["sig_macd"].iloc[3] < 0
+        # Cruce alcista binario
+        assert "sig_macd_cross" in df.columns
+        assert df["sig_macd_cross"].iloc[6] == 1
+        assert df["sig_macd_cross"].iloc[3] == -1
 
     def test_add_signal_columns_bollinger(self):
         df = pd.DataFrame({
@@ -43,9 +47,12 @@ class TestSignalGenerator:
         }, index=pd.date_range("2023-01-01", periods=3, freq="D"))
 
         df = SignalGenerator.add_signal_columns(df)
-        assert df["sig_bb"].iloc[0] == 1   # close <= bb_lower
-        assert df["sig_bb"].iloc[1] == -1  # close >= bb_upper
-        assert df["sig_bb"].iloc[2] == 0   # dentro de bandas
+        # close <= bb_lower debe ser señal positiva (compra)
+        assert df["sig_bb"].iloc[0] > 0
+        # close >= bb_upper debe ser señal negativa (venta)
+        assert df["sig_bb"].iloc[1] < 0
+        # dentro de bandas debe ser cercano a 0
+        assert abs(df["sig_bb"].iloc[2]) < 0.5
 
     def test_add_signal_columns_sma_cross(self):
         df = pd.DataFrame({
@@ -54,12 +61,16 @@ class TestSignalGenerator:
         }, index=pd.date_range("2023-01-01", periods=5, freq="D"))
 
         df = SignalGenerator.add_signal_columns(df)
-        # Golden cross en índice 3
-        assert df["sig_sma"].iloc[3] == 1
+        # SMA50 > SMA200 = señal positiva
+        assert df["sig_sma"].iloc[3] > 0
+        # Golden cross binario
+        assert "sig_sma_cross" in df.columns
+        assert df["sig_sma_cross"].iloc[3] == 1
 
     def test_composite_score_range(self, dummy_with_indicators):
         df = SignalGenerator.add_signal_columns(dummy_with_indicators)
         score = SignalGenerator.composite_score(df)
+        assert not np.isnan(score)
         assert -1.0 <= score <= 1.0
 
     def test_get_latest_signals_structure(self, dummy_with_indicators):
