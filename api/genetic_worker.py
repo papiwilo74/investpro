@@ -6,7 +6,15 @@ by multiprocessing.spawn on Windows.
 from __future__ import annotations
 
 import multiprocessing as mp
+import sys
+from pathlib import Path
 from typing import Any
+
+# Aseguramos que el proyecto raíz esté en sys.path para los procesos hijos
+# spawn (Windows). El hijo arranca un intérprete limpio sin el sys.path del padre.
+_PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
 
 def run_genetic_process(

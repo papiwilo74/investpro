@@ -147,7 +147,10 @@ class JobManager:
             job.status = "running"
             try:
                 while True:
-                    msg = queue.get(timeout=3600)  # I/O wait, libera GIL
+                    if not proc.is_alive():
+                        # Proceso murió sin dejar mensaje → abortar
+                        raise TimeoutError("Worker process died unexpectedly")
+                    msg = queue.get(timeout=15)  # I/O wait, libera GIL
                     msg_type = msg.get("type", "")
 
                     if msg_type == "started":
@@ -174,6 +177,7 @@ class JobManager:
                 if proc.is_alive():
                     proc.join(timeout=5)
                 queue.close()
+                queue.join_thread()
 
         reader_thread = threading.Thread(target=_queue_reader, daemon=True, name=f"reader-{job.job_id}")
         job._thread = reader_thread
@@ -190,33 +194,36 @@ class JobManager:
         dummy_queue: queue_module.Queue = queue_module.Queue()
         job_id = job.job_id
 
+        def _drain_queue():
+            """Lee todos los mensajes pendientes de la dummy queue."""
+            while True:
+                try:
+                    msg = dummy_queue.get_nowait()
+                    if msg.get("type") == "completed":
+                        job.result = msg.get("result")
+                        job.status = "completed"
+                    elif msg.get("type") == "failed":
+                        job.error = msg.get("error")
+                        job.status = "failed"
+                    elif msg.get("type") == "progress":
+                        job.progress = msg
+                except queue_module.Empty:
+                    break
+
         def _thread_runner():
             job.started_at = time.time()
             job.status = "running"
             try:
-                # Llamar al target con la dummy queue
                 target(dummy_queue, *args, **kwargs)
-                # Leer el resultado final de la cola
-                while True:
-                    try:
-                        msg = dummy_queue.get_nowait()
-                        if msg.get("type") == "completed":
-                            job.result = msg.get("result")
-                            job.status = "completed"
-                            break
-                        elif msg.get("type") == "failed":
-                            job.error = msg.get("error")
-                            job.status = "failed"
-                            break
-                        elif msg.get("type") == "progress":
-                            job.progress = msg
-                    except queue_module.Empty:
-                        break
+            except Exception as e:
+                _drain_queue()
+                if job.status not in ("completed", "failed"):
+                    job.error = str(e)
+                    job.status = "failed"
+            else:
+                _drain_queue()
                 if job.status not in ("completed", "failed", "cancelled"):
                     job.status = "completed"
-            except Exception as e:
-                job.error = str(e)
-                job.status = "failed"
             finally:
                 job.finished_at = time.time()
 
