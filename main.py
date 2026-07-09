@@ -508,7 +508,16 @@ def main() -> None:
         print(f"  INVERSION HELPER — Web App Premium")
         print(f"  Abriendo en: http://{host}:{port}")
         print(f"{'=' * 60}\n")
-        uvicorn.run("api.server:app", host=host, port=port, reload=False)
+        try:
+            # Pre-importar para detectar errores antes de que uvicorn los oculte
+            import api.server
+            print("  [OK] api.server importado correctamente")
+            uvicorn.run("api.server:app", host=host, port=port, reload=False)
+        except Exception as e:
+            import traceback
+            print(f"\n[ERROR FATAL] {e}")
+            traceback.print_exc()
+            sys.exit(1)
     elif args.app:
         app_path = Path(__file__).parent / "app" / "streamlit_app.py"
         subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path)])
