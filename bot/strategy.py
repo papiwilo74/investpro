@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from db.repositories import KellyRepository
 from ml.rl import RLExitAgent
 from ml.ensemble import ensemble, ModelSignal
+from ml.lstm_model import LSTMPredictor
 
 # Instancias globales para compatibilidad con código existente.
 # Los nuevos componentes deben inyectar rl_agent y kelly_tracker vía constructor.
@@ -508,6 +509,7 @@ class TradingBrain:
 
     # Lazy-loaded Neural Brain compartido
     _neural_brain: object | None = None
+    _lstm_predictor: LSTMPredictor | None = None
 
     def __init__(self, params: StrategyParams | None = None,
                  rl_agent_instance: RLExitAgent | None = None,
@@ -928,6 +930,26 @@ class TradingBrain:
                     nn_dir = {"BUY": "BULLISH", "HOLD": "NEUTRAL", "SELL": "BEARISH"}.get(nn_result["action"], "NEUTRAL")
                     nn_signal = ModelSignal(direction=nn_dir, probability=nn_result["confidence"], score=(nn_result["confidence"] * 2 - 1))
 
+            lstm_signal = None
+            if self._lstm_predictor is None:
+                try:
+                    self._lstm_predictor = LSTMPredictor()
+                except Exception:
+                    self._lstm_predictor = False
+            if self._lstm_predictor and self._lstm_predictor is not False:
+                try:
+                    lstm_result = self._lstm_predictor.predict_trend(df)
+                    if lstm_result["status"] == "OK":
+                        lstm_dir = lstm_result["prediction"]
+                        lstm_conf = lstm_result["confidence"]
+                        lstm_signal = ModelSignal(
+                            direction=lstm_dir,
+                            probability=lstm_conf,
+                            score=(lstm_conf * 2 - 1) if lstm_dir == "BULLISH" else -(lstm_conf * 2 - 1),
+                        )
+                except Exception:
+                    pass
+
             ensemble_regime = market_regime
             if ensemble_regime not in ("BULL", "BEAR", "LATERAL"):
                 ensemble_regime = "BULL" if ensemble_regime == "NEUTRAL" else "HIGH_VOL"
@@ -937,6 +959,7 @@ class TradingBrain:
                 xgboost_signal=xgb_signal,
                 neural_brain_signal=nn_signal,
                 ta_score=entry_score,
+                lstm_signal=lstm_signal,
             )
 
             if ens_result.consensus_direction == "BULLISH" and ens_result.confidence >= 0.3:

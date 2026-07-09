@@ -956,7 +956,7 @@ const Components = {
       const pct = (weight * 100).toFixed(0);
       const acc = accuracy[model];
       const accStr = acc ? `${(acc.global_accuracy * 100).toFixed(0)}%` : '—';
-      const colors = {xgboost: 'bg-cyan-500', neural_brain: 'bg-violet-500', rl_agent: 'bg-amber-500', online_advisor: 'bg-emerald-500', ta_classic: 'bg-blue-500'};
+      const colors = {xgboost: 'bg-cyan-500', neural_brain: 'bg-violet-500', rl_agent: 'bg-amber-500', online_advisor: 'bg-emerald-500', ta_classic: 'bg-blue-500', lstm: 'bg-pink-500'};
       const color = colors[model] || 'bg-slate-400';
       return `
         <div class="mb-1.5">

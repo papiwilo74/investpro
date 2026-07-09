@@ -30,16 +30,16 @@ import numpy as np
 
 
 # ── Modelos del ensemble ──────────────────────────────────────────────
-MODEL_NAMES = ["xgboost", "neural_brain", "rl_agent", "online_advisor", "ta_classic"]
+MODEL_NAMES = ["xgboost", "neural_brain", "rl_agent", "online_advisor", "ta_classic", "lstm"]
 
 REGIMES = ["BULL", "BEAR", "LATERAL", "HIGH_VOL"]
 
 # Pesos iniciales por defecto (por régimen, suma 1.0 por modelo)
 DEFAULT_WEIGHTS: dict[str, dict[str, float]] = {
-    "BULL":     {"xgboost": 0.30, "neural_brain": 0.20, "rl_agent": 0.10, "online_advisor": 0.15, "ta_classic": 0.25},
-    "BEAR":     {"xgboost": 0.20, "neural_brain": 0.25, "rl_agent": 0.20, "online_advisor": 0.20, "ta_classic": 0.15},
-    "LATERAL":  {"xgboost": 0.15, "neural_brain": 0.15, "rl_agent": 0.15, "online_advisor": 0.25, "ta_classic": 0.30},
-    "HIGH_VOL": {"xgboost": 0.25, "neural_brain": 0.30, "rl_agent": 0.15, "online_advisor": 0.20, "ta_classic": 0.10},
+    "BULL":     {"xgboost": 0.25, "neural_brain": 0.20, "rl_agent": 0.10, "online_advisor": 0.15, "ta_classic": 0.20, "lstm": 0.10},
+    "BEAR":     {"xgboost": 0.15, "neural_brain": 0.25, "rl_agent": 0.20, "online_advisor": 0.20, "ta_classic": 0.10, "lstm": 0.10},
+    "LATERAL":  {"xgboost": 0.15, "neural_brain": 0.15, "rl_agent": 0.15, "online_advisor": 0.20, "ta_classic": 0.25, "lstm": 0.10},
+    "HIGH_VOL": {"xgboost": 0.20, "neural_brain": 0.25, "rl_agent": 0.15, "online_advisor": 0.15, "ta_classic": 0.10, "lstm": 0.15},
 }
 
 WINDOW_SIZE = 20  # predicciones recientes para tracking de precisión
@@ -191,6 +191,7 @@ class AdaptiveEnsemble:
         rl_agent_signal: ModelSignal | None = None,
         online_advisor_signal: ModelSignal | None = None,
         ta_score: float = 0.0,
+        lstm_signal: ModelSignal | None = None,
     ) -> EnsembleResult:
         """Ejecuta el ensemble: recoge señales, pondera, retorna resultado."""
         if regime not in self._weights:
@@ -209,6 +210,8 @@ class AdaptiveEnsemble:
         if ta_score != 0.0:
             dir_ = "BULLISH" if ta_score > 0 else "BEARISH"
             signals["ta_classic"] = ModelSignal(direction=dir_, score=ta_score, probability=abs(ta_score))
+        if lstm_signal:
+            signals["lstm"] = lstm_signal
 
         # Si no hay señales, devolver neutral
         if not signals:

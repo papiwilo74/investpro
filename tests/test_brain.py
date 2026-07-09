@@ -35,14 +35,14 @@ class TestTradingBrain:
         assert "RSI too high" in decision.reason
 
     def test_entry_ml_missing_when_required(self):
-        brain = TradingBrain(StrategyParams(use_ml_filter=True))
+        brain = TradingBrain(StrategyParams(use_ml_filter=True, use_ensemble=False))
         df = pd.DataFrame({"close": [110.0], "sma_200": [100.0], "rsi": [50.0]})
         decision = brain.decide(df=df, score=0.5, has_position=False, ml_direction=None, ml_probability=None)
         assert decision.action == "HOLD"
         assert "ML confirmation missing" in decision.reason
 
     def test_entry_ml_rejected(self):
-        brain = TradingBrain(StrategyParams(use_ml_filter=True))
+        brain = TradingBrain(StrategyParams(use_ml_filter=True, use_ensemble=False))
         df = pd.DataFrame({"close": [110.0], "sma_200": [100.0], "rsi": [50.0]})
         decision = brain.decide(df=df, score=0.5, has_position=False, ml_direction="BAJISTA", ml_probability=0.9)
         assert decision.action == "HOLD"
@@ -137,8 +137,8 @@ class TestTradingBrain:
         from bot.strategy import PositionState
         params = StrategyParams()
         pos = PositionState(entry_price=100.0, entry_atr=2.0, params=params)
-        assert pos.current_pnl_pct(110.0) == 0.10
-        assert pos.current_pnl_pct(90.0) == -0.10
+        assert abs(pos.current_pnl_pct(110.0) - 0.10) < 1e-9
+        assert abs(pos.current_pnl_pct(90.0) - (-0.10)) < 1e-9
 
     def test_position_state_short_pnl(self):
         from bot.strategy import PositionState

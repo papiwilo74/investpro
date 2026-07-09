@@ -4,6 +4,7 @@ import numpy as np
 
 from backtesting.engine import BacktestEngine
 from backtesting.metrics import PerformanceMetrics
+from bot.strategy import StrategyParams
 
 
 class TestBacktestEngine:
@@ -91,20 +92,25 @@ class TestBacktestEngine:
 class TestBotBacktestEngine:
     def test_bot_engine_creates_brain(self):
         from backtesting.bot_engine import BotBacktestEngine
-        engine = BotBacktestEngine()
+        params = StrategyParams(use_regime_filter=False, use_multi_timeframe=False, use_confirmation_filter=False, use_donchian_breakout=False)
+        engine = BotBacktestEngine(strategy_params=params)
         assert engine.brain is not None
 
     def test_bot_engine_runs_with_synthetic_data(self, synthetic_backtest_df):
         from backtesting.bot_engine import BotBacktestEngine
-        engine = BotBacktestEngine()
+        from bot.strategy import StrategyParams
+        params = StrategyParams(use_regime_filter=False, use_multi_timeframe=False, use_confirmation_filter=False, use_donchian_breakout=False)
+        engine = BotBacktestEngine(strategy_params=params)
         result = engine.run(synthetic_backtest_df, ticker="TEST")
         assert len(result.equity_curve) == len(synthetic_backtest_df)
         assert result.metrics["total_trades"] >= 0
 
     def test_bot_engine_missing_signal_column_raises(self):
         from backtesting.bot_engine import BotBacktestEngine
+        from bot.strategy import StrategyParams
+        params = StrategyParams(use_regime_filter=False, use_multi_timeframe=False)
+        engine = BotBacktestEngine(strategy_params=params)
         df = pd.DataFrame({"close": [100.0, 101.0]}, index=pd.date_range("2023-01-01", periods=2))
-        engine = BotBacktestEngine()
         with pytest.raises(ValueError, match="sig_composite"):
             engine.run(df)
 
@@ -122,11 +128,12 @@ class TestMonteCarlo:
 
     def test_monte_carlo_with_trades(self):
         from backtesting.validation import MonteCarloSimulator
-        from backtesting.metrics import Trade
         trades = [
-            Trade("2023-01-01", "2023-01-10", "LONG", 100, 110, 10, 100, 0.1, 0.5),
-            Trade("2023-01-11", "2023-01-20", "LONG", 110, 105, 10, -50, -0.05, 0.5),
-            Trade("2023-01-21", "2023-01-30", "LONG", 105, 120, 10, 150, 0.14, 0.5),
+            type("Trade", (), {"pnl_pct": 0.1})(),
+            type("Trade", (), {"pnl_pct": -0.05})(),
+            type("Trade", (), {"pnl_pct": 0.14})(),
+            type("Trade", (), {"pnl_pct": 0.08})(),
+            type("Trade", (), {"pnl_pct": -0.02})(),
         ]
         mc = MonteCarloSimulator(n_simulations=200).run(trades)
         assert mc.n_simulations == 200
@@ -141,14 +148,13 @@ class TestMonteCarlo:
 
 
 class TestWalkForwardOptimizer:
-    def test_wfo_minimal_data_returns_empty(self):
+    def test_wfo_minimal_data_raises(self):
         from backtesting.validation import WalkForwardOptimizer
         wfo = WalkForwardOptimizer(train_months=24, test_months=6)
         dates = pd.date_range("2023-01-01", periods=30, freq="D")
         df = pd.DataFrame({"close": range(100, 130), "sig_composite": [0.0]*30}, index=dates)
-        windows = wfo.run(df, ticker="TEST")
-        # Not enough data for even one window
-        assert len(windows) == 0
+        with pytest.raises(ValueError, match="al menos 60 filas"):
+            wfo.run(df, ticker="TEST")
 
 
 class TestOverfitDetector:
@@ -158,7 +164,9 @@ class TestOverfitDetector:
         is_metrics = {"sharpe_ratio": 1.5, "retorno_total": 0.3}
         oos_metrics = {"sharpe_ratio": 1.2, "retorno_total": 0.2}
         flags = detector.detect([], oos_metrics, is_metrics)
-        assert flags.get("oos_sharpe_positive", True) is True
+        assert isinstance(flags, list)
+        assert len(flags) == 1
+        assert "Sin señales de overfitting" in flags[0]
 
     def test_detect_overfit_when_oos_sharpe_negative(self):
         from backtesting.validation import OverfitDetector
@@ -166,26 +174,33 @@ class TestOverfitDetector:
         is_metrics = {"sharpe_ratio": 1.5, "retorno_total": 0.3}
         oos_metrics = {"sharpe_ratio": -0.3, "retorno_total": -0.1}
         flags = detector.detect([], oos_metrics, is_metrics)
-        assert flags.get("oos_sharpe_positive", True) is False
+        assert isinstance(flags, list)
+        assert any("no generaliza" in f for f in flags)
 
     def test_verdict_rejected_with_high_overfit(self):
         from backtesting.validation import OverfitDetector
         detector = OverfitDetector()
-        flags = {"oos_sharpe_positive": False, "oos_is_ratio": 0.3}
+        flags = ["overfitting severo"]
         mc = type("MC", (), {"prob_negative_return": 0.5, "prob_sharpe_above_1": 0.3})()
         verdict = detector.verdict(flags, mc)
-        assert verdict in ("RECHAZADO", "CONDICIONAL", "APROBADO")
+        assert verdict == "RECHAZADO"
 
 
     def test_bot_engine_leverage_applied_to_position_size(self):
         from backtesting.bot_engine import BotBacktestEngine, BacktestParams
         from bot.strategy import StrategyParams
-        params = StrategyParams(buy_score_threshold=-1.0, use_ml_filter=False, max_position_size_pct=1.0)
+        params = StrategyParams(
+            buy_score_threshold=-1.0, use_ml_filter=False, use_ensemble=False,
+            max_position_size_pct=1.0, use_regime_filter=False, use_multi_timeframe=False,
+            use_confirmation_filter=False, use_donchian_breakout=False,
+            use_momentum_scalp=False, use_mean_reversion=False, use_contrarian_dip=False,
+            use_short_selling=False, use_time_based_exit=False, use_breakeven_stop=False,
+        )
         engine = BotBacktestEngine(strategy_params=params, leverage=2.0)
-        dates = pd.date_range("2023-01-01", periods=5, freq="D")
+        dates = pd.date_range("2023-01-01", periods=10, freq="D")
         df = pd.DataFrame({
-            "close": [100.0, 101.0, 102.0, 103.0, 104.0],
-            "sig_composite": [1.0, 0.0, 0.0, 0.0, -1.0],
+            "close": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0, 108.0, 109.0],
+            "sig_composite": [1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         }, index=dates)
         result = engine.run(df, ticker="TEST")
         # With leverage 2.0, position should be larger

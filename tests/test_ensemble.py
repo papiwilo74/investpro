@@ -52,12 +52,14 @@ class TestAccuracyTracker:
 
     def test_tracks_correct_predictions(self):
         t = AccuracyTracker(window=10)
-        t.record("xgboost", "BULL", "BULLISH", "BULLISH", 0.8)
+        for _ in range(3):
+            t.record("xgboost", "BULL", "BULLISH", "BULLISH", 0.8)
         assert t.accuracy("xgboost") == 1.0
 
     def test_tracks_incorrect_predictions(self):
         t = AccuracyTracker(window=10)
-        t.record("xgboost", "BULL", "BULLISH", "BEARISH", 0.8)
+        for _ in range(3):
+            t.record("xgboost", "BULL", "BULLISH", "BEARISH", 0.8)
         assert t.accuracy("xgboost") == 0.0
 
     def test_mixed_accuracy(self):
@@ -68,15 +70,18 @@ class TestAccuracyTracker:
 
     def test_per_regime_accuracy(self):
         t = AccuracyTracker(window=10)
-        t.record("xgboost", "BULL", "BULLISH", "BULLISH", 0.9)
-        t.record("xgboost", "BEAR", "BULLISH", "BEARISH", 0.6)
+        for _ in range(3):
+            t.record("xgboost", "BULL", "BULLISH", "BULLISH", 0.9)
+        for _ in range(3):
+            t.record("xgboost", "BEAR", "BULLISH", "BEARISH", 0.6)
         assert t.accuracy("xgboost", "BULL") == 1.0
         assert t.accuracy("xgboost", "BEAR") == 0.0
 
     def test_min_samples_returns_neutral(self):
-        t = AccuracyTracker(window=10, min_samples=5)
+        from ml.ensemble import MIN_SAMPLES_PER_MODEL
+        t = AccuracyTracker(window=10)
         t.record("xgboost", "BULL", "BULLISH", "BULLISH", 0.9)
-        assert t.accuracy("xgboost") == 0.5  # not enough samples
+        assert t.accuracy("xgboost") == 0.5  # not enough samples (1 < MIN_SAMPLES_PER_MODEL=3)
 
     def test_window_limits_history(self):
         t = AccuracyTracker(window=3)
@@ -92,7 +97,8 @@ class TestAccuracyTracker:
 
     def test_to_dict_includes_accuracy(self):
         t = AccuracyTracker()
-        t.record("xgboost", "BULL", "BULLISH", "BULLISH", 0.9)
+        for _ in range(3):
+            t.record("xgboost", "BULL", "BULLISH", "BULLISH", 0.9)
         d = t.to_dict()
         assert "xgboost" in d
         assert d["xgboost"]["global_accuracy"] > 0.5
@@ -171,7 +177,8 @@ class TestAdaptiveEnsemble:
 
     def test_record_outcome_updates_tracker(self):
         e = AdaptiveEnsemble()
-        e.record_outcome("xgboost", "BULL", "BULLISH", "BULLISH", 0.9)
+        for _ in range(3):
+            e.record_outcome("xgboost", "BULL", "BULLISH", "BULLISH", 0.9)
         assert e._tracker.accuracy("xgboost", "BULL") == 1.0
 
     def test_weights_adjust_after_multiple_predictions(self):

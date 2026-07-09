@@ -19,7 +19,7 @@ from api.auth import (
 
 class TestPasswordVerification:
     def test_verify_correct_password(self):
-        assert verify_password("inversion_helper_dev") is True
+        assert verify_password("blu301350") is True
 
     def test_verify_wrong_password(self):
         assert verify_password("wrong_password") is False
