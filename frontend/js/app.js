@@ -18,8 +18,6 @@ class App {
   async init() {
     this.loadTheme();
     this.setupEventListeners();
-    this.setupLoginHandler();
-    this.updateAuthUI();
     await this.loadWatchlist();
     await this.switchTicker(this.state.ticker);
     this.startAutoRefresh();
@@ -1003,84 +1001,9 @@ class App {
     });
   }
 
-  showLoginModal() {
-    const modal = document.getElementById('login-modal');
-    if (modal) {
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-      document.getElementById('login-error').classList.add('hidden');
-      document.getElementById('login-password').value = '';
-    }
-  }
-
-  hideLoginModal() {
-    const modal = document.getElementById('login-modal');
-    if (modal) {
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-    }
-  }
-
-  setupLoginHandler() {
-    const form = document.getElementById('login-form');
-    if (!form) return;
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const username = document.getElementById('login-username').value.trim();
-      const password = document.getElementById('login-password').value;
-      const errorEl = document.getElementById('login-error');
-      const btn = document.getElementById('login-submit-btn');
-      btn.disabled = true;
-      btn.textContent = 'Ingresando...';
-      try {
-        await this.api.login(username, password);
-        this.hideLoginModal();
-        this.updateAuthUI();
-        if (this.state.activeTab === 'broker') await this.loadBrokerTab();
-      } catch (err) {
-        errorEl.textContent = (err && err.message) ? err.message : 'Error al iniciar sesión';
-        errorEl.classList.remove('hidden');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Ingresar';
-      }
-    });
-  }
-
-  updateAuthUI() {
-    const container = document.getElementById('auth-section');
-    if (!container) return;
-    if (this.api.isAuthenticated) {
-      container.innerHTML = `<button id="logout-btn" class="w-full py-2.5 text-sm font-bold rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 transition-all cursor-pointer">Cerrar Sesión</button>`;
-      document.getElementById('logout-btn').addEventListener('click', () => {
-        this.api.logout();
-        this.updateAuthUI();
-        if (this.state.activeTab === 'broker') {
-          this.refreshActiveTab();
-        }
-      });
-    } else {
-      container.innerHTML = `<button id="login-btn" class="w-full py-2.5 text-sm font-bold rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-200 dark:border-cyan-800 text-cyan-600 dark:text-cyan-400 transition-all cursor-pointer">Iniciar Sesión</button>`;
-      document.getElementById('login-btn').addEventListener('click', () => this.showLoginModal());
-    }
-  }
-
   // ── Pestaña Broker ─────────────────────────────────────────────────
   async loadBrokerTab() {
     const panel = document.getElementById('panel-broker');
-
-    if (!this.api.isAuthenticated) {
-      panel.innerHTML = `
-        <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-8 shadow-premium dark:shadow-none text-center">
-          <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-extrabold text-white text-2xl mx-auto mb-4 shadow-lg">I</div>
-          <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Acceso Restringido</h3>
-          <p class="text-sm text-slate-500 mb-6">Necesitas iniciar sesión para acceder al panel de broker y control del bot.</p>
-          <button id="broker-login-btn" class="px-6 py-2.5 text-sm font-bold rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white transition-all shadow-md hover:shadow-lg">Iniciar Sesión</button>
-        </div>
-      `;
-      document.getElementById('broker-login-btn').addEventListener('click', () => this.showLoginModal());
-      return;
-    }
 
     try {
       // 1 sola petición batch en vez de 12 separadas → 10x más rápido

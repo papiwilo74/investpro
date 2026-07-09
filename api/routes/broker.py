@@ -1,7 +1,7 @@
 from collections import defaultdict
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from api.utils import sanitize_for_json
 from api.schemas import BotConfig, BotStatus, DashboardResponse, HealthCheck, MLModelInfo, RiskConfigParams
 from broker.alpaca_client import AlpacaClient
