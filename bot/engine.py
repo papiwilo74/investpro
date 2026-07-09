@@ -157,7 +157,6 @@ class TradingBot:
                 "use_vwap_filter": False,
                 "use_partial_take_profit": False,
                 "use_donchian_breakout": False,
-                "min_ml_buy_probability": 0.999,
                 "use_ml_filter": False,
             }
         )
@@ -470,9 +469,15 @@ class TradingBot:
                         self._log(f"MACRO PANIC: VIX={macro.get('vix_level')} — suspendiendo nuevas entradas")
 
                     hedge = self._check_hedge()
-                    if hedge and hedge.get("status") == "PANIC":
-                        self._log(f"HEDGE PANIC: SPY {hedge['drop_pct']:+.2%} — vendiendo posiciones correlacionadas")
-                        await self._execute_hedge()
+                    if hedge:
+                        status = hedge.get("status", "NORMAL")
+                        if status == "PANIC":
+                            self._log(f"HEDGE PANIC: {hedge.get('reason', '')} — vendiendo posiciones correlacionadas")
+                            notifier.panic(hedge.get("drop_pct", 0), hedge.get("reason", ""))
+                            await self._execute_hedge()
+                        elif status == "ALERT":
+                            self._log(f"HEDGE ALERT: {hedge.get('reason', '')} — cobertura parcial recomendada")
+                            notifier.send("hedge_alert", f"⚠️ {hedge.get('reason', '')}", "warning")
 
                     # ── Regime Rotation: LONG/SHORT según mercado ────────
                     await self._manage_rotation_hedge()

@@ -15,8 +15,14 @@ import numpy as np
 import pandas as pd
 from ml.rl import RLExitAgent
 
-# Global RL Agent para no recargarlo en cada paso
+# Instancias globales para compatibilidad con código existente.
+# Los nuevos componentes deben inyectar rl_agent y kelly_tracker vía constructor.
 rl_agent = RLExitAgent()
+
+
+def get_rl_agent() -> RLExitAgent:
+    """Factory para obtener el agente RL singleton."""
+    return rl_agent
 
 
 class KellyCalculator:
@@ -42,7 +48,9 @@ class KellyCalculator:
                 data = json.loads(raw)
                 self.trades = data.get("trades", [])
                 self.fractional = data.get("fractional", self.fractional)
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger("inversion_helper.kelly").warning("Error cargando Kelly trades: %s", e)
             self.trades = []
 
     def save(self) -> None:
@@ -50,8 +58,9 @@ class KellyCalculator:
             Path(self._file_path).parent.mkdir(parents=True, exist_ok=True)
             data = {"trades": self.trades, "fractional": self.fractional}
             Path(self._file_path).write_text(json.dumps(data, indent=2), encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger("inversion_helper.kelly").warning("Error guardando Kelly trades: %s", e)
 
     def record(self, pnl_pct: float) -> None:
         self.trades.append(pnl_pct)
@@ -63,7 +72,7 @@ class KellyCalculator:
     @property
     def win_rate(self) -> float:
         if not self.trades:
-            return 0.55
+            return 0.0  # No asumir edge sin evidencia
         wins = sum(1 for t in self.trades if t > 0)
         return wins / len(self.trades)
 
@@ -384,7 +393,7 @@ class PositionState:
             pnl_pct = (current_price / self.entry_price) - 1.0
 
             if p.use_rl_exits:
-                action = rl_agent.get_action(pnl_pct, rsi, regime, is_training=False)
+                action = self._rl_agent.get_action(pnl_pct, rsi, regime, is_training=False)
                 if action == 1:
                     return True, f"RL agent chose CLOSE (PnL: {pnl_pct:.2%})"
                 if pnl_pct <= (p.stop_loss_pct * 1.5):
@@ -412,7 +421,7 @@ class PositionState:
             pnl_pct = (self.entry_price / current_price) - 1.0
 
             if p.use_rl_exits:
-                action = rl_agent.get_action(pnl_pct, rsi, regime, is_training=False)
+                action = self._rl_agent.get_action(pnl_pct, rsi, regime, is_training=False)
                 if action == 1:
                     return True, f"RL agent CLOSE SHORT (PnL: {pnl_pct:.2%})"
                 if pnl_pct <= -(p.short_stop_loss_pct * 1.5):
@@ -444,9 +453,14 @@ class TradingBrain:
     # Lazy-loaded Neural Brain compartido
     _neural_brain: object | None = None
 
-    def __init__(self, params: StrategyParams | None = None) -> None:
+    def __init__(self, params: StrategyParams | None = None,
+                 rl_agent_instance: RLExitAgent | None = None,
+                 kelly_instance: "KellyCalculator | None" = None) -> None:
         self.params = params or StrategyParams()
         self._positions: dict[str, PositionState] = {}
+        # Inyección de dependencias: permite testear sin singletons globales
+        self._rl_agent = rl_agent_instance or rl_agent
+        self._kelly = kelly_instance or kelly_tracker
         self._load_neural_if_needed()
 
     @classmethod
@@ -507,8 +521,8 @@ class TradingBrain:
 
         # 3. Quarter-Kelly: si hay historial suficiente, ajustar sizing
         kelly_multiplier = 1.0
-        if kelly_tracker.trades and len(kelly_tracker.trades) >= 10:
-            kelly_pct = kelly_tracker.kelly_pct
+        if self._kelly.trades and len(self._kelly.trades) >= 10:
+            kelly_pct = self._kelly.kelly_pct
             # Usar quarter-kelly como multiplicador suave (0.5x - 1.2x)
             kelly_multiplier = min(1.2, max(0.5, 1.0 + (kelly_pct - 0.10) * 2.0))
 
@@ -662,9 +676,9 @@ class TradingBrain:
             should_exit, reason = pos.should_exit(close, rsi=rsi, regime=market_regime, current_date=current_date)
             if should_exit:
                 pnl = pos.current_pnl_pct(close)
-                kelly_tracker.record(pnl)
-                rl_agent.update(pnl, rsi, market_regime, action=1, reward=pnl, next_pnl_pct=0.0, next_rsi=rsi, next_regime=market_regime)
-                rl_agent.save_model()
+                self._kelly.record(pnl)
+                self._rl_agent.update(pnl, rsi, market_regime, action=1, reward=pnl, next_pnl_pct=0.0, next_rsi=rsi, next_regime=market_regime)
+                self._rl_agent.save_model()
                 del self._positions[ticker_key]
                 if pos.side == "SHORT":
                     return Decision("COVER", reason, confidence=1.0, side="SHORT")
@@ -675,11 +689,11 @@ class TradingBrain:
                 short_pnl = pos.current_pnl_pct(close)
                 # Cubrir si: score >= 0 (se puso alcista) O stop-loss O take-profit
                 if score >= 0.0:
-                    kelly_tracker.record(short_pnl)
+                    self._kelly.record(short_pnl)
                     del self._positions[ticker_key]
                     return Decision("COVER", f"short: score turned bullish ({score:.2f})", confidence=0.7, side="SHORT")
                 if short_pnl <= self.params.short_take_profit_pct:
-                    kelly_tracker.record(short_pnl)
+                    self._kelly.record(short_pnl)
                     del self._positions[ticker_key]
                     return Decision("COVER", f"short take-profit ({short_pnl:.2%})", confidence=0.9, side="SHORT")
                 return Decision("HOLD", f"short holding (score={score:.2f}, pnl={short_pnl:.2%})", side="SHORT")
@@ -692,7 +706,7 @@ class TradingBrain:
                 return Decision("HOLD", f"uptrend holding (score={score:.2f})", side=pos.side)
             if score < -0.30:
                 pnl = pos.current_pnl_pct(close)
-                kelly_tracker.record(pnl)
+                self._kelly.record(pnl)
                 del self._positions[ticker_key]
                 return Decision("SELL", f"score bearish ({score:.2f})", confidence=abs(score), side=pos.side)
             return Decision("HOLD", "position still valid", side=pos.side)

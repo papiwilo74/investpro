@@ -18,12 +18,16 @@ from api.routes import market, analysis, backtest, portfolio, ml, advisor, broke
 
 app = FastAPI(title="Inversion Helper API", version="2.0.0")
 
-# Habilitar CORS
+# Habilitar CORS (restringido a origins conocidos en producción)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        os.environ.get("RENDER_EXTERNAL_URL", ""),
+    ],
+    allow_credentials=False,  # True + allow_origins=* es inválido según spec
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -92,5 +96,35 @@ async def _start_keepalive():
 # ── Health check para la plataforma (Render/Fly.io) ────────────────────
 @app.get("/health")
 async def platform_health():
-    """Health check simple para que la plataforma sepa que el servicio está vivo."""
-    return {"status": "ok"}
+    """Health check real: verifica broker, bot y DB.
+
+    No basta con responder 200 — el servicio puede estar vivo
+    pero el bot colgado. Este endpoint verifica componentes críticos.
+    """
+    checks = {"api": "ok"}
+    status_code = 200
+
+    # Verificar broker
+    try:
+        from broker.alpaca_client import AlpacaClient
+        c = AlpacaClient()
+        connected = c.is_connected()
+        checks["broker"] = "ok" if connected else "disconnected"
+        if not connected:
+            status_code = 503
+    except Exception as e:
+        checks["broker"] = f"error: {e}"
+        status_code = 503
+
+    # Verificar bot
+    try:
+        from api.routes.broker import bot
+        checks["bot"] = "running" if bot.is_running else "stopped"
+    except Exception:
+        checks["bot"] = "unknown"
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content={"status": "ok" if status_code == 200 else "degraded", "checks": checks},
+        status_code=status_code,
+    )
