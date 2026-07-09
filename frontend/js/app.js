@@ -197,7 +197,7 @@ class App {
     this.refreshTimer = setInterval(() => {
       this.loadHeaderData();
       this.refreshActiveTab();
-    }, 60000);
+    }, 120000);
   }
 
   async switchTab(tabName) {
@@ -1005,22 +1005,35 @@ class App {
   async loadBrokerTab() {
     const panel = document.getElementById('panel-broker');
     try {
-      const botStatus = await this.api.getBotStatus();
-      const account = await this.api.getAccount();
-      
+      // 1 sola petición batch en vez de 12 separadas → 10x más rápido
+      const data = await this.api.getDashboard();
+      const botStatus = data.bot_status;
+      const account = data.account;
+      const positions = data.positions || [];
+      const orders = data.orders || [];
+      const config = data.config || {};
+      const risk = data.risk || {};
+      const kelly = data.kelly || {};
+      const mlModels = data.ml_models || [];
+      const advisor = data.advisor;
+      const regime = data.market_regime || {};
+      const breadth = data.market_breadth || {};
+
       if (!botStatus.connected) {
-        panel.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 border-l-4 border-l-rose-500 rounded-2xl p-6 shadow-premium"><h3 class="font-bold mb-2">Desconectado del Broker</h3><p class="text-sm text-slate-500">Asegúrate de que las credenciales de Alpaca en config.py sean correctas.</p></div>`;
+        panel.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 border-l-4 border-l-rose-500 rounded-2xl p-6 shadow-premium"><h3 class="font-bold mb-2">Desconectado del Broker</h3><p class="text-sm text-slate-500">Asegúrate de que las credenciales de Alpaca sean correctas.</p></div>`;
         return;
       }
 
       const isBotActive = botStatus.active;
-      const btnClass = isBotActive 
-        ? "bg-rose-500 hover:bg-rose-600 text-white"
-        : "bg-emerald-500 hover:bg-emerald-600 text-white";
+      const btnClass = isBotActive ? "bg-rose-500 hover:bg-rose-600 text-white" : "bg-emerald-500 hover:bg-emerald-600 text-white";
       const btnText = isBotActive ? "Detener Bot Automático" : "Activar Bot Automático";
       const statusBadge = isBotActive
         ? '<span class="px-2 py-1 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-bold animate-pulse">ACTIVO</span>'
         : '<span class="px-2 py-1 rounded bg-slate-100 text-slate-500 dark:bg-slate-800 text-xs font-bold">INACTIVO</span>';
+
+      const eq = account?.equity || 0;
+      const bp = account?.buying_power || 0;
+      const pnl = account?.pnl_today || 0;
 
       panel.innerHTML = `
         <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none flex justify-between items-center">
@@ -1030,26 +1043,24 @@ class App {
           </div>
           <button id="toggle-bot-btn" class="px-5 py-2.5 rounded-xl font-bold text-sm transition-colors shadow-sm ${btnClass}">${btnText}</button>
         </div>
-
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl p-5 shadow-premium dark:shadow-none">
             <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Valor de la Cuenta</span>
-            <span class="text-2xl font-extrabold text-slate-800 dark:text-slate-100">$${account.equity.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+            <span class="text-2xl font-extrabold text-slate-800 dark:text-slate-100">$${eq.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
           </div>
           <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl p-5 shadow-premium dark:shadow-none">
-            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Efectivo (Poder Adquisitivo)</span>
-            <span class="text-2xl font-extrabold text-blue-600 dark:text-blue-400">$${account.buying_power.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Poder Adquisitivo</span>
+            <span class="text-2xl font-extrabold text-blue-600 dark:text-blue-400">$${bp.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
           </div>
           <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl p-5 shadow-premium dark:shadow-none">
             <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ganancia/Pérdida Diaria</span>
-            <span class="text-2xl font-extrabold ${account.pnl_today >= 0 ? 'text-emerald-500' : 'text-rose-500'}">$${account.pnl_today.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+            <span class="text-2xl font-extrabold ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}">$${pnl.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
           </div>
           <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl p-5 shadow-premium dark:shadow-none">
-            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Estado de Cuenta</span>
-            <span class="text-xl font-extrabold text-slate-500">${account.status}</span>
+            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Estado</span>
+            <span class="text-xl font-extrabold text-slate-500">${account?.status || 'N/A'}</span>
           </div>
         </div>
-        
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none h-[300px] overflow-y-auto">
             <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 mb-4">Logs del Bot</h3>
@@ -1064,7 +1075,6 @@ class App {
           <div id="broker-config-container"></div>
           <div id="broker-market-regime-container"></div>
           <div id="broker-breadth-container"></div>
-          <div id="broker-mtf-container"></div>
           <div id="broker-kelly-container"></div>
           <div id="broker-advisor-container"></div>
           <div id="broker-ml-container"></div>
@@ -1073,126 +1083,49 @@ class App {
       `;
 
       document.getElementById('toggle-bot-btn').addEventListener('click', async () => {
-        try {
-          await this.api.toggleBot();
-          this.loadBrokerTab(); // refresh
-        } catch(e) {
-          console.error(e);
-        }
+        try { await this.api.toggleBot(); this.loadBrokerTab(); } catch(e) { console.error(e); }
       });
 
-      // Load positions async
-      this.api.getPositions().then(pos => {
-        const pCont = document.getElementById('broker-positions-container');
-        if(!pCont) return;
-        
-        if (pos.length === 0) {
+      // Render positions
+      const pCont = document.getElementById('broker-positions-container');
+      if (pCont) {
+        if (positions.length === 0) {
           pCont.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none h-full"><h3 class="text-sm font-bold mb-4">Portafolio Abierto</h3><p class="text-xs text-slate-500">No tienes acciones compradas actualmente.</p></div>`;
-          return;
+        } else {
+          const rows = positions.map(p => {
+            const c = p.unrealized_pl >= 0 ? 'text-emerald-500' : 'text-rose-500';
+            return `<tr class="border-b border-slate-100 dark:border-slate-800"><td class="px-4 py-3 font-bold">${p.symbol}</td><td class="px-4 py-3">${p.qty}</td><td class="px-4 py-3 font-semibold">$${p.current_price.toFixed(2)}</td><td class="px-4 py-3 font-bold ${c}">$${p.unrealized_pl.toFixed(2)} (${(p.unrealized_plpc * 100).toFixed(2)}%)</td></tr>`;
+          }).join('');
+          pCont.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none h-full overflow-x-auto"><h3 class="text-sm font-bold mb-4">Portafolio Abierto</h3><table class="w-full text-left text-xs"><thead><tr class="bg-slate-50 dark:bg-slate-950 text-slate-400 border-b border-slate-200 dark:border-slate-800"><th class="px-4 py-2 font-semibold">Símbolo</th><th class="px-4 py-2 font-semibold">Cant.</th><th class="px-4 py-2 font-semibold">Precio</th><th class="px-4 py-2 font-semibold">P/L</th></tr></thead><tbody>${rows}</tbody></table></div>`;
         }
+      }
 
-        let tableRows = pos.map(p => {
-          const colorClass = p.unrealized_pl >= 0 ? 'text-emerald-500' : 'text-rose-500';
-          return `
-            <tr class="border-b border-slate-100 dark:border-slate-800">
-              <td class="px-4 py-3 font-bold">${p.symbol}</td>
-              <td class="px-4 py-3">${p.qty}</td>
-              <td class="px-4 py-3 font-semibold">$${p.current_price.toFixed(2)}</td>
-              <td class="px-4 py-3 font-bold ${colorClass}">$${p.unrealized_pl.toFixed(2)} (${(p.unrealized_plpc * 100).toFixed(2)}%)</td>
-            </tr>
-          `;
-        }).join('');
-
-        pCont.innerHTML = `
-          <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none h-full overflow-x-auto">
-            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 mb-4">Portafolio Abierto</h3>
-            <table class="w-full text-left text-xs">
-              <thead>
-                <tr class="bg-slate-50 dark:bg-slate-950 text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                  <th class="px-4 py-2 font-semibold">Símbolo</th>
-                  <th class="px-4 py-2 font-semibold">Cant.</th>
-                  <th class="px-4 py-2 font-semibold">Precio Actual</th>
-                  <th class="px-4 py-2 font-semibold">P/L No Realizado</th>
-                </tr>
-              </thead>
-              <tbody>${tableRows}</tbody>
-            </table>
-          </div>
-        `;
-      });
-
-      // Load orders async
-      this.api.getOrders().then(orders => {
-        const oCont = document.getElementById('broker-orders-container');
-        if(!oCont) return;
-        
+      // Render orders
+      const oCont = document.getElementById('broker-orders-container');
+      if (oCont) {
         if (orders.length === 0) {
-          oCont.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none"><h3 class="text-sm font-bold mb-4">Órdenes Recientes</h3><p class="text-xs text-slate-500">No hay órdenes recientes (mercado cerrado o bot inactivo).</p></div>`;
-          return;
+          oCont.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none"><h3 class="text-sm font-bold mb-4">Órdenes Recientes</h3><p class="text-xs text-slate-500">No hay órdenes recientes.</p></div>`;
+        } else {
+          const rows = orders.map(o => `<tr class="border-b border-slate-100 dark:border-slate-800"><td class="px-4 py-3 font-bold">${o.symbol}</td><td class="px-4 py-3 font-semibold text-blue-500">${o.side}</td><td class="px-4 py-3">${o.qty}</td><td class="px-4 py-3"><span class="px-2 py-1 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded text-[10px] font-bold">${o.status}</span></td></tr>`).join('');
+          oCont.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none overflow-x-auto"><h3 class="text-sm font-bold mb-4">Órdenes Recientes</h3><table class="w-full text-left text-xs"><thead><tr class="bg-slate-50 dark:bg-slate-950 text-slate-400 border-b border-slate-200 dark:border-slate-800"><th class="px-4 py-2 font-semibold">Símbolo</th><th class="px-4 py-2 font-semibold">Tipo</th><th class="px-4 py-2 font-semibold">Cant.</th><th class="px-4 py-2 font-semibold">Estado</th></tr></thead><tbody>${rows}</tbody></table></div>`;
         }
+      }
 
-        let tableRows = orders.map(o => {
-          return `
-            <tr class="border-b border-slate-100 dark:border-slate-800">
-              <td class="px-4 py-3 font-bold">${o.symbol}</td>
-              <td class="px-4 py-3 font-semibold text-blue-500">${o.side}</td>
-              <td class="px-4 py-3">${o.qty}</td>
-              <td class="px-4 py-3"><span class="px-2 py-1 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded text-[10px] font-bold">${o.status}</span></td>
-            </tr>
-          `;
-        }).join('');
-
-        oCont.innerHTML = `
-          <div class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-6 shadow-premium dark:shadow-none overflow-x-auto">
-            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 mb-4">Órdenes Recientes (Pendientes por Mercado Cerrado)</h3>
-            <table class="w-full text-left text-xs">
-              <thead>
-                <tr class="bg-slate-50 dark:bg-slate-950 text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                  <th class="px-4 py-2 font-semibold">Símbolo</th>
-                  <th class="px-4 py-2 font-semibold">Tipo</th>
-                  <th class="px-4 py-2 font-semibold">Cant.</th>
-                  <th class="px-4 py-2 font-semibold">Estado</th>
-                </tr>
-              </thead>
-              <tbody>${tableRows}</tbody>
-            </table>
-          </div>
-        `;
-      });
-
-      // Load Kelly, ML, Risk cards async
-      this.api.getBotConfig().then(config => {
-        const cCont = document.getElementById('broker-config-container');
-        if (cCont) cCont.innerHTML = Components.botConfigCard(config);
-      });
-      this.api.getMarketRegime().then(regime => {
-        const mCont = document.getElementById('broker-market-regime-container');
-        if (mCont) mCont.innerHTML = Components.marketRegimeCard(regime);
-      });
-      this.api.getRiskKelly().then(kelly => {
-        const kCont = document.getElementById('broker-kelly-container');
-        if (kCont) kCont.innerHTML = Components.kellyCard(kelly);
-      });
-      this.api.getMLModelsStatus().then(data => {
-        const mCont = document.getElementById('broker-ml-container');
-        if (mCont) mCont.innerHTML = Components.mlStatusCard(data?.models || []);
-      });
-      this.api.getRiskStatus().then(risk => {
-        const rCont = document.getElementById('broker-risk-container');
-        if (rCont) rCont.innerHTML = Components.riskCard(risk);
-      });
-      this.api.getAdvisorStatus().then(advisor => {
-        const aCont = document.getElementById('broker-advisor-container');
-        if (aCont) aCont.innerHTML = Components.onlineAdvisorCard(advisor);
-      });
-      this.api.getMarketBreadth().then(breadth => {
-        const bCont = document.getElementById('broker-breadth-container');
-        if (bCont) bCont.innerHTML = Components.marketBreadthCard(breadth);
-      });
-      this.api.getMTFStatus(this.state.ticker).then(mtf => {
-        const mCont = document.getElementById('broker-mtf-container');
-        if (mCont) mCont.innerHTML = Components.mtfCard(mtf);
-      });
+      // Render cards
+      const cCont = document.getElementById('broker-config-container');
+      if (cCont) cCont.innerHTML = Components.botConfigCard(config);
+      const mCont = document.getElementById('broker-market-regime-container');
+      if (mCont) mCont.innerHTML = Components.marketRegimeCard(regime);
+      const kCont = document.getElementById('broker-kelly-container');
+      if (kCont) kCont.innerHTML = Components.kellyCard(kelly);
+      const mlCont = document.getElementById('broker-ml-container');
+      if (mlCont) mlCont.innerHTML = Components.mlStatusCard(mlModels);
+      const rCont = document.getElementById('broker-risk-container');
+      if (rCont) rCont.innerHTML = Components.riskCard(risk);
+      const aCont = document.getElementById('broker-advisor-container');
+      if (aCont) aCont.innerHTML = Components.onlineAdvisorCard(advisor);
+      const bCont = document.getElementById('broker-breadth-container');
+      if (bCont) bCont.innerHTML = Components.marketBreadthCard(breadth);
 
     } catch(e) {
       panel.innerHTML = `<div class="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 border-l-4 border-l-rose-500 rounded-2xl p-6 shadow-premium">Error al cargar datos del broker: ${e.message}</div>`;

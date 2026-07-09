@@ -303,6 +303,119 @@ async def get_ml_status():
     }
 
 
+@router.get("/dashboard")
+async def get_broker_dashboard():
+    """Endpoint batch: devuelve TODOS los datos del broker en 1 sola petición.
+
+    Reemplaza 12 llamadas separadas por 1 sola → 10x más rápido en Render free.
+    """
+    try:
+        # Datos básicos
+        bot_status = {
+            "active": bot.is_running,
+            "connected": client.is_connected(),
+            "strategy_mode": bot.strategy_mode,
+            "logs": bot.logs[-30:],
+        }
+        acc = client.get_account_summary()
+        positions = client.get_positions()
+        orders = client.get_orders()
+
+        # Risk manager
+        if acc:
+            bot.risk_manager.set_portfolio_value(acc.get("equity", 0))
+        bot.risk_manager.set_positions(positions)
+        risk = bot.risk_manager.to_dict()
+
+        # Config
+        params = bot._strategy_params
+        config = {
+            "strategy_mode": bot.strategy_mode,
+            "buy_score_threshold": params.buy_score_threshold,
+            "sell_score_threshold": params.sell_score_threshold,
+            "stop_loss_pct": params.stop_loss_pct,
+            "take_profit_pct": params.take_profit_pct,
+            "trailing_stop_atr_mult": params.trailing_stop_atr_mult,
+            "max_position_size_pct": params.max_position_size_pct,
+            "min_position_size_pct": params.min_position_size_pct,
+            "require_price_above_sma200": params.require_price_above_sma200,
+            "max_buy_rsi": params.max_buy_rsi,
+            "use_short_selling": params.use_short_selling,
+            "leverage_enabled": BROKER_CONFIG.leverage_enabled,
+            "leverage_range": f"x{BROKER_CONFIG.min_leverage:.0f}-x{BROKER_CONFIG.max_leverage:.0f}",
+            "hall_of_fame": getattr(bot, "_hof_info", None),
+            "risk": {
+                "max_daily_loss_pct": WEB_RISK_CONFIG.max_daily_loss_pct,
+                "max_weekly_drawdown_pct": WEB_RISK_CONFIG.max_weekly_drawdown_pct,
+                "max_position_concentration_pct": WEB_RISK_CONFIG.max_position_concentration_pct,
+                "max_total_exposure_pct": WEB_RISK_CONFIG.max_total_exposure_pct,
+                "correlation_threshold": WEB_RISK_CONFIG.correlation_threshold,
+            },
+        }
+
+        # Kelly
+        kelly = kelly_tracker.to_dict()
+
+        # ML status (ligero — solo lee archivos)
+        from pathlib import Path
+        from config import PROJECT_ROOT
+        models_dir = PROJECT_ROOT / "ml" / "models"
+        ml_models = []
+        if models_dir.exists():
+            import json as _json
+            import time as _time
+            for f in sorted(models_dir.glob("*.meta.json")):
+                try:
+                    with open(f) as fh:
+                        meta = _json.load(fh)
+                    age_h = (_time.time() - f.stat().st_mtime) / 3600
+                    ml_models.append({
+                        "ticker": meta.get("ticker", f.stem),
+                        "accuracy": round(meta.get("metrics", {}).get("accuracy", 0), 3),
+                        "age_hours": round(age_h, 1),
+                    })
+                except Exception:
+                    continue
+
+        # Advisor (ligero)
+        advisor = None
+        if bot.online_advisor:
+            try:
+                advisor = bot.online_advisor.to_dict()
+            except Exception:
+                advisor = {"status": "error"}
+
+        # Market regime (cacheado 30 min)
+        try:
+            regime = bot.market_regime.to_dict()
+        except Exception:
+            regime = {"regime": "UNKNOWN", "reason": "Error"}
+
+        # Market breadth (cacheado 60 min)
+        breadth = None
+        if bot.market_breadth:
+            try:
+                breadth = bot.market_breadth.to_dict()
+            except Exception:
+                breadth = {"available": False}
+
+        return sanitize_for_json({
+            "bot_status": bot_status,
+            "account": acc,
+            "positions": positions,
+            "orders": orders,
+            "config": config,
+            "risk": risk,
+            "kelly": kelly,
+            "ml_models": ml_models,
+            "advisor": advisor,
+            "market_regime": regime,
+            "market_breadth": breadth,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/health")
 async def get_health_dashboard():
     """Dashboard de salud del bot: estado consolidado de un vistazo.

@@ -77,6 +77,11 @@ class ApiClient {
   }
 
   // ── API del Broker ──
+
+  async getDashboard() {
+    return this._fetch(`/api/broker/dashboard`);
+  }
+
   async getAccount() {
     return this._fetch(`/api/broker/account`);
   }
