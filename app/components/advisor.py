@@ -1,4 +1,8 @@
-import streamlit as st
+try:
+    import streamlit as st
+except (ImportError, ModuleNotFoundError):
+    st = None
+
 import pandas as pd
 from ml.train import ModelTrainer
 from indicators.signals import SignalGenerator
