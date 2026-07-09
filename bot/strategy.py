@@ -441,9 +441,13 @@ class PositionState:
             pnl_pct = (current_price / self.entry_price) - 1.0
 
             if p.use_rl_exits:
-                action = self._rl_agent.get_action(pnl_pct, rsi, regime, is_training=False)
-                if action == 1:
-                    return True, f"RL agent chose CLOSE (PnL: {pnl_pct:.2%})"
+                try:
+                    rl = get_rl_agent()
+                    action = rl.get_action(pnl_pct, rsi, regime, is_training=False)
+                    if action == 1:
+                        return True, f"RL agent chose CLOSE (PnL: {pnl_pct:.2%})"
+                except Exception:
+                    pass
                 if pnl_pct <= (p.stop_loss_pct * 1.5):
                     return True, f"stop-loss extremo ({pnl_pct:.2%})"
                 if p.use_trailing_stop and self.entry_atr > 0:
@@ -469,9 +473,13 @@ class PositionState:
             pnl_pct = (self.entry_price / current_price) - 1.0
 
             if p.use_rl_exits:
-                action = self._rl_agent.get_action(pnl_pct, rsi, regime, is_training=False)
-                if action == 1:
-                    return True, f"RL agent CLOSE SHORT (PnL: {pnl_pct:.2%})"
+                try:
+                    rl = get_rl_agent()
+                    action = rl.get_action(pnl_pct, rsi, regime, is_training=False)
+                    if action == 1:
+                        return True, f"RL agent CLOSE SHORT (PnL: {pnl_pct:.2%})"
+                except Exception:
+                    pass
                 if pnl_pct <= -(p.short_stop_loss_pct * 1.5):
                     return True, f"short stop-loss extremo ({pnl_pct:.2%})"
                 return False, ""
