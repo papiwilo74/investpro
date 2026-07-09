@@ -1038,7 +1038,7 @@ class App {
         this.updateAuthUI();
         if (this.state.activeTab === 'broker') await this.loadBrokerTab();
       } catch (err) {
-        errorEl.textContent = err.message || 'Error al iniciar sesión';
+        errorEl.textContent = (err && err.message) ? err.message : 'Error al iniciar sesión';
         errorEl.classList.remove('hidden');
       } finally {
         btn.disabled = false;

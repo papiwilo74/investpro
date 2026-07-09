@@ -4,15 +4,14 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from api.utils import sanitize_for_json
 from api.schemas import BotConfig, BotStatus, DashboardResponse, HealthCheck, MLModelInfo, RiskConfigParams
-from api.auth import get_current_user
 from broker.alpaca_client import AlpacaClient
 from bot.engine import TradingBot
 from bot.safety import SignalJournal
 from bot.strategy import kelly_tracker, create_web_bot_strategy_params
 from config import BROKER_CONFIG, WEB_RISK_CONFIG
 
-# Router protegido (requiere JWT)
-router = APIRouter(dependencies=[Depends(get_current_user)])
+# Router público (sin JWT por ahora)
+router = APIRouter()
 # Router público (health checks, etc.)
 public_router = APIRouter()
 
