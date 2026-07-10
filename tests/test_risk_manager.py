@@ -1,6 +1,7 @@
 """Tests for RiskManager (JSON and DB modes)."""
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
 
 from bot.risk import RiskManager
 from config import RiskConfig

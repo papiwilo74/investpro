@@ -5,7 +5,6 @@ Usa scipy.optimize para resolver problemas de optimización de media-varianza.
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -29,7 +28,7 @@ class PortfolioOptimizer:
 
     def get_portfolio_prices(
         self,
-        tickers: List[str],
+        tickers: list[str],
         period: str = "1y",
         interval: str = "1d",
     ) -> pd.DataFrame:
@@ -58,10 +57,10 @@ class PortfolioOptimizer:
         # Alinear fechas (hacer un outer join y luego ffill/bfill)
         portfolio_df = pd.DataFrame(prices_dict)
         portfolio_df = portfolio_df.ffill().bfill()
-        
+
         # Eliminar cualquier fila que aún contenga NaN (si hay tickers sin solapamiento)
         portfolio_df = portfolio_df.dropna()
-        
+
         if portfolio_df.empty:
             raise ValueError("El DataFrame de portafolio resultante está vacío tras alinear fechas.")
 
@@ -71,7 +70,7 @@ class PortfolioOptimizer:
     def calculate_stats(
         prices_df: pd.DataFrame,
         trading_days: int = 252,
-    ) -> Tuple[pd.Series, pd.DataFrame]:
+    ) -> tuple[pd.Series, pd.DataFrame]:
         """
         Calcula los retornos esperados anualizados (promedio histórico)
         y la matriz de covarianza anualizada de los retornos diarios.
@@ -89,7 +88,7 @@ class PortfolioOptimizer:
         expected_returns: pd.Series,
         cov_matrix: pd.DataFrame,
         risk_free_rate: float = 0.04,
-    ) -> Tuple[float, float, float]:
+    ) -> tuple[float, float, float]:
         """
         Calcula el retorno esperado, volatilidad esperada y Sharpe Ratio de un portafolio.
         """
@@ -111,13 +110,13 @@ class PortfolioOptimizer:
         expected_returns: pd.Series,
         cov_matrix: pd.DataFrame,
         risk_free_rate: float | None = None,
-    ) -> Dict[str, any]:
+    ) -> dict[str, any]:
         """
         Encuentra los pesos óptimos que maximizan el Sharpe Ratio del portafolio.
         """
         rf = risk_free_rate if risk_free_rate is not None else BACKTEST_PARAMS.risk_free_rate
         num_assets = len(expected_returns)
-        
+
         # Objetivo: Minimizar el Sharpe negativo
         def objective(weights):
             _, _, sharpe = self.portfolio_performance(weights, expected_returns, cov_matrix, rf)
@@ -125,10 +124,10 @@ class PortfolioOptimizer:
 
         # Restricciones: la suma de los pesos debe ser 1 (100%)
         constraints = {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
-        
+
         # Límites: Pesos entre 0 y 1 (sin ventas en corto, long-only)
         bounds = tuple((0.0, 1.0) for _ in range(num_assets))
-        
+
         # Valor inicial: pesos equiponderados
         init_weights = np.ones(num_assets) / num_assets
 
@@ -162,7 +161,7 @@ class PortfolioOptimizer:
         expected_returns: pd.Series,
         cov_matrix: pd.DataFrame,
         risk_free_rate: float | None = None,
-    ) -> Dict[str, any]:
+    ) -> dict[str, any]:
         """
         Encuentra los pesos óptimos que minimizan la volatilidad (varianza) del portafolio.
         """
@@ -216,9 +215,9 @@ class PortfolioOptimizer:
         """
         rf = risk_free_rate if risk_free_rate is not None else BACKTEST_PARAMS.risk_free_rate
         num_assets = len(expected_returns)
-        
+
         results = []
-        
+
         # Generación de pesos aleatorios vectorizada para mayor velocidad
         # Cada fila es un portafolio simulado
         random_weights = np.random.random((num_portfolios, num_assets))
@@ -232,5 +231,5 @@ class PortfolioOptimizer:
                 "volatility": vol,
                 "sharpe_ratio": sharpe,
             })
-            
+
         return pd.DataFrame(results)

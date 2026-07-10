@@ -1,13 +1,13 @@
 from fastapi import APIRouter, HTTPException, Query
-from data.fetcher import DataFetcher
-from indicators.technical import TechnicalIndicators
-from indicators.signals import SignalGenerator
+
+from api.genetic_worker import run_genetic_process
+from api.job_manager import job_manager
+from api.utils import sanitize_for_json
 from backtesting.bot_engine import BotBacktestEngine
 from backtesting.validation import run_validation
-from api.utils import sanitize_for_json
-from api.job_manager import job_manager, Job
-from api.genetic_worker import run_genetic_process
-from portfolio.genetic_optimizer import GeneticOptimizer
+from data.fetcher import DataFetcher
+from indicators.signals import SignalGenerator
+from indicators.technical import TechnicalIndicators
 
 router = APIRouter()
 fetcher = DataFetcher()
@@ -24,9 +24,9 @@ async def run_backtest(
         df = fetcher.get_data(ticker, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
         df = SignalGenerator.add_signal_columns(df)
-        
+
         result = engine.run(df)
-        
+
         # Formatear la equity curve para lightweight charts
         equity_curve = []
         for idx, val in result.equity_curve.items():
@@ -34,7 +34,7 @@ async def run_backtest(
                 "time": idx.strftime("%Y-%m-%d"),
                 "value": float(val)
             })
-            
+
         # Formatear el historial de trades
         trades_list = []
         for t in result.trades:
@@ -49,7 +49,7 @@ async def run_backtest(
                 "pnl_pct": t.pnl_pct,
                 "commission": t.commission
             })
-            
+
         return sanitize_for_json({
             "ticker": ticker,
             "metrics": result.metrics,

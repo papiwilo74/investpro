@@ -2,24 +2,21 @@
 ShadowTrader, PortfolioAllocator y SmartOrderRouter."""
 from __future__ import annotations
 
-import json
 import sys
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
-import pytest
 
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-from ml.model_gate import ModelGate
-from ml.champion_challenger import ChampionChallenger
-from bot.shadow_trader import ShadowTrader
 from bot.portfolio_allocator import PortfolioAllocator
-
+from bot.shadow_trader import ShadowTrader
+from ml.champion_challenger import ChampionChallenger
+from ml.model_gate import ModelGate
 
 # ── ModelGate ──────────────────────────────────────────────────────────
 

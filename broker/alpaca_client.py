@@ -1,11 +1,11 @@
 import asyncio
 import os
-from typing import Callable
+from collections.abc import Callable
 
 import requests
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, GetOrdersRequest
-from alpaca.trading.enums import OrderSide, TimeInForce, QueryOrderStatus, OrderType
+from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
+from alpaca.trading.requests import GetOrdersRequest, LimitOrderRequest, MarketOrderRequest
 from loguru import logger
 
 from config import BROKER_CONFIG

@@ -4,7 +4,7 @@ from .features import FeatureGenerator
 from .train import ModelTrainer
 
 try:
-    from .neural_brain import NeuralTradingBrain, NeuralTrainer, train_from_backtest, extract_features
+    from .neural_brain import NeuralTradingBrain, NeuralTrainer, extract_features, train_from_backtest
 except (ImportError, ModuleNotFoundError):
     NeuralTradingBrain = None
     NeuralTrainer = None

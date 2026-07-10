@@ -7,18 +7,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
-from typing import List
+from enum import StrEnum
 
 import numpy as np
 import pandas as pd
 
-from config import INDICATOR_PARAMS, SIGNAL_WEIGHTS_TREND, SIGNAL_WEIGHTS_RANGE, SIGNAL_WEIGHTS_MOMENTUM
-
+from config import INDICATOR_PARAMS, SIGNAL_WEIGHTS_RANGE, SIGNAL_WEIGHTS_TREND
 
 # ── Tipos ─────────────────────────────────────────────────────────────
 
-class Action(str, Enum):
+class Action(StrEnum):
     BUY = "COMPRA"
     SELL = "VENTA"
     HOLD = "ESPERA"
@@ -124,11 +122,9 @@ class SignalGenerator:
         # ADX / Régimen de mercado ─────────────────────────────────────
         # Adaptar pesos según si hay tendencia fuerte o rango
         adx = df.get("adx", pd.Series(50.0, index=df.index))
-        trend_mask = adx >= INDICATOR_PARAMS.adx_trend_threshold
         range_mask = adx <= INDICATOR_PARAMS.adx_range_threshold
         w_t = SIGNAL_WEIGHTS_TREND
         w_r = SIGNAL_WEIGHTS_RANGE
-        w_m = SIGNAL_WEIGHTS_MOMENTUM
 
         df["w_rsi"] = w_t["rsi"]
         df["w_macd"] = w_t["macd"]
@@ -182,7 +178,7 @@ class SignalGenerator:
     # ── Señales legibles (última fila) ────────────────────────────────
 
     @staticmethod
-    def get_latest_signals(df: pd.DataFrame, ticker: str) -> List[Signal]:
+    def get_latest_signals(df: pd.DataFrame, ticker: str) -> list[Signal]:
         """Retorna señales explicativas de la **última** fila del DataFrame."""
         if df.empty:
             return []
@@ -190,7 +186,7 @@ class SignalGenerator:
         last = df.iloc[-1]
         prev = df.iloc[-2] if len(df) > 1 else None
         ts = df.index[-1]
-        signals: List[Signal] = []
+        signals: list[Signal] = []
         regime = "tendencia" if last.get("adx", 50) >= INDICATOR_PARAMS.adx_trend_threshold else "rango"
 
         # ── RSI ───────────────────────────────────────────────────────
@@ -212,7 +208,7 @@ class SignalGenerator:
 
         # ── MACD ─────────────────────────────────────────────────────
         if all(c in df.columns for c in ("macd", "macd_signal")):
-            m, ms = last["macd"], last["macd_signal"]
+            _m, _ms = last["macd"], last["macd_signal"]
             sig_macd = last.get("sig_macd", 0)
             cross = last.get("sig_macd_cross", 0)
             if prev is not None and cross != 0:

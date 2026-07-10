@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from config import PROJECT_ROOT
@@ -70,7 +70,7 @@ class SignalJournal:
         confidence: float | None = None,
         horizon_days: int = 5,
     ) -> int:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         today = now[:10]
         with self._connect() as conn:
             existing = conn.execute(

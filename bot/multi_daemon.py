@@ -14,34 +14,35 @@ Mejoras de ejecución:
 - Opciones dimensionadas con el último precio real del contrato.
 - Persiste leverage + confidence en SQLite para auditoría.
 """
-import sys
 import os
+import sys
+
 # Añadir el directorio raíz al path para que encuentre 'broker' y 'bot'
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
-import schedule
 from datetime import datetime
+
 import pandas as pd
+import schedule
 
-from broker.alpaca_client import AlpacaClient
-from bot.strategy import TradingBrain, StrategyParams, Decision
-from data.fetcher import DataFetcher
-from indicators.technical import TechnicalIndicators
-from indicators.signals import SignalGenerator
-from ml.sentiment import SentimentAnalyzer
-from ml.reddit_sentiment import RedditSentimentAnalyzer
-from ml.train import ModelTrainer
-from bot.scanner import MarketScanner
 from bot.hedging import HedgeMonitor
-from ml.vision import VisualAnalyzer
-from bot.smart_money import SmartMoneyTracker
 from bot.macro_calendar import MacroTracker
-from ml.stocktwits_sentiment import StockTwitsAnalyzer
-from ml.lstm_model import LSTMPredictor
-from bot.state_manager import BotStateManager
 from bot.risk import SECTOR_MAP
-
+from bot.scanner import MarketScanner
+from bot.smart_money import SmartMoneyTracker
+from bot.state_manager import BotStateManager
+from bot.strategy import Decision, StrategyParams, TradingBrain
+from broker.alpaca_client import AlpacaClient
+from data.fetcher import DataFetcher
+from indicators.signals import SignalGenerator
+from indicators.technical import TechnicalIndicators
+from ml.lstm_model import LSTMPredictor
+from ml.reddit_sentiment import RedditSentimentAnalyzer
+from ml.sentiment import SentimentAnalyzer
+from ml.stocktwits_sentiment import StockTwitsAnalyzer
+from ml.train import ModelTrainer
+from ml.vision import VisualAnalyzer
 
 # ── Parámetros de apalancamiento (mantenemos x2 - x3, sin x4/x5) ──────────
 MIN_LEVERAGE = 2.0
@@ -394,7 +395,7 @@ class MultiLiveDaemon:
 
         # Filtro de apertura (solo aquí, no en el constructor)
         if self._is_opening_bell():
-            print(f"[DAEMON] 🛡️ Filtro de Apertura Activo (9:30-9:45 AM). Modo Observador.")
+            print("[DAEMON] 🛡️ Filtro de Apertura Activo (9:30-9:45 AM). Modo Observador.")
             return
 
         if not self.broker.is_connected():
@@ -414,7 +415,7 @@ class MultiLiveDaemon:
             # Ordenar por el score del ranking y tomar los mejores 10
             top_cands = sorted(scan_res.accepted, key=lambda c: c.rank_score, reverse=True)[:10]
             discovered = [c.ticker for c in top_cands]
-            
+
             # Asegurarnos de mantener en la lista las posiciones ya abiertas
             self.tickers = list(set(discovered + open_symbols))
             print(f"[DAEMON] 🔍 Scanner descubrió {len(discovered)} joyas ocultas. Tickers a vigilar hoy: {self.tickers}")
@@ -423,21 +424,21 @@ class MultiLiveDaemon:
         market_state = self.hedge_monitor.check_market_state()
         macro_state = self.macro.get_macro_status()
         if market_state["status"] == "PANIC" or macro_state.get("panic_mode", False):
-            print(f"\n🚨 [PROTOCOL ESCUDO ACTIVADO] 🚨")
+            print("\n🚨 [PROTOCOL ESCUDO ACTIVADO] 🚨")
             print(f"🚨 Motivo: {market_state.get('reason', 'Alta volatilidad VIX')}")
-            print(f"🚨 Acción: Bloqueando compras de riesgo e inyectando liquidez en SQQQ.\n")
-            
+            print("🚨 Acción: Bloqueando compras de riesgo e inyectando liquidez en SQQQ.\n")
+
             # Bloquear compras normales forzando una lista de candidatos vacía
             # y forzando la compra de SQQQ con confianza máxima (Apalancamiento x3).
             buy_candidates = []
             if "SQQQ" not in open_symbols:
                 df_sqqq = self.fetcher.get_data("SQQQ", period="5d", interval="1d")
                 sqqq_price = float(df_sqqq["close"].iloc[-1]) if not df_sqqq.empty else 10.0
-                
+
                 decision = Decision(
-                    action="BUY", 
-                    reason="PROTOCOLO ESCUDO (Caída del S&P 500)", 
-                    confidence=1.0, 
+                    action="BUY",
+                    reason="PROTOCOLO ESCUDO (Caída del S&P 500)",
+                    confidence=1.0,
                     side="LONG"
                 )
                 buy_candidates.append({
@@ -449,7 +450,7 @@ class MultiLiveDaemon:
         else:
             # Flujo normal si el mercado está saludable
             buy_candidates = []
-    
+
             for ticker in self.tickers:
                 print(f"\n── Analizando {ticker} ──")
                 try:
@@ -457,28 +458,28 @@ class MultiLiveDaemon:
                     df = self.fetcher.get_data(ticker, period="6mo", interval="1d")
                     if len(df) < 50:
                         continue
-    
+
                     df = TechnicalIndicators.add_all(df)
                     df = SignalGenerator.add_signal_columns(df)
-    
+
                     current_price = float(df["close"].iloc[-1])
                     score = float(df["sig_composite"].iloc[-1])
-    
+
                     # 2. Noticias (Alpaca NLP)
                     news = self.broker.get_news(ticker, limit=5)
                     nlp_res = self.sentiment.analyze_news_batch(news)
                     news_label = nlp_res["global_label"]
                     news_score = nlp_res["average_sentiment"]
-    
+
                     # 3. Reddit Sentiment
                     reddit_res = self.reddit.analyze_ticker(ticker, limit=10)
                     reddit_label = reddit_res["label"]
                     reddit_score = reddit_res["avg_sentiment"]
                     hype = reddit_res["hype_score"]
-    
+
                     # 4.1 StockTwits
                     st_res = self.stocktwits.get_sentiment(ticker)
-                    
+
                     # 4.2 Smart Money (Options Flow)
                     sm_res = self.smart_money.get_put_call_ratio(ticker)
                     pcr = sm_res.get("pcr_volume", 1.0)
@@ -487,8 +488,8 @@ class MultiLiveDaemon:
                     vision_res = self.vision.analyze_chart(df)
                     lstm_res = self.lstm.predict_trend(df)
                     vision_label = vision_res.get("visual_label", "NOT_AVAILABLE")
-                    vision_prob = vision_res.get("visual_prob", 0.5)
-    
+                    vision_res.get("visual_prob", 0.5)
+
                     # 6. Combinar sentimiento real (noticias, redes, smart money)
                     combined_sentiment = (news_score * 0.4) + (reddit_score * 0.2) + (st_res.get("score", 0.0) * 0.4)
 
@@ -496,14 +497,14 @@ class MultiLiveDaemon:
                         combined_sentiment += 0.3
                     elif pcr > 1.3:
                         combined_sentiment -= 0.3
-    
+
                     if combined_sentiment >= 0.10:
                         final_label = "ALCISTA"
                     elif combined_sentiment <= -0.10:
                         final_label = "BAJISTA"
                     else:
                         final_label = "NEUTRAL"
-    
+
                     print(f"   Precio: ${current_price:.2f} | Score: {score:+.2f}")
                     print(f"   📰 Noticias: {news_label} ({news_score:+.3f})")
                     print(f"   🌐 Reddit:   {reddit_label} ({reddit_score:+.3f}) | Hype: {hype:.2f}")
@@ -512,7 +513,7 @@ class MultiLiveDaemon:
                     print(f"   🐋 SmartMoney: PCR {pcr:.2f}")
                     print(f"   🧠 LSTM (EXPERIMENTAL): {lstm_res['prediction']}")
                     print(f"   🧠 Sentimiento Final: {final_label} ({combined_sentiment:+.3f})")
-    
+
                     # 6. Decisión del cerebro
                     has_pos = ticker in open_symbols
                     weekly_trend = TradingBrain._infer_weekly_trend(df)
@@ -530,7 +531,7 @@ class MultiLiveDaemon:
                             weekly_trend=weekly_trend,
                             market_regime=market_regime
                         )
-    
+
                         if decision.action != "HOLD":
                             buy_candidates.append({
                                 "ticker": ticker,
@@ -542,7 +543,7 @@ class MultiLiveDaemon:
                             print(f"   ⏸️  HOLD: {decision.reason}")
                     else:
                         print(f"   📌 Ya tenemos posición abierta en {ticker}.")
-    
+
                 except Exception as e:
                     print(f"[DAEMON] ❌ Error evaluando {ticker}: {e}")
 
@@ -566,7 +567,7 @@ class MultiLiveDaemon:
     def retrain_all_models(self):
         """Re-entrena el modelo de ML para cada ticker usando datos recientes."""
         print(f"\n{'='*60}")
-        print(f"  🧬 AUTO-EVOLUCIÓN: Re-entrenando modelos de IA...")
+        print("  🧬 AUTO-EVOLUCIÓN: Re-entrenando modelos de IA...")
         print(f"{'='*60}\n")
 
         for ticker in self.tickers:
@@ -579,7 +580,7 @@ class MultiLiveDaemon:
                 print(f"  ❌ Error entrenando {ticker}: {e}")
 
         print(f"\n{'='*60}")
-        print(f"  🧬 Re-entrenamiento completo. El cerebro ha evolucionado.")
+        print("  🧬 Re-entrenamiento completo. El cerebro ha evolucionado.")
         print(f"{'='*60}\n")
 
     # ── ARRANQUE ─────────────────────────────────────────────────────

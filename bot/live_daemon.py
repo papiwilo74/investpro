@@ -3,14 +3,15 @@ Live Auto-Trading Daemon
 Estrategias: LONG, Buy the Dip, Short Selling
 """
 import time
-import schedule
 from datetime import datetime
 
+import schedule
+
+from bot.strategy import TradingBrain
 from broker.alpaca_client import AlpacaClient
-from bot.strategy import TradingBrain, StrategyParams
 from data.fetcher import DataFetcher
-from indicators.technical import TechnicalIndicators
 from indicators.signals import SignalGenerator
+from indicators.technical import TechnicalIndicators
 from ml.sentiment import SentimentAnalyzer
 
 
@@ -120,8 +121,8 @@ class LiveDaemon:
             print(f"[DAEMON] Error crítico en ciclo: {e}")
 
     def run_forever(self):
-        print(f"[DAEMON] Auto-Trading activo | Estrategias: LONG + Buy the Dip + Short Selling")
-        print(f"[DAEMON] Revisando cada hora. Ctrl+C para detener.\n")
+        print("[DAEMON] Auto-Trading activo | Estrategias: LONG + Buy the Dip + Short Selling")
+        print("[DAEMON] Revisando cada hora. Ctrl+C para detener.\n")
         self.job()
         schedule.every(1).hours.do(self.job)
         while True:

@@ -13,8 +13,6 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from loguru import logger
-
 
 class BotStateManager:
     """Guarda y recupera el estado del bot en SQLite.

@@ -8,19 +8,18 @@ evitar look-ahead bias.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 import pandas as pd
 
+from backtesting.metrics import PerformanceMetrics, Trade
 from config import BACKTEST_PARAMS, BacktestParams
-from backtesting.metrics import Trade, PerformanceMetrics
 
 
 @dataclass
 class BacktestResult:
     """Resultado de una simulación de backtest."""
     equity_curve: pd.Series
-    trades: List[Trade]
+    trades: list[Trade]
     metrics: dict
 
 
@@ -64,9 +63,9 @@ class BacktestEngine:
         entry_price: float = 0.0
         entry_date = None
 
-        equity_values: List[float] = []
+        equity_values: list[float] = []
         equity_dates: list = []
-        trades: List[Trade] = []
+        trades: list[Trade] = []
 
         # Desplazar señales +1 para evitar look-ahead bias
         signals = df[signal_col].shift(1).fillna(0)

@@ -4,13 +4,12 @@ Métricas de rendimiento para resultados de backtesting.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from config import BACKTEST_PARAMS
-
 
 # ── Tipo de trade ─────────────────────────────────────────────────────
 
@@ -70,7 +69,7 @@ class PerformanceMetrics:
         return float(excess / returns.std() * np.sqrt(trading_days))
 
     @staticmethod
-    def max_drawdown(equity: pd.Series) -> Dict[str, Any]:
+    def max_drawdown(equity: pd.Series) -> dict[str, Any]:
         """Máximo drawdown con fechas de pico y valle."""
         if equity.empty:
             return {"max_drawdown": 0.0, "peak_date": None, "valley_date": None}
@@ -85,7 +84,7 @@ class PerformanceMetrics:
         }
 
     @staticmethod
-    def win_rate(trades: List[Trade]) -> float:
+    def win_rate(trades: list[Trade]) -> float:
         """Porcentaje de trades ganadores."""
         if not trades:
             return 0.0
@@ -93,7 +92,7 @@ class PerformanceMetrics:
         return wins / len(trades)
 
     @staticmethod
-    def profit_factor(trades: List[Trade]) -> float:
+    def profit_factor(trades: list[Trade]) -> float:
         """Ratio ganancia bruta / pérdida bruta."""
         gross_profit = sum(t.pnl for t in trades if t.pnl > 0)
         gross_loss = abs(sum(t.pnl for t in trades if t.pnl < 0))
@@ -102,7 +101,7 @@ class PerformanceMetrics:
         return gross_profit / gross_loss
 
     @staticmethod
-    def summary(equity: pd.Series, trades: List[Trade]) -> Dict[str, Any]:
+    def summary(equity: pd.Series, trades: list[Trade]) -> dict[str, Any]:
         """Diccionario con todas las métricas."""
         dd = PerformanceMetrics.max_drawdown(equity)
         return {

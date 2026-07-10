@@ -21,10 +21,9 @@ Reward: P&L porcentual real de la operación resultante.
 from __future__ import annotations
 
 import json
-import math
 import random
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +32,6 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from db.repositories import AdvisorRepository
-
 
 # ── Discretización de estado ─────────────────────────────────────────
 
@@ -231,7 +229,7 @@ class OnlineAdvisor:
             reason = f"exploracion (epsilon={self.epsilon:.2f})"
         else:
             action_idx = int(np.argmax(q_values))
-            reason = f"mejor Q conocido"
+            reason = "mejor Q conocido"
 
         # Si no hay suficientes muestras, ser conservador (ALLOW por defecto)
         if total_visits < self.min_samples_before_trust:

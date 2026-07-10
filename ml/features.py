@@ -63,13 +63,13 @@ class FeatureGenerator:
                     high=data["high"], low=data["low"], close=data["close"], volume=data["volume"], fillna=True
                 )
                 features["feat_dist_vwap"] = ((data["close"] - vwap) / vwap).replace([np.inf, -np.inf], 0.0).fillna(0.0)
-                
+
                 # CMF (Chaikin Money Flow) para medir presión de compra/venta
                 cmf = ta.volume.chaikin_money_flow(
                     high=data["high"], low=data["low"], close=data["close"], volume=data["volume"], fillna=True
                 )
                 features["feat_cmf"] = cmf.fillna(0.0)
-                
+
                 # Cambio porcentual del volumen
                 features["feat_vol_change"] = data["volume"].pct_change().replace([np.inf, -np.inf], 0.0).fillna(0.0)
             except Exception:
@@ -87,16 +87,16 @@ class FeatureGenerator:
             fetcher = DataFetcher()
             spy = fetcher.get_data("SPY", period="5y", interval="1d")
             vix = fetcher.get_data("^VIX", period="5y", interval="1d")
-            
+
             # Alinear fechas
             spy_aligned = spy.reindex(data.index, method='ffill')
             vix_aligned = vix.reindex(data.index, method='ffill')
-            
+
             features["feat_macro_spy_return"] = spy_aligned["close"].pct_change().fillna(0.0)
             spy_sma200 = spy_aligned["close"].rolling(200).mean()
             features["feat_macro_spy_trend"] = ((spy_aligned["close"] - spy_sma200) / (spy_sma200 + 1e-8)).fillna(0.0)
             features["feat_macro_vix"] = vix_aligned["close"].fillna(20.0)
-        except Exception as e:
+        except Exception:
             features["feat_macro_spy_return"] = 0.0
             features["feat_macro_spy_trend"] = 0.0
             features["feat_macro_vix"] = 20.0
@@ -115,7 +115,7 @@ class FeatureGenerator:
         Target 1 = Precio en 'horizon' días sube al menos 'min_return'.
         """
         data = df.copy()
-        
+
         features = cls._add_features(data)
 
         # Variable Objetivo (Target): 1 si la ganancia supera el min_return

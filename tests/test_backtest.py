@@ -1,6 +1,5 @@
-import pytest
 import pandas as pd
-import numpy as np
+import pytest
 
 from backtesting.engine import BacktestEngine
 from backtesting.metrics import PerformanceMetrics
@@ -25,16 +24,16 @@ class TestBacktestEngine:
         """
         Precio: 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
         Señal:   0,  1,  0,  0, -1,  0,  0,  0,  0,  0
-        
+
         shift(1) en señal:
         signals: 0,  0,  1,  0,  0, -1,  0,  0,  0,  0
-        
+
         i=2: signal=1, compra en 12 (slippage 0.05% → 12.006)
             shares = int(100000 / 12.006) = 8333
             cost = 8333 * 12.006 = 100,005.998
             comm = 100,005.998 * 0.001 = 100.006
             capital = 100,000 - 100,005.998 - 100.006 ≈ -106
-        
+
         Espera, con precio 10 funciona mejor.
         """
         dates = pd.date_range("2023-01-01", periods=10, freq="D")
@@ -42,10 +41,10 @@ class TestBacktestEngine:
             "close": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0],
             "sig_composite": [0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         }, index=dates)
-        
+
         engine = BacktestEngine()
         result = engine.run(df)
-        
+
         # Debe haber exactamente 1 trade (compra en día 3, venta en día 6)
         assert result.metrics["total_trades"] == 1
         # Equity final debe ser mayor que inicial porque el precio subió
@@ -62,10 +61,10 @@ class TestBacktestEngine:
             "close": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0],
             "sig_composite": [0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         }, index=dates)
-        
+
         engine = BacktestEngine()
         result = engine.run(df)
-        
+
         # Solo un trade, no reentra después de vender
         assert result.metrics["total_trades"] == 1
         # El capital final debe ser cash (no hay posición abierta al final)
@@ -140,8 +139,8 @@ class TestMonteCarlo:
         assert mc.p50_return is not None
 
     def test_monte_carlo_percentiles_well_ordered(self):
-        from backtesting.validation import MonteCarloSimulator
         from backtesting.metrics import Trade
+        from backtesting.validation import MonteCarloSimulator
         trades = [Trade(f"2023-01-0{i}", f"2023-01-1{i}", "LONG", 100 + i, 100 + i + (5 if i % 2 == 0 else -3), 10, 0, 0, 0.5) for i in range(20)]
         mc = MonteCarloSimulator(n_simulations=500).run(trades)
         assert mc.p5_return <= mc.p50_return <= mc.p95_return
@@ -187,7 +186,7 @@ class TestOverfitDetector:
 
 
     def test_bot_engine_leverage_applied_to_position_size(self):
-        from backtesting.bot_engine import BotBacktestEngine, BacktestParams
+        from backtesting.bot_engine import BotBacktestEngine
         from bot.strategy import StrategyParams
         params = StrategyParams(
             buy_score_threshold=-1.0, use_ml_filter=False, use_ensemble=False,

@@ -10,27 +10,30 @@ import pandas as pd
 from loguru import logger
 
 import logging_config  # noqa: F401 — configura loguru al importar
-from bot.state_manager import BotStateManager
-from broker.alpaca_client import AlpacaClient
-from data.fetcher import DataFetcher
-from db import SessionLocal, init_db as init_database
-from indicators.technical import TechnicalIndicators
-from indicators.signals import SignalGenerator
-from ml.train import ModelTrainer
-from ml.sentiment import SentimentAnalyzer
-from config import BROKER_CONFIG, WEB_RISK_CONFIG, WATCHLIST, intraday_indicator_params
-from bot.risk import RiskManager
-from bot.scanner import MarketScanner
-from bot.safety import SignalJournal
-from bot.strategy import StrategyParams, TradingBrain, Decision, create_web_bot_strategy_params
-from bot.market_regime import MarketRegimeFilter
-from bot.online_advisor import OnlineAdvisor
-from bot.mtf_filter import MTFFilter
-from bot.market_breadth import MarketBreadth
-from bot.macro_calendar import MacroTracker
 from bot.hedging import HedgeMonitor
+from bot.macro_calendar import MacroTracker
+from bot.market_breadth import MarketBreadth
+from bot.market_regime import MarketRegimeFilter
+from bot.mtf_filter import MTFFilter
 from bot.notifications import notifier
+from bot.online_advisor import OnlineAdvisor
+from bot.order_manager import OrderManager
 from bot.performance_tracker import PerformanceTracker
+from bot.risk import RiskManager
+from bot.risk_controller import RiskController
+from bot.safety import SignalJournal
+from bot.scanner import MarketScanner
+from bot.state_manager import BotStateManager
+from bot.strategy import Decision, StrategyParams, TradingBrain, create_web_bot_strategy_params
+from broker.alpaca_client import AlpacaClient
+from config import BROKER_CONFIG, WATCHLIST, WEB_RISK_CONFIG
+from data.fetcher import DataFetcher
+from db import SessionLocal
+from db import init_db as init_database
+from indicators.signals import SignalGenerator
+from indicators.technical import TechnicalIndicators
+from ml.sentiment import SentimentAnalyzer
+from ml.train import ModelTrainer
 
 
 class TradingBot:
@@ -76,6 +79,15 @@ class TradingBot:
         )
         self.risk_manager.set_alert_callback(lambda level, event, msg: notifier.send(event, msg, level))
         self.state = BotStateManager()
+        # ── Componentes extraídos (composición sobre herencia) ────────
+        # Inicializados sin smart_router; se setea tras crearlo abajo
+        self.order_manager = OrderManager(self.client, self.state)
+        self.risk_controller = RiskController(
+            self.risk_manager,
+            macro_tracker=None,
+            hedge_monitor=None,
+            notifier=notifier,
+        )
 
         if strategy_params is not None:
             params = strategy_params
@@ -317,15 +329,10 @@ class TradingBot:
 
     def _route_order(self, symbol: str, qty: int, side: str, ref_price: float,
                      use_limit: bool = True) -> dict:
-        """Punto único de ejecución: usa SmartOrderRouter si está disponible,
-        sino cae al place_smart_order legacy."""
-        if self.smart_router is not None and qty > 0:
-            return self.smart_router.execute(
-                symbol, qty, side, ref_price, strategy="auto", use_limit=use_limit
-            )
-        return self.client.place_smart_order(
-            symbol, qty, side, ref_price, use_limit=use_limit, limit_offset_pct=0.005
-        )
+        """Punto único de ejecución: delega a OrderManager."""
+        if self.smart_router is not None:
+            self.order_manager._smart_router = self.smart_router
+        return self.order_manager.route_order(symbol, qty, side, ref_price, use_limit)
 
     def _reset_daily_order_counter_if_needed(self):
         today = datetime.now().date()
@@ -832,9 +839,7 @@ class TradingBot:
         return invested
 
     def _update_risk_state(self, equity: float, positions: dict[str, dict]) -> None:
-        self.risk_manager.set_portfolio_value(equity)
-        self.risk_manager.set_positions(list(positions.values()))
-        self.risk_manager.reset_daily()
+        self.risk_controller.update_risk_state(equity, positions)
         # Precargar historial de precios para correlación real (últimos 90 días)
         try:
             price_history = self._load_price_history_for_correlation(list(positions.keys()))
@@ -994,7 +999,7 @@ class TradingBot:
                     res = self._route_order("SH", int(sh_qty), "SELL", sh_current, use_limit=True)
                     if res.get("status") == "success":
                         self.state.remove_position("SH")
-                        notifier.send("rotation", f"✅ Cobertura SH vendida: mercado sano", "info")
+                        notifier.send("rotation", "✅ Cobertura SH vendida: mercado sano", "info")
 
         except Exception as exc:
             logger.warning("Error en rotation hedge: %s", exc)
@@ -1025,8 +1030,8 @@ class TradingBot:
         except Exception as exc:
             logger.warning("Error en telemetría diaria: %s", exc)
 
-    def _log_trade_telemetry(self, ticker: str, side: str, entry_date: str = None,
-                              exit_reason: str = None, pnl_pct: float = 0, pnl_usd: float = 0) -> None:
+    def _log_trade_telemetry(self, ticker: str, side: str, entry_date: str | None = None,
+                              exit_reason: str | None = None, pnl_pct: float = 0, pnl_usd: float = 0) -> None:
         """Registra trade en el sistema de telemetría."""
         if not self.perf_tracker:
             return
@@ -1153,7 +1158,7 @@ class TradingBot:
 
         # 4. Tamaño de posición válido
         if decision.position_size_pct <= 0:
-            checks.append(f"❌ Tamaño de posición inválido")
+            checks.append("❌ Tamaño de posición inválido")
             passed = False
         else:
             checks.append(f"✅ Tamaño objetivo {decision.position_size_pct:.1%}")
@@ -1287,7 +1292,7 @@ class TradingBot:
         de cartera; si el sizing por Kelly/ATR excede el target, se recorta.
         """
         if not self._can_place_order():
-            self._log(f"Limite diario de ordenes alcanzado.")
+            self._log("Limite diario de ordenes alcanzado.")
             return 0.0
 
         # ── Apalancamiento dinámico x2-x3 (degradado por riesgo) ──────
@@ -1378,7 +1383,7 @@ class TradingBot:
     ) -> float:
         """Ejecuta una venta en corto (short sell) con apalancamiento x2-x3."""
         if not self._can_place_order():
-            self._log(f"Limite diario de ordenes alcanzado (SHORT)")
+            self._log("Limite diario de ordenes alcanzado (SHORT)")
             return 0.0
 
         # ── Apalancamiento dinámico x2-x3 ──────────────────────────────

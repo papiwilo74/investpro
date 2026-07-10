@@ -9,14 +9,14 @@ import logging
 import pickle
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 import pandas as pd
 
 logger = logging.getLogger("inversion_helper.ml.train")
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 from xgboost import XGBClassifier
-from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 from config import PROJECT_ROOT
 from data.fetcher import DataFetcher
@@ -67,7 +67,7 @@ class ModelTrainer:
 
     # ── Entrenamiento del Modelo ──────────────────────────────────────
 
-    def train_and_save(self, ticker: str, period: str = "2y", optimize: bool = False) -> Dict[str, Any]:
+    def train_and_save(self, ticker: str, period: str = "2y", optimize: bool = False) -> dict[str, Any]:
         """
         Descarga datos históricos, genera features, entrena un XGBoost
         usando separación cronológica (Time Series Split) y guarda el modelo.
@@ -203,7 +203,7 @@ class ModelTrainer:
 
     # ── Cargar y Predecir ─────────────────────────────────────────────
 
-    def load_model(self, ticker: str) -> Dict[str, Any] | None:
+    def load_model(self, ticker: str) -> dict[str, Any] | None:
         """
         Carga un modelo entrenado para el ticker especificado si existe.
         Prueba formato nativo JSON primero; fallback a legacy pickle.
@@ -218,7 +218,7 @@ class ModelTrainer:
         if model_path.exists() and meta_path.exists():
             model = XGBClassifier(device="cuda" if _HAS_CUDA else "cpu")
             model.load_model(str(model_path))
-            with open(meta_path, "r", encoding="utf-8") as f:
+            with open(meta_path, encoding="utf-8") as f:
                 metadata = json.load(f)
             return {**metadata, "model": model}
 
@@ -239,7 +239,7 @@ class ModelTrainer:
 
         return None
 
-    def predict_trend(self, ticker: str, latest_df: pd.DataFrame) -> Dict[str, Any]:
+    def predict_trend(self, ticker: str, latest_df: pd.DataFrame) -> dict[str, Any]:
         """
         Utiliza el modelo cargado para predecir la dirección y probabilidad del precio
         del activo en los próximos 5 días utilizando la última fila de datos disponible.

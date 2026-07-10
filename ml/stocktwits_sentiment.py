@@ -1,8 +1,9 @@
 """StockTwits Sentiment Analyzer - Analiza el pulso de la comunidad inversora"""
 
-import requests
-import json
 import time
+
+import requests
+
 
 class StockTwitsAnalyzer:
     def __init__(self):
@@ -16,9 +17,9 @@ class StockTwitsAnalyzer:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
-        
+
         url = self.base_url.format(ticker)
-        
+
         result = {
             "bullish_pct": 0.5,
             "bearish_pct": 0.5,
@@ -26,49 +27,49 @@ class StockTwitsAnalyzer:
             "score": 0.0,
             "status": "OK"
         }
-        
+
         try:
             response = requests.get(url, headers=headers, timeout=5)
-            
+
             if response.status_code == 429:
                 # Rate limit hit
                 time.sleep(2)
                 response = requests.get(url, headers=headers, timeout=5)
-                
+
             if response.status_code != 200:
                 result["status"] = "ERROR_API"
                 return result
-                
+
             data = response.json()
             messages = data.get("messages", [])[:limit]
-            
+
             bulls = 0
             bears = 0
-            
+
             for msg in messages:
                 entities = msg.get("entities", {})
                 sentiment = entities.get("sentiment", None)
-                
+
                 if sentiment:
                     basic = sentiment.get("basic", "")
                     if basic == "Bullish":
                         bulls += 1
                     elif basic == "Bearish":
                         bears += 1
-            
+
             total = bulls + bears
-            
+
             if total > 0:
                 result["bullish_pct"] = bulls / total
                 result["bearish_pct"] = bears / total
                 result["volume"] = len(messages)
-                
+
                 # Score de -1.0 a 1.0
                 result["score"] = (bulls - bears) / total
-                
+
             return result
 
-        except Exception as e:
+        except Exception:
             result["status"] = "EXCEPTION"
             return result
 

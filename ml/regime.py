@@ -23,7 +23,7 @@ class RegimeDetector:
         self.model: hmm.GaussianHMM | None = None
         self._state_map: dict[int, str] = {}
 
-    def fit(self, df: pd.DataFrame) -> "RegimeDetector":
+    def fit(self, df: pd.DataFrame) -> RegimeDetector:
         """Entrena el HMM con el historial de retornos y volatilidad."""
         returns = df["close"].pct_change().dropna()
         volatility = returns.rolling(5).std().dropna()

@@ -10,9 +10,8 @@ Salida: distribución de acciones (BUY/SELL/HOLD/SHORT/COVER) + tamaño posició
 """
 from __future__ import annotations
 
-import json
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -491,8 +490,8 @@ def train_from_backtest(
 ):
     """Entrena la red con datos reales de yfinance + backtest."""
     from data.fetcher import DataFetcher
-    from indicators.technical import TechnicalIndicators
     from indicators.signals import SignalGenerator
+    from indicators.technical import TechnicalIndicators
 
     tickers = tickers or ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"]
     fetcher = DataFetcher()
@@ -536,9 +535,9 @@ def train_from_backtest(
             if (ep + 1) % 5 == 0:
                 print(f"  [RL] Episodio {ep+1}/{rl_epochs}")
         trainer.save()
-        print(f"  [RL] Modelo fine-tuneado guardado")
+        print("  [RL] Modelo fine-tuneado guardado")
 
-    print(f"[NN] Entrenamiento completo")
+    print("[NN] Entrenamiento completo")
 
 
 if __name__ == "__main__":

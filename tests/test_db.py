@@ -1,8 +1,7 @@
 """Tests for the SQLAlchemy database layer."""
-import pytest
 from datetime import datetime
 
-from db.repositories import KellyRepository, RiskRepository, AdvisorRepository
+from db.repositories import AdvisorRepository, KellyRepository, RiskRepository
 
 
 class TestKellyRepository:

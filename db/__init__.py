@@ -40,5 +40,5 @@ def get_session():
 
 def init_db():
     """Create all tables. Safe to call multiple times (idempotent)."""
-    import db.models  # noqa: F401 — register models
+    import db.models
     Base.metadata.create_all(bind=engine)

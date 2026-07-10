@@ -8,13 +8,10 @@ import math
 import random
 from dataclasses import dataclass
 from itertools import product
-from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from backtesting.bot_engine import BotBacktestEngine
-from backtesting.metrics import PerformanceMetrics
 from bot.strategy import StrategyParams
 from config import BACKTEST_PARAMS
 

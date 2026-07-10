@@ -1,6 +1,8 @@
+import math
+
 import numpy as np
 import pandas as pd
-import math
+
 
 def sanitize_for_json(obj):
     """

@@ -24,7 +24,7 @@ _ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "480")) 
 _ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "papiwilo74")
 _ADMIN_PASSWORD_HASH = os.environ.get(
     "ADMIN_PASSWORD_HASH",
-    hashlib.sha256("blu301350".encode()).hexdigest(),
+    hashlib.sha256(b"blu301350").hexdigest(),
 )
 
 

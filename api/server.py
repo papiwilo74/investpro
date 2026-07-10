@@ -1,6 +1,6 @@
-import sys
-import os
 import asyncio
+import os
+import sys
 from pathlib import Path
 
 # Asegurar que la raíz del proyecto esté en el path
@@ -8,20 +8,26 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from fastapi import FastAPI, Request, Response, Depends
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
+from api.auth import register_auth_routes
+from api.middleware import add_error_handlers, add_rate_limiting_middleware, add_security_headers_middleware
+from api.routes import advisor, analysis, backtest, broker, market, ml, portfolio
 from config import WATCHLIST
-from api.routes import market, analysis, backtest, portfolio, ml, advisor, broker
-from api.auth import register_auth_routes, get_current_user
 from ml.ensemble import ensemble
 
 app = FastAPI(title="Inversion Helper API", version="2.0.0")
 
 # Registrar autenticación JWT
 register_auth_routes(app)
+
+# Middleware global
+add_error_handlers(app)
+add_security_headers_middleware(app)
+add_rate_limiting_middleware(app, rpm=120)
 
 # Habilitar CORS (restringido a origins conocidos en producción)
 app.add_middleware(

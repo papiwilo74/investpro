@@ -27,13 +27,13 @@ class ChartCNN(nn.Module if TORCH_AVAILABLE else object):
     def __init__(self):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch no está instalado. Instala 'torch' para usar Visión Artificial.")
-        
+
         super().__init__()
         # Capas convolucionales para extraer patrones geométricos (Hombro-Cabeza-Hombro, Triángulos, etc.)
         self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(2, 2)
-        
+
         # Capas lineales para decisión final
         self.fc1 = nn.Linear(32 * 16 * 16, 128)
         self.fc2 = nn.Linear(128, 1) # Salida: Probabilidad de subir (0 a 1)
@@ -59,20 +59,20 @@ class VisualAnalyzer:
     def _df_to_image_matrix(self, df: pd.DataFrame, width: int = 64, height: int = 64) -> np.ndarray:
         """
         [SIMULACIÓN DE RENDERIZADO]
-        Toma las últimas filas de un DataFrame y renderiza una matriz en blanco y negro 
+        Toma las últimas filas de un DataFrame y renderiza una matriz en blanco y negro
         que representa un gráfico de precios básico.
         """
-        # Para evitar dependencias lentas como matplotlib en el daemon, 
+        # Para evitar dependencias lentas como matplotlib en el daemon,
         # aproximamos un renderizado normalizando los precios.
         img = np.zeros((height, width), dtype=np.float32)
-        
+
         if len(df) < width:
             return img
-            
+
         recent = df.tail(width)
         max_p = recent['high'].max()
         min_p = recent['low'].min()
-        
+
         if max_p == min_p:
             return img
 
@@ -84,16 +84,16 @@ class VisualAnalyzer:
             y_low = int(h * (1 - (row['low'] - min_p) / (max_p - min_p)))
             y_open = int(h * (1 - (row['open'] - min_p) / (max_p - min_p)))
             y_close = int(h * (1 - (row['close'] - min_p) / (max_p - min_p)))
-            
+
             # Dibujar la mecha
             img[min(y_high, y_low):max(y_high, y_low)+1, x] = 0.5
-            
+
             # Dibujar el cuerpo
             top = min(y_open, y_close)
             bottom = max(y_open, y_close)
             color = 1.0 if row['close'] >= row['open'] else 0.2
             img[top:bottom+1, x] = color
-            
+
         return img
 
     def analyze_chart(self, df: pd.DataFrame) -> dict:

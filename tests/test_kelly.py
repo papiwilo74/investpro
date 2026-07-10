@@ -1,5 +1,4 @@
 """Tests for KellyCalculator (both JSON and DB modes)."""
-import pytest
 from bot.strategy import KellyCalculator
 
 
@@ -59,7 +58,6 @@ class TestKellyCalculatorJson:
 
 class TestKellyCalculatorDB:
     def test_db_mode_uses_repo(self, _clean_db):
-        from db.repositories import KellyRepository
         k = KellyCalculator(session=_clean_db)
         assert k._use_db is True
         assert k._repo is not None

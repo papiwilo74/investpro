@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query
 import pandas as pd
+from fastapi import APIRouter, HTTPException, Query
+
+from api.utils import sanitize_for_json
 from bot.scanner import MarketScanner
 from data.fetcher import DataFetcher
 from indicators.technical import TechnicalIndicators
-from api.utils import sanitize_for_json
 
 router = APIRouter()
 fetcher = DataFetcher()
@@ -39,7 +40,7 @@ async def get_market_data(
         ticker = ticker.upper().strip()
         df = fetcher.get_data(ticker, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
-        
+
         # Generar lista de velas ordenadas por fecha
         candles = []
         sma_20 = []
@@ -48,10 +49,10 @@ async def get_market_data(
         rsi = []
         macd = []
         bb = []
-        
+
         for idx, row in df.iterrows():
             time_str = idx.strftime("%Y-%m-%d")
-            
+
             # Vela
             candles.append({
                 "time": time_str,
@@ -61,7 +62,7 @@ async def get_market_data(
                 "close": row["close"],
                 "volume": row["volume"]
             })
-            
+
             # SMA
             if "sma_20" in row and pd.notna(row["sma_20"]):
                 sma_20.append({"time": time_str, "value": row["sma_20"]})
@@ -69,11 +70,11 @@ async def get_market_data(
                 sma_50.append({"time": time_str, "value": row["sma_50"]})
             if "sma_200" in row and pd.notna(row["sma_200"]):
                 sma_200.append({"time": time_str, "value": row["sma_200"]})
-                
+
             # RSI
             if "rsi" in row and pd.notna(row["rsi"]):
                 rsi.append({"time": time_str, "value": row["rsi"]})
-                
+
             # MACD
             if "macd" in row and "macd_signal" in row and "macd_histogram" in row:
                 macd.append({
@@ -82,7 +83,7 @@ async def get_market_data(
                     "signal": row["macd_signal"],
                     "histogram": row["macd_histogram"]
                 })
-                
+
             # Bollinger Bands
             if "bb_upper" in row and "bb_middle" in row and "bb_lower" in row:
                 bb.append({
@@ -96,7 +97,7 @@ async def get_market_data(
         last_close = float(df["close"].iloc[-1])
         prev_close = float(df["close"].iloc[-2]) if len(df) > 1 else last_close
         change_pct = float(((last_close / prev_close) - 1) * 100)
-        
+
         latest = {
             "close": last_close,
             "change_pct": change_pct,
@@ -130,14 +131,14 @@ async def get_market_news(
     try:
         from data.news import NewsFetcher
         from ml.sentiment import SentimentAnalyzer
-        
+
         ticker = ticker.upper().strip()
         news_list = NewsFetcher.get_latest_news(ticker, limit)
-        
+
         analyzer = SentimentAnalyzer()
         result = analyzer.analyze_news_batch(news_list)
-        
+
         return sanitize_for_json(result)
-        
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -6,12 +6,9 @@ compuesto.
 """
 from __future__ import annotations
 
-from typing import List
-
 import streamlit as st
 
-from indicators.signals import Signal, Action
-
+from indicators.signals import Action, Signal
 
 # ── Mapeo de estilos por acción ───────────────────────────────────────
 
@@ -24,7 +21,7 @@ _STYLE = {
 
 # ── Cards de señales ──────────────────────────────────────────────────
 
-def signals_dashboard(signals: List[Signal]) -> None:
+def signals_dashboard(signals: list[Signal]) -> None:
     """Renderiza tarjetas de señales en un grid responsivo."""
     if not signals:
         st.info("No hay señales activas.")
@@ -76,7 +73,7 @@ def signals_dashboard(signals: List[Signal]) -> None:
 
 # ── Tabla detallada ───────────────────────────────────────────────────
 
-def signals_table(signals: List[Signal]) -> None:
+def signals_table(signals: list[Signal]) -> None:
     """Tabla detallada de señales activas."""
     if not signals:
         return

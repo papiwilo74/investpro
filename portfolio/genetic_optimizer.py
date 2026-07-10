@@ -21,13 +21,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from backtesting.bot_engine import BotBacktestEngine
-from backtesting.metrics import PerformanceMetrics
 from bot.strategy import StrategyParams
-from config import BACKTEST_PARAMS
 
 # ── Cache global de datos (se carga una sola vez) ─────────────────────
 # En Windows, ProcessPoolExecutor spawn + DataFrame copying explota la RAM.
@@ -92,8 +89,8 @@ DISCRETE_PARAMS: dict[str, list[bool]] = {
 def _preload_data() -> None:
     """Carga datos de todos los tickers una sola vez en el cache global."""
     from data.fetcher import DataFetcher
-    from indicators.technical import TechnicalIndicators
     from indicators.signals import SignalGenerator
+    from indicators.technical import TechnicalIndicators
 
     global _DATA_CACHE
     fetcher = DataFetcher()
@@ -506,8 +503,8 @@ class GeneticOptimizer:
         try:
             from backtesting.validation import WalkForwardOptimizer
             from data.fetcher import DataFetcher
-            from indicators.technical import TechnicalIndicators
             from indicators.signals import SignalGenerator
+            from indicators.technical import TechnicalIndicators
 
             # Usar cache global si está disponible, o cargar datos frescos
             all_dfs = []
@@ -584,7 +581,7 @@ class GeneticOptimizer:
     @staticmethod
     def _print_summary(result: dict[str, Any]) -> None:
         print(f"\n{'=' * 55}")
-        print(f"  OPTIMIZACIÓN GENÉTICA — COMPLETA")
+        print("  OPTIMIZACIÓN GENÉTICA — COMPLETA")
         print(f"{'=' * 55}")
         bp = result["best_params"]
         bm = result.get("best_metrics") or {}
@@ -597,7 +594,7 @@ class GeneticOptimizer:
         print(f"  Trades totales:   {bm.get('total_trades', 0)}")
         print(f"  Evaluaciones:     {result['total_evaluations']}")
         print(f"  Aprobado WFO:     {'SI' if result['is_approved_by_wfo'] else 'NO'}")
-        print(f"\n  Mejores parámetros:")
+        print("\n  Mejores parámetros:")
         for k, v in sorted(bp.items()):
             print(f"    {k:35s} = {v}")
         print()

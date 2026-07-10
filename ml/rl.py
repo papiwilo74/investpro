@@ -1,17 +1,19 @@
-import numpy as np
-import pickle
 import os
+import pickle
 import random
+
+import numpy as np
+
 
 class RLExitAgent:
     """
     Q-Learning Agent para decidir cuándo cerrar una operación (HOLD vs CLOSE).
-    
+
     Estado discretizado:
     - PnL actual (ej. Pérdida Grave, Pérdida Leve, Neutro, Ganancia Leve, Ganancia Fuerte)
     - RSI actual (ej. Sobrevendido, Normal, Sobrecomprado)
     - Régimen de Mercado (ej. BULL, BEAR, LATERAL)
-    
+
     Acciones:
     - 0: HOLD (Mantener)
     - 1: CLOSE (Cerrar)
@@ -54,7 +56,7 @@ class RLExitAgent:
 
     def get_action(self, pnl_pct: float, rsi: float, regime: str, is_training: bool = False) -> int:
         state = self._discretize_state(pnl_pct, rsi, regime)
-        
+
         # Inicializar estado si no existe
         if state not in self.q_table:
             # Ligera preferencia a HOLD si no conocemos el estado
@@ -79,11 +81,11 @@ class RLExitAgent:
         # Ecuación de Bellman
         old_value = self.q_table[state][action]
         next_max = np.max(self.q_table[next_state])
-        
+
         # Si cerramos (action=1), no hay estado siguiente relevante para esta operación
         if action == 1:
             new_value = (1 - self.alpha) * old_value + self.alpha * reward
         else:
             new_value = (1 - self.alpha) * old_value + self.alpha * (reward + self.gamma * next_max)
-            
+
         self.q_table[state][action] = new_value

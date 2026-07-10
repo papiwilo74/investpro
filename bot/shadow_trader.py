@@ -21,11 +21,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
-
-import pandas as pd
 
 from config import PROJECT_ROOT
 
@@ -167,7 +164,7 @@ class ShadowTrader:
                     tickers_prices[ticker] = self._fetch_current_price(ticker, entry_price)
 
             for row in pending:
-                sig_id, ticker, model, predicted_dir, entry_price, sig_ts, horizon, regime = row
+                sig_id, ticker, model, predicted_dir, entry_price, _sig_ts, _horizon, regime = row
                 current_price = tickers_prices.get(ticker, entry_price)
                 actual_dir = self._direction_from_prices(entry_price, current_price)
                 correct = 1 if actual_dir == predicted_dir else 0

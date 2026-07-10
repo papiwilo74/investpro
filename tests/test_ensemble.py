@@ -7,15 +7,13 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-import pytest
 from ml.ensemble import (
-    AdaptiveEnsemble,
-    ModelSignal,
-    EnsembleResult,
-    AccuracyTracker,
-    DEFAULT_WEIGHTS,
     MODEL_NAMES,
     REGIMES,
+    AccuracyTracker,
+    AdaptiveEnsemble,
+    EnsembleResult,
+    ModelSignal,
 )
 
 
@@ -160,7 +158,7 @@ class TestAdaptiveEnsemble:
     def test_high_confidence_when_strong_and_agreed(self):
         e = AdaptiveEnsemble()
         xgb = ModelSignal(direction="BULLISH", probability=0.9, score=0.8)
-        ta = ModelSignal(direction="BULLISH", probability=0.7, score=0.5)
+        ModelSignal(direction="BULLISH", probability=0.7, score=0.5)
         result = e.predict(regime="BULL", xgboost_signal=xgb, ta_score=0.5)
         assert result.confidence > 0.5
 

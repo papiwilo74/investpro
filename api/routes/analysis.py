@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query
-from data.fetcher import DataFetcher
-from indicators.technical import TechnicalIndicators
-from indicators.signals import SignalGenerator
+
 from api.utils import sanitize_for_json
+from data.fetcher import DataFetcher
+from indicators.signals import SignalGenerator
+from indicators.technical import TechnicalIndicators
 
 router = APIRouter()
 fetcher = DataFetcher()
@@ -18,10 +19,10 @@ async def get_signals(
         df = fetcher.get_data(ticker, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
         df = SignalGenerator.add_signal_columns(df)
-        
+
         composite = SignalGenerator.composite_score(df)
         raw_signals = SignalGenerator.get_latest_signals(df, ticker)
-        
+
         signals_list = []
         for s in raw_signals:
             signals_list.append({
@@ -29,7 +30,7 @@ async def get_signals(
                 "strength": s.strength,
                 "reason": s.reason
             })
-            
+
         return sanitize_for_json({
             "ticker": ticker,
             "composite_score": composite,

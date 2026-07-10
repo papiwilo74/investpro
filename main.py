@@ -10,6 +10,7 @@ Uso
 from __future__ import annotations
 
 import os
+
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
 import argparse
@@ -17,16 +18,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+from backtesting.bot_engine import BotBacktestEngine, StrategyOptimizer
+from backtesting.engine import BacktestEngine
+from bot.safety import SignalJournal
+from bot.scanner import MarketScanner
 from config import BACKTEST_PARAMS, INDICATOR_PARAMS
 from data.fetcher import DataFetcher
-from indicators.technical import TechnicalIndicators
 from indicators.signals import SignalGenerator
-from backtesting.engine import BacktestEngine
-from backtesting.bot_engine import BotBacktestEngine, StrategyOptimizer
-from portfolio.optimizer import PortfolioOptimizer
+from indicators.technical import TechnicalIndicators
 from ml.train import ModelTrainer
-from bot.scanner import MarketScanner
-from bot.safety import SignalJournal
+from portfolio.optimizer import PortfolioOptimizer
 
 
 def run_pipeline(ticker: str, period: str, interval: str) -> None:
@@ -78,7 +79,7 @@ def run_pipeline(ticker: str, period: str, interval: str) -> None:
     m = result.metrics
 
     print(f"\n{'-' * 50}")
-    print(f"  RESULTADOS BACKTEST")
+    print("  RESULTADOS BACKTEST")
     print(f"{'-' * 50}")
     print(f"  Capital inicial:    ${BACKTEST_PARAMS.initial_capital:>12,.2f}")
     print(f"  Capital final:      ${m['capital_final']:>12,.2f}")
@@ -228,7 +229,7 @@ def run_bot_backtest(ticker: str, period: str, interval: str, leverage: float = 
             # Razones de venta
             from collections import Counter
             reasons = Counter([t.reason for t in result.trades])
-            print(f"\n  Razones de cierre:")
+            print("\n  Razones de cierre:")
             for reason, count in reasons.most_common():
                 pct = count / len(result.trades) * 100
                 print(f"    {count:>3d} ({pct:>5.1f}%)  {reason}")
@@ -505,12 +506,11 @@ def main() -> None:
         port = args.port or int(os.environ.get("PORT", 8000))
         host = os.environ.get("HOST", "0.0.0.0")
         print(f"\n{'=' * 60}")
-        print(f"  INVERSION HELPER — Web App Premium")
+        print("  INVERSION HELPER — Web App Premium")
         print(f"  Abriendo en: http://{host}:{port}")
         print(f"{'=' * 60}\n")
         try:
             # Pre-importar para detectar errores antes de que uvicorn los oculte
-            import api.server
             print("  [OK] api.server importado correctamente")
             uvicorn.run("api.server:app", host=host, port=port, reload=False)
         except Exception as e:
@@ -567,6 +567,7 @@ def main() -> None:
         )
     elif args.stream:
         import asyncio
+
         from broker.alpaca_client import AlpacaStreamer
 
         async def _print_data(data):
@@ -589,24 +590,24 @@ def main() -> None:
     elif args.global_backtest:
         from backtesting.global_engine import GlobalBacktester
         print(f"\\n{'=' * 60}")
-        print(f"  GLOBAL BACKTEST ENGINE")
+        print("  GLOBAL BACKTEST ENGINE")
         print(f"{'=' * 60}\\n")
-        
+
         # Seleccionar universo
         if args.universe == "nasdaq100":
             # Lista parcial representativa para el demo
-            tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "NFLX", "AMD", "INTC", 
+            tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "NFLX", "AMD", "INTC",
                        "QCOM", "CSCO", "ADBE", "CRM", "AVGO", "TXN", "AMAT", "MU", "LRCX", "ADI"]
         elif args.universe == "tech10":
             tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "NFLX", "AMD", "INTC"]
         else:
             tickers = [t.strip().upper() for t in args.universe.split(",") if t.strip()]
-            
+
         tester = GlobalBacktester()
-        metrics, trades, equity = tester.run_universe(tickers, period=args.period, interval=args.interval)
-        
+        metrics, _trades, _equity = tester.run_universe(tickers, period=args.period, interval=args.interval)
+
         print(f"\\n{'-' * 50}")
-        print(f"  RESULTADOS GLOBALES DEL PORTAFOLIO")
+        print("  RESULTADOS GLOBALES DEL PORTAFOLIO")
         print(f"{'-' * 50}")
         print(f"  Capital Inicial:   ${metrics['initial_capital']:>12,.2f}")
         print(f"  Capital Final:     ${metrics['final_capital']:>12,.2f}")
@@ -614,15 +615,15 @@ def main() -> None:
         print(f"  Max Drawdown:      {metrics['max_drawdown']:>12.2%}")
         print(f"  Sharpe Ratio:      {metrics['sharpe_ratio']:>12.2f}")
         print(f"\\n{'-' * 50}")
-        print(f"  METRICAS DE TRADES (SIGNIFICANCIA ESTADISTICA)")
+        print("  METRICAS DE TRADES (SIGNIFICANCIA ESTADISTICA)")
         print(f"{'-' * 50}")
         print(f"  Total Trades:      {metrics['total_trades']:>12d}")
-        
+
         pf_str = f"{metrics['profit_factor']:.2f}" if metrics['profit_factor'] != float("inf") else "Inf"
         print(f"  Win Rate:          {metrics['win_rate']:>12.2%}")
         print(f"  Profit Factor:     {pf_str:>12s}")
         print(f"  Expectancy:        {metrics['expectancy_pct']:>12.2%}")
-        
+
         if metrics['total_trades'] < 100:
             print("\\n  [!] ADVERTENCIA: La muestra es menor a 100 trades. Prueba con un periodo mayor (--period 5y).")
         else:

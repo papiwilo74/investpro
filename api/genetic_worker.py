@@ -8,7 +8,6 @@ from __future__ import annotations
 import multiprocessing as mp
 import sys
 from pathlib import Path
-from typing import Any
 
 # Aseguramos que el proyecto raíz esté en sys.path para los procesos hijos
 # spawn (Windows). El hijo arranca un intérprete limpio sin el sys.path del padre.
@@ -36,8 +35,8 @@ def run_genetic_process(
     queue.put({"type": "started"})
 
     try:
-        from portfolio.genetic_optimizer import GeneticOptimizer
         from api.utils import sanitize_for_json
+        from portfolio.genetic_optimizer import GeneticOptimizer
 
         optimizer = GeneticOptimizer(
             tickers=tickers,

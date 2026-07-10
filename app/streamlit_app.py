@@ -16,26 +16,30 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import streamlit as st
 import numpy as np
 import pandas as pd
+import streamlit as st
 
-from config import WATCHLIST, PERIODS, INTERVALS, BACKTEST_PARAMS
-from data.fetcher import DataFetcher
-from indicators.technical import TechnicalIndicators
-from indicators.signals import SignalGenerator
-from backtesting.engine import BacktestEngine
-from portfolio.optimizer import PortfolioOptimizer
-from ml.train import ModelTrainer
-from app.components.charts import (
-    price_chart, overlay_sma, overlay_bollinger,
-    rsi_chart, macd_chart, equity_curve_chart,
-    portfolio_weights_chart, efficient_frontier_chart,
-    feature_importance_chart,
-)
-from app.components.alerts import signals_dashboard, signals_table, composite_gauge
 from app.components.advisor import render_advisor_tab
-
+from app.components.alerts import composite_gauge, signals_dashboard, signals_table
+from app.components.charts import (
+    efficient_frontier_chart,
+    equity_curve_chart,
+    feature_importance_chart,
+    macd_chart,
+    overlay_bollinger,
+    overlay_sma,
+    portfolio_weights_chart,
+    price_chart,
+    rsi_chart,
+)
+from backtesting.engine import BacktestEngine
+from config import BACKTEST_PARAMS, INTERVALS, PERIODS, WATCHLIST
+from data.fetcher import DataFetcher
+from indicators.signals import SignalGenerator
+from indicators.technical import TechnicalIndicators
+from ml.train import ModelTrainer
+from portfolio.optimizer import PortfolioOptimizer
 
 # ══════════════════════════════════════════════════════════════════════
 #  Configuración de página
@@ -430,7 +434,7 @@ with tab_portfolio:
         initial_assets.append(ticker)
 
     # Ampliamos la lista de opciones para que el usuario pueda agregar más activos
-    extended_options = sorted(list(set(WATCHLIST + [ticker] + ["GOOG", "NFLX", "AMD", "COIN", "BTC-USD", "ETH-USD"])))
+    extended_options = sorted(list(set([*WATCHLIST, ticker, "GOOG", "NFLX", "AMD", "COIN", "BTC-USD", "ETH-USD"])))
 
     selected_assets = st.multiselect(
         "Activos a incluir en el portafolio",
@@ -464,19 +468,19 @@ with tab_portfolio:
             try:
                 with st.spinner("Descargando precios históricos y ejecutando optimización..."):
                     optimizer = PortfolioOptimizer()
-                    
+
                     # 1. Descargar precios históricos
                     prices_df = optimizer.get_portfolio_prices(selected_assets, period=opt_period, interval="1d")
-                    
+
                     # 2. Calcular retornos y covarianza
                     mean_returns, cov_matrix = optimizer.calculate_stats(prices_df)
-                    
+
                     # 3. Optimizar Sharpe Máximo
                     max_sharpe_res = optimizer.optimize_max_sharpe(mean_returns, cov_matrix, rf_rate)
-                    
+
                     # 4. Optimizar Volatilidad Mínima
                     min_vol_res = optimizer.optimize_min_volatility(mean_returns, cov_matrix, rf_rate)
-                    
+
                     # 5. Calcular Equiponderado
                     num_assets = len(selected_assets)
                     eq_weights = np.ones(num_assets) / num_assets
@@ -487,16 +491,16 @@ with tab_portfolio:
                         "volatility": eq_vol,
                         "sharpe_ratio": eq_sharpe
                     }
-                    
+
                     # 6. Generar portafolios simulados
                     random_ports_df = optimizer.generate_random_portfolios(mean_returns, cov_matrix, rf_rate, num_portfolios=2000)
 
                 # Mostrar métricas comparativas
                 st.markdown("---")
                 st.markdown("### Comparación de Portafolios")
-                
+
                 c1, c2, c3 = st.columns(3)
-                
+
                 with c1:
                     st.markdown(
                         f"""
@@ -508,7 +512,7 @@ with tab_portfolio:
                         """,
                         unsafe_allow_html=True
                     )
-                    
+
                 with c2:
                     st.markdown(
                         f"""
@@ -520,7 +524,7 @@ with tab_portfolio:
                         """,
                         unsafe_allow_html=True
                     )
-                    
+
                 with c3:
                     st.markdown(
                         f"""
@@ -532,30 +536,30 @@ with tab_portfolio:
                         """,
                         unsafe_allow_html=True
                     )
-                
+
                 st.markdown("---")
-                
+
                 # Gráficos de distribución de pesos y frontera eficiente
                 col_chart_left, col_chart_right = st.columns(2)
-                
+
                 with col_chart_left:
                     port_to_show = st.radio(
                         "Ver distribución de pesos para:",
                         ["Sharpe Máximo", "Volatilidad Mínima"],
                         horizontal=True
                     )
-                    
+
                     if port_to_show == "Sharpe Máximo":
                         w_dict = max_sharpe_res["weights"]
                         title_chart = "Asignación Máximo Sharpe Ratio"
                     else:
                         w_dict = min_vol_res["weights"]
                         title_chart = "Asignación Mínima Volatilidad"
-                        
+
                     # Filtrar pesos menores a 0.1% para limpiar el gráfico
                     w_dict_filtered = {k: v for k, v in w_dict.items() if v > 0.001}
                     st.plotly_chart(portfolio_weights_chart(w_dict_filtered, title_chart), use_container_width=True)
-                    
+
                 with col_chart_right:
                     st.plotly_chart(
                         efficient_frontier_chart(random_ports_df, max_sharpe_res, min_vol_res),
@@ -570,7 +574,7 @@ with tab_portfolio:
                     "Min Vol (%)": [min_vol_res["weights"].get(t, 0.0) * 100 for t in selected_assets],
                     "Equiponderado (%)": [eq_res["weights"].get(t, 0.0) * 100 for t in selected_assets]
                 })
-                
+
                 st.dataframe(
                     comparison_df.style.format({
                         "Max Sharpe (%)": "{:.2f}%",
@@ -580,7 +584,7 @@ with tab_portfolio:
                     use_container_width=True,
                     hide_index=True
                 )
-                
+
             except Exception as e:
                 st.error(f"Error durante la optimización: {e}")
 
@@ -606,17 +610,17 @@ with tab_ml:
         )
     else:
         st.success(f"Modelo cargado para **{ticker}** (Guardado localmente).")
-        
+
         # Mostrar métricas del modelo entrenado
         metrics = model_data["metrics"]
         best_params = model_data.get("best_params", {})
         is_optimized = model_data.get("optimized", False)
         opt_text = "Optimizado con Grid Search" if is_optimized else "Parámetros Estáticos"
-        
+
         st.markdown(f"#### Rendimiento Histórico del Modelo (Fuera de Muestra) · *{opt_text}*")
         if best_params:
             st.caption(f"Hiperparámetros activos: `max_depth={best_params.get('max_depth')}`, `min_samples_leaf={best_params.get('min_samples_leaf')}`, `n_estimators={best_params.get('n_estimators')}`")
-        
+
         # Mostrar métricas en columnas
         met_col1, met_col2, met_col3, met_col4 = st.columns(4)
         met_col1.metric("Exactitud (Accuracy)", f"{metrics['accuracy']:.1%}", help="Porcentaje total de predicciones correctas.")
@@ -627,16 +631,16 @@ with tab_ml:
         # Realizar la predicción en base a los datos actuales
         try:
             prediction_res = trainer.predict_trend(ticker, df)
-            
+
             st.markdown("---")
             st.markdown("#### Predicción de Tendencia (Siguiente Horizonte de 5 Días)")
-            
+
             p_col1, p_col2 = st.columns([1, 2])
-            
+
             with p_col1:
                 direction = prediction_res["direction"]
                 probability = prediction_res["probability"]
-                
+
                 if direction == "ALCISTA":
                     direction_color = "#3fb950"
                     direction_emoji = "ALCISTA"
@@ -645,7 +649,7 @@ with tab_ml:
                     direction_color = "#f85149"
                     direction_emoji = "BAJISTA"
                     bg_color = "#351c1c"
-                    
+
                 st.markdown(
                     f"""
                     <div style="background: linear-gradient(135deg, {bg_color}, #161b22); border: 1px solid {direction_color}40; border-radius: 12px; padding: 24px; text-align: center;">
@@ -657,7 +661,7 @@ with tab_ml:
                     """,
                     unsafe_allow_html=True
                 )
-                
+
             with p_col2:
                 # Explicar las implicaciones prácticas de la predicción
                 st.markdown("**Implicaciones de trading:**")
@@ -681,7 +685,7 @@ with tab_ml:
                         "- **Indecisión**: El modelo predice caída, pero con baja confianza ($<60%$). "
                         "El mercado puede estar entrando en una fase de consolidación lateral."
                     )
-                
+
                 st.info(
                     "Nota importante: Los modelos predictivos financieros basados en precios pasados "
                     "son inherentemente ruidosos. Úsese únicamente como una herramienta auxiliar de análisis de riesgo, "
@@ -696,51 +700,51 @@ with tab_ml:
             st.markdown("---")
             st.markdown("#### Simulador de Estrategia ML (Backtesting Fuera de Muestra)")
             st.markdown("Evalúa cómo le habría ido a una estrategia basada en las predicciones de este modelo en el **set de prueba (Test Data)**.")
-            
+
             sim_col1, sim_col2 = st.columns(2)
             with sim_col1:
                 buy_threshold = st.slider("Umbral de Compra (probabilidad mínima para comprar)", 0.50, 0.80, 0.55, 0.01)
             with sim_col2:
                 sell_threshold = st.slider("Umbral de Venta (probabilidad por debajo para vender)", 0.30, 0.60, 0.45, 0.01)
-                
+
             if st.button("Ejecutar Simulación ML", use_container_width=True):
                 with st.spinner("Ejecutando simulaciones en el set de prueba..."):
                     try:
                         # 1. Obtener predicciones del test set
                         df_test = trainer.get_test_predictions(ticker, df)
-                        
+
                         # 2. Generar señales para ML
                         df_test["sig_ml"] = 0
                         df_test.loc[df_test["ml_probability"] >= buy_threshold, "sig_ml"] = 1
                         df_test.loc[df_test["ml_probability"] < sell_threshold, "sig_ml"] = -1
-                        
+
                         # 3. Generar señal Buy & Hold
                         df_test["sig_bh"] = 0
                         # Comprar en la primera fila del test set
                         first_valid_index = df_test.index[0]
                         df_test.loc[first_valid_index, "sig_bh"] = 1
-                        
+
                         # 4. Ejecutar Backtests
                         engine_ml = BacktestEngine()
                         res_ml = engine_ml.run(df_test, signal_col="sig_ml")
-                        
+
                         engine_ta = BacktestEngine()
                         res_ta = engine_ta.run(df_test, signal_col="sig_composite")
-                        
+
                         engine_bh = BacktestEngine()
                         res_bh = engine_bh.run(df_test, signal_col="sig_bh")
-                        
+
                         # 5. Combinar Equity Curves
                         eq_ml = res_ml.equity_curve
                         eq_ta = res_ta.equity_curve
                         eq_bh = res_bh.equity_curve
-                        
+
                         import plotly.graph_objects as go
                         fig_sim = go.Figure()
                         fig_sim.add_trace(go.Scatter(x=eq_ml.index, y=eq_ml.values, mode='lines', name='Estrategia ML', line=dict(color='#3fb950', width=2)))
                         fig_sim.add_trace(go.Scatter(x=eq_ta.index, y=eq_ta.values, mode='lines', name='Técnica Clásica', line=dict(color='#58a6ff', width=2)))
                         fig_sim.add_trace(go.Scatter(x=eq_bh.index, y=eq_bh.values, mode='lines', name='Buy & Hold', line=dict(color='#f0883e', width=2, dash='dot')))
-                        
+
                         fig_sim.update_layout(
                             title="Comparativa de Equity Curves (Test Set)",
                             xaxis_title="Fecha",
@@ -752,7 +756,7 @@ with tab_ml:
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                         )
                         st.plotly_chart(fig_sim, use_container_width=True)
-                        
+
                         # 6. Tabla comparativa
                         st.markdown("**Métricas Fuera de Muestra (Test Set)**")
                         comp_data = {
@@ -761,11 +765,11 @@ with tab_ml:
                             "Sharpe Ratio": [res_ml.metrics['sharpe_ratio'], res_ta.metrics['sharpe_ratio'], res_bh.metrics['sharpe_ratio']],
                             "Max Drawdown (%)": [res_ml.metrics['max_drawdown'] * 100, res_ta.metrics['max_drawdown'] * 100, res_bh.metrics['max_drawdown'] * 100],
                             "Trades": [res_ml.metrics['total_trades'], res_ta.metrics['total_trades'], res_bh.metrics['total_trades']],
-                            "Win Rate (%)": [res_ml.metrics['win_rate'] * 100 if res_ml.metrics['total_trades'] > 0 else 0, 
-                                             res_ta.metrics['win_rate'] * 100 if res_ta.metrics['total_trades'] > 0 else 0, 
+                            "Win Rate (%)": [res_ml.metrics['win_rate'] * 100 if res_ml.metrics['total_trades'] > 0 else 0,
+                                             res_ta.metrics['win_rate'] * 100 if res_ta.metrics['total_trades'] > 0 else 0,
                                              res_bh.metrics['win_rate'] * 100 if res_bh.metrics['total_trades'] > 0 else 0]
                         }
-                        
+
                         df_comp = pd.DataFrame(comp_data)
                         st.dataframe(
                             df_comp.style.format({
@@ -778,7 +782,7 @@ with tab_ml:
                             use_container_width=True,
                             hide_index=True
                         )
-                        
+
                     except Exception as e:
                         st.error(f"Error al ejecutar la simulación: {e}")
 
@@ -788,7 +792,7 @@ with tab_ml:
     # 2. Control de entrenamiento
     st.markdown("---")
     st.markdown("#### Entrenamiento del Modelo")
-    
+
     col_btn, col_chk, col_info = st.columns([1, 1, 2])
     with col_chk:
         optimize_hp = st.checkbox("Optimizar Hiperparámetros (Grid Search)", value=False, help="Realiza una validación cruzada TimeSeriesSplit para buscar los mejores parámetros. Puede tardar unos segundos extra.")
@@ -801,7 +805,7 @@ with tab_ml:
                     st.rerun()
             except Exception as e:
                 st.error(f"Error al entrenar el modelo: {e}")
-                
+
     with col_info:
         st.caption(
             "El entrenamiento divide los datos cronológicamente: entrena sobre el primer 80% del tiempo "

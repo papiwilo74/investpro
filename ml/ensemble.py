@@ -19,9 +19,6 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import numpy as np
-
-
 MODEL_NAMES = ["xgboost", "neural_brain", "rl_agent", "online_advisor", "ta_classic", "lstm"]
 REGIMES = ["BULL", "BEAR", "LATERAL", "HIGH_VOL"]
 
@@ -71,7 +68,7 @@ class AccuracyTracker:
     def __init__(self, halflife: int = DECAY_HALFLIFE, min_samples: int = MIN_SAMPLES_PER_MODEL):
         self.halflife = halflife
         self.min_samples = min_samples
-        all_models = MODEL_NAMES + [BASELINE_LABEL]
+        all_models = [*MODEL_NAMES, BASELINE_LABEL]
         self._history: dict[str, list[dict]] = {m: [] for m in all_models}
         self._per_regime: dict[str, dict[str, list[dict]]] = {
             r: {m: [] for m in all_models} for r in REGIMES

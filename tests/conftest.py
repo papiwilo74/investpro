@@ -4,12 +4,11 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-import pytest
-import pandas as pd
 import numpy as np
-from sqlalchemy import text
+import pandas as pd
+import pytest
 
-from db import init_db, SessionLocal, Base
+from db import Base, SessionLocal, init_db
 
 
 @pytest.fixture(autouse=True)

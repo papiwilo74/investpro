@@ -161,7 +161,7 @@ class ModelGate:
         ticker = ticker.upper()
         entry = self._cache.get(ticker, {})
         entry["approved"] = False
-        entry["reasons"] = entry.get("reasons", []) + [f"revoked: {reason}"]
+        entry["reasons"] = [*entry.get("reasons", []), f"revoked: {reason}"]
         entry["revoked_at"] = time.time()
         self._cache[ticker] = entry
         self._save_registry()

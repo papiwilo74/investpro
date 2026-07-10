@@ -8,18 +8,17 @@ Estrategias implementadas:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
 
 from db.repositories import KellyRepository
-from ml.rl import RLExitAgent
-from ml.ensemble import ensemble, ModelSignal
+from ml.ensemble import ModelSignal, ensemble
 from ml.lstm_model import LSTMPredictor
+from ml.rl import RLExitAgent
 
 # Instancias globales para compatibilidad con código existente.
 # Los nuevos componentes deben inyectar rl_agent y kelly_tracker vía constructor.
@@ -256,14 +255,14 @@ class StrategyParams:
     intraday_scalp_take_profit_pct: float = 0.025
     intraday_scalp_position_size_pct: float = 0.12
     intraday_max_hold_minutes: int = 90
-    
+
     # Filtro de sesión: solo operar en horas de mercado líquido (9:30-16:00 ET)
     use_session_filter: bool = True
     session_start_hour: int = 9
     session_start_minute: int = 30
     session_end_hour: int = 16
     session_end_minute: int = 0
-    
+
     # VWAP como referencia intradía
     use_vwap_filter: bool = True
     vwap_deviation_pct: float = 0.005  # 0.5% desviación de VWAP
@@ -335,7 +334,7 @@ class PositionState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict, params: StrategyParams) -> "PositionState":
+    def from_dict(cls, data: dict, params: StrategyParams) -> PositionState:
         state = cls(
             entry_price=data["entry_price"],
             entry_atr=data.get("entry_atr", data["entry_price"] * 0.02),
@@ -513,7 +512,7 @@ class TradingBrain:
 
     def __init__(self, params: StrategyParams | None = None,
                  rl_agent_instance: RLExitAgent | None = None,
-                 kelly_instance: "KellyCalculator | None" = None) -> None:
+                 kelly_instance: KellyCalculator | None = None) -> None:
         self.params = params or StrategyParams()
         self._positions: dict[str, PositionState] = {}
         # Inyección de dependencias: permite testear sin singletons globales
@@ -528,7 +527,7 @@ class TradingBrain:
         if cls._neural_brain is not None:
             return
         try:
-            from ml.neural_brain import NeuralTradingBrain, extract_features
+            from ml.neural_brain import NeuralTradingBrain
             model = NeuralTradingBrain()
             model_path = Path(__file__).resolve().parent.parent / "data" / "neural_brain.pth"
             if model_path.exists():
@@ -808,8 +807,6 @@ class TradingBrain:
 
         # Estrategias permitidas (el régimen BULL/NEUTRAL ya pasó filtro arriba)
         can_dip = p.use_contrarian_dip
-        can_short = p.use_short_selling
-        can_long = True
 
         # 0. Momentum Scalping (rápido, antes que otras estrategias)
         if p.use_momentum_scalp:
@@ -1066,24 +1063,24 @@ class TradingBrain:
 
     def restore_positions(self, state_manager, alpaca_positions: list[dict]) -> int:
         """Recupera PositionState desde SQLite + Alpaca al iniciar el bot.
-        
+
         Si hay posición en Alpaca pero no en SQLite, la crea desde cero.
         Si hay en SQLite, restaura el estado completo (trailing, breakeven, etc.).
         Retorna cantidad de posiciones restauradas.
         """
         if state_manager is None:
             return 0
-        
+
         saved = {p["ticker"]: p for p in state_manager.get_positions()}
         count = 0
-        
+
         for pos in alpaca_positions:
             ticker = pos.get("symbol", "")
             if not ticker:
                 continue
             entry_price = float(pos.get("avg_entry_price", pos.get("current_price", 0)))
             current_price = float(pos.get("current_price", entry_price))
-            
+
             if ticker in saved:
                 s = saved[ticker]
                 ps = PositionState.from_dict(s, self.params)
@@ -1094,7 +1091,7 @@ class TradingBrain:
                 ps = PositionState(entry_price, atr_est, self.params, side="LONG")
                 ps.update_extremes(current_price)
                 self._positions[ticker] = ps
-                
+
                 state_manager.save_position(
                     ticker=ticker, side="LONG", entry_price=entry_price,
                     entry_atr=atr_est, qty=float(pos.get("qty", 0)),
@@ -1103,7 +1100,7 @@ class TradingBrain:
                     tp1_hit=ps._tp1_hit, tp2_hit=ps._tp2_hit,
                 )
             count += 1
-        
+
         return count
 
     def save_position_state(self, state_manager, ticker: str, qty: float = 0) -> None:

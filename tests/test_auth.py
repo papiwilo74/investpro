@@ -9,11 +9,11 @@ from jose import jwt
 
 import api.auth
 from api.auth import (
-    verify_password,
+    _ALGORITHM,
+    _SECRET_KEY,
     create_access_token,
     decode_access_token,
-    _SECRET_KEY,
-    _ALGORITHM,
+    verify_password,
 )
 
 
@@ -28,7 +28,7 @@ class TestPasswordVerification:
         assert verify_password("") is False
 
     def test_verify_with_env_override(self):
-        custom_hash = hashlib.sha256("custom_pass".encode()).hexdigest()
+        custom_hash = hashlib.sha256(b"custom_pass").hexdigest()
         os.environ["ADMIN_PASSWORD_HASH"] = custom_hash
         reload(api.auth)
         from api.auth import verify_password as vp

@@ -1,8 +1,6 @@
-import pytest
 import pandas as pd
-import numpy as np
 
-from bot.strategy import TradingBrain, StrategyParams, Decision, kelly_tracker, rl_agent
+from bot.strategy import StrategyParams, TradingBrain
 
 
 class TestTradingBrain:

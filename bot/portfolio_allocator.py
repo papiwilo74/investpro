@@ -27,7 +27,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from config import RISK_CONFIG, WEB_RISK_CONFIG
+from config import WEB_RISK_CONFIG
 from data.fetcher import DataFetcher
 
 logger = logging.getLogger("inversion_helper.portfolio_allocator")
@@ -134,7 +134,7 @@ class PortfolioAllocator:
         current_values = {}
         for sym, pos in current_positions.items():
             current_values[sym.upper()] = float(pos.get("market_value", 0))
-        total_current = sum(current_values.values())
+        sum(current_values.values())
 
         all_tickers = set(target_weights) | set(current_values)
         for ticker in all_tickers:

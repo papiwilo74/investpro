@@ -1,7 +1,8 @@
 """Smart Money Tracker - Analiza Options Flow usando yfinance"""
 
+
 import yfinance as yf
-import traceback
+
 
 class SmartMoneyTracker:
     def __init__(self):
@@ -17,20 +18,20 @@ class SmartMoneyTracker:
         try:
             tk = yf.Ticker(ticker)
             expirations = tk.options
-            
+
             if not expirations:
                 return {"pcr": 1.0, "status": "NO_OPTIONS"}
 
             # Tomar la expiración más cercana
             opt = tk.option_chain(expirations[0])
-            
+
             calls = opt.calls
             puts = opt.puts
-            
+
             # Sumar Open Interest
             total_call_oi = calls['openInterest'].sum() if 'openInterest' in calls else 0
             total_put_oi = puts['openInterest'].sum() if 'openInterest' in puts else 0
-            
+
             # Sumar Volume
             total_call_vol = calls['volume'].sum() if 'volume' in calls else 0
             total_put_vol = puts['volume'].sum() if 'volume' in puts else 0
@@ -41,12 +42,12 @@ class SmartMoneyTracker:
                 pcr_vol = total_put_vol / total_call_vol
             else:
                 pcr_vol = 1.0
-                
+
             if total_call_oi > 0:
                 pcr_oi = total_put_oi / total_call_oi
             else:
                 pcr_oi = 1.0
-            
+
             return {
                 "pcr_volume": float(pcr_vol),
                 "pcr_oi": float(pcr_oi),
@@ -54,8 +55,8 @@ class SmartMoneyTracker:
                 "put_volume": int(total_put_vol),
                 "status": "OK"
             }
-            
-        except Exception as e:
+
+        except Exception:
             # Silencioso, a veces yfinance falla en opciones
             return {"pcr_volume": 1.0, "pcr_oi": 1.0, "status": "ERROR"}
 

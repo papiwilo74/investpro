@@ -3,14 +3,13 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+
+from api.schemas import HealthCheck
 from api.utils import sanitize_for_json
-from api.schemas import BotConfig, BotStatus, DashboardResponse, HealthCheck, MLModelInfo, RiskConfigParams
-from broker.alpaca_client import AlpacaClient
-from broker.smart_router import SmartOrderRouter
 from bot.engine import TradingBot
-from bot.safety import SignalJournal
 from bot.shadow_trader import ShadowTrader
-from bot.strategy import kelly_tracker, create_web_bot_strategy_params
+from bot.strategy import kelly_tracker
+from broker.smart_router import SmartOrderRouter
 from config import BROKER_CONFIG, WEB_RISK_CONFIG
 
 # Router público (sin JWT por ahora)
@@ -291,7 +290,6 @@ async def get_telemetry_metrics():
 @router.get("/ml/status")
 async def get_ml_status():
     # En modo web no dependemos de ML; se mantiene el endpoint para compatibilidad.
-    from pathlib import Path
     from config import PROJECT_ROOT
     models_dir = PROJECT_ROOT / "ml" / "models"
     status = []
@@ -368,7 +366,6 @@ async def get_broker_dashboard():
         kelly = kelly_tracker.to_dict()
 
         # ML status (ligero — solo lee archivos)
-        from pathlib import Path
         from config import PROJECT_ROOT
         models_dir = PROJECT_ROOT / "ml" / "models"
         ml_models = []

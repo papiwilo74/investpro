@@ -7,13 +7,10 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-import time
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
-from typing import Any
 
 import numpy as np
-import pandas as pd
 
 
 class PerformanceTracker:

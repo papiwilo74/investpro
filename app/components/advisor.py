@@ -4,19 +4,21 @@ except (ImportError, ModuleNotFoundError):
     st = None
 
 import pandas as pd
-from ml.train import ModelTrainer
+
 from indicators.signals import SignalGenerator
+from ml.train import ModelTrainer
+
 
 def generate_advisor_briefing(ticker: str, df: pd.DataFrame, trainer: ModelTrainer):
     """Genera un informe estructurado de asesoría financiera."""
-    last_close = df["close"].iloc[-1]
+    df["close"].iloc[-1]
     composite = SignalGenerator.composite_score(df)
-    
+
     # Intentar cargar ML
     ml_data = trainer.load_model(ticker)
     ml_direction = "N/A"
     ml_prob = 0.5
-    
+
     if ml_data is not None:
         try:
             pred_res = trainer.predict_trend(ticker, df)
@@ -24,7 +26,7 @@ def generate_advisor_briefing(ticker: str, df: pd.DataFrame, trainer: ModelTrain
             ml_prob = pred_res["probability"]
         except Exception:
             pass
-            
+
     # Determinar recomendación
     if composite >= 1.5:
         verdict = "COMPRA FUERTE"
@@ -56,7 +58,7 @@ def generate_advisor_briefing(ticker: str, df: pd.DataFrame, trainer: ModelTrain
     # Indicadores específicos
     rsi = df["rsi"].iloc[-1] if "rsi" in df.columns else 50
     rsi_status = "SOBRECOMPRA (Alto riesgo de corrección)" if rsi > 70 else ("SOBREVENTA (Atractivo para comprar)" if rsi < 30 else "Neutral")
-    
+
     macd_hist = df["macd_histogram"].iloc[-1] if "macd_histogram" in df.columns else 0
     macd_status = "Impulso Alcista" if macd_hist > 0 else "Impulso Bajista"
 
@@ -78,9 +80,9 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
         "Este panel consolida el análisis técnico y los algoritmos predictivos de Machine Learning "
         "para brindarte consejos y asesorías directas sobre tus decisiones de inversión."
     )
-    
+
     brief = generate_advisor_briefing(ticker, df, trainer)
-    
+
     # Tarjeta Principal de Asesoría
     st.markdown(
         f"""
@@ -99,10 +101,10 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
         """,
         unsafe_allow_html=True
     )
-    
+
     # Columnas de variables de apoyo
     c1, c2, c3 = st.columns(3)
-    
+
     with c1:
         st.markdown(
             f"""
@@ -114,7 +116,7 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
             """,
             unsafe_allow_html=True
         )
-        
+
     with c2:
         st.markdown(
             f"""
@@ -126,14 +128,14 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
             """,
             unsafe_allow_html=True
         )
-        
+
     with c3:
         ml_txt = "Sin modelo entrenado"
         ml_col = "#57606a"
         if brief['ml_direction'] != "N/A":
             ml_txt = f"{brief['ml_direction']} ({brief['ml_prob']:.0%})"
             ml_col = "#2ea043" if brief['ml_direction'] == "ALCISTA" else "#da3633"
-            
+
         st.markdown(
             f"""
             <div class="advisor-stat-card" style="border: 1px solid #e1e4e6; border-radius: 12px; padding: 16px; text-align: center; height: 100%;">
@@ -144,12 +146,12 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
             """,
             unsafe_allow_html=True
         )
-        
+
     st.markdown("---")
-    
+
     # ── Módulo Dinámico / Preguntas al Asesor ─────────────────────────
     st.markdown("#### ¿Tienes dudas sobre esta inversión? Consúltale al Asesor:")
-    
+
     questions = [
         "Selecciona una pregunta para el Asesor...",
         "¿Cuáles son los niveles clave de soporte y resistencia?",
@@ -157,15 +159,15 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
         "¿Cómo influye la tendencia de largo plazo (SMA 200)?",
         "¿Qué porcentaje de mi capital debería invertir en este activo?"
     ]
-    
+
     selected_q = st.selectbox("Preguntas frecuentes de asesoría:", options=questions)
-    
+
     if selected_q != questions[0]:
         st.markdown("<br>", unsafe_allow_html=True)
         response_box = st.container()
-        
+
         last_price = df["close"].iloc[-1]
-        
+
         if selected_q == questions[1]:
             # Soporte y resistencia aproximados usando Bollinger Bands y SMA
             support = df["bb_lower"].iloc[-1] if "bb_lower" in df.columns else last_price * 0.95

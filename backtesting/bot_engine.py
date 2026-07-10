@@ -1,9 +1,9 @@
 """Backtest engine for the live bot decision logic."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import product
-from typing import Iterable
 
 import pandas as pd
 
@@ -59,7 +59,7 @@ class BotBacktestEngine:
         equity_dates: list = []
 
         scores = df[signal_col].shift(1).fillna(0.0)
-        
+
         # Pre-calcular régimen de mercado usando HMM
         regimes = ["BULL"] * len(df)
         if self.strategy_params.use_regime_filter:
@@ -73,7 +73,7 @@ class BotBacktestEngine:
                             close_col = close_col.iloc[:, 0]
                         BotBacktestEngine._spy_cache['SMA50'] = close_col.rolling(50).mean()
                         BotBacktestEngine._spy_cache['Regime'] = ["BULL" if pd.notna(sma) and c > sma else "BEAR" for c, sma in zip(close_col, BotBacktestEngine._spy_cache['SMA50'])]
-                
+
                 spy = BotBacktestEngine._spy_cache
                 if spy is not None and not spy.empty and 'Regime' in spy:
                     for j, date in enumerate(df.index):
@@ -81,13 +81,13 @@ class BotBacktestEngine:
                         dt = pd.to_datetime(date)
                         if dt.tz is not None:
                             dt = dt.tz_localize(None)
-                            
+
                         # Usar aproximación temporal
                         valid_dates = [d.tz_localize(None) if d.tz is not None else d for d in spy.index]
                         diffs = [abs((d - dt).total_seconds()) for d in valid_dates]
                         best_idx = diffs.index(min(diffs))
                         regimes[j] = spy['Regime'].iloc[best_idx]
-            except Exception as e:
+            except Exception:
                 pass
         sma50 = df["close"].rolling(50).mean()
         weekly_trends = ["NEUTRAL"] * len(df)

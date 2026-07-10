@@ -8,9 +8,9 @@ UNFAVORABLE (no operar), no FAVORABLE (operar a ciegas).
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import logging
 
 import pandas as pd
 

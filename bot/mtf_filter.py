@@ -12,10 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Optional
 
 import pandas as pd
-import numpy as np
 
 from data.fetcher import DataFetcher
 
@@ -130,7 +128,7 @@ class MTFFilter:
         try:
             last = df.iloc[-1]
             close = float(last["close"])
-            typical = (float(last["high"]) + float(last["low"]) + close) / 3.0 if "high" in df.columns else close
+            (float(last["high"]) + float(last["low"]) + close) / 3.0 if "high" in df.columns else close
 
             # VWAP aproximado con los últimos 20 períodos (representa precio medio ponderado)
             if "volume" in df.columns and df["volume"].sum() > 0:
@@ -192,7 +190,7 @@ class MTFFilter:
 
     def evaluate_short(self, ticker: str, daily_df: pd.DataFrame) -> MTFResult:
         """Evalúa filtros MTF para una entrada SHORT.
-        
+
         Condiciones (invertidas del LONG):
         - Semanal bajista: precio < SMA20w OR SMA20w < SMA50w
         - Precio diario debajo de VWAP (debilidad)

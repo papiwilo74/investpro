@@ -7,6 +7,7 @@ de sentimiento social usando VADER NLP.
 from __future__ import annotations
 
 import re
+
 import requests
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 

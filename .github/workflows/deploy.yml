@@ -4,11 +4,18 @@ on:
   push:
     branches: [master]
 
+env:
+  RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+
 jobs:
   deploy:
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Render deploy
+        if: env.RENDER_DEPLOY_HOOK_URL != ''
         run: |
-          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          curl -X POST "$RENDER_DEPLOY_HOOK_URL"
+      - name: Skip deploy hook
+        if: env.RENDER_DEPLOY_HOOK_URL == ''
+        run: echo "RENDER_DEPLOY_HOOK_URL not set — skipping manual trigger. Render auto-deploy will handle this push if a Blueprint is linked."

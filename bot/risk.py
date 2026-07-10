@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -541,7 +540,7 @@ class RiskManager:
 
     def _check_beta_exposure(self, ticker: str, new_amount: float) -> tuple[bool, str]:
         """Beta-weighted: mide exposición real al SPY, no solo nominal.
-        
+
         Si 5 posiciones tienen beta 0.9 cada una, la exposición real es 4.5x SPY.
         Calcula beta del portafolio y advierte si supera el límite configurado.
         """

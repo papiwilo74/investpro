@@ -1,14 +1,16 @@
 """
 Módulo de Arbitraje Estadístico (Trading de Pares).
 
-Detecta divergencias temporales entre dos acciones históricamente cointegradas 
+Detecta divergencias temporales entre dos acciones históricamente cointegradas
 (Ej: KO vs PEP) calculando el Z-Score del ratio de precios.
 """
 from __future__ import annotations
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 from data.fetcher import DataFetcher
+
 
 class PairTradingEngine:
     def __init__(self, z_score_threshold: float = 2.0):
@@ -43,7 +45,7 @@ class PairTradingEngine:
                 # Alinear las series por fecha
                 df1.set_index("date", inplace=True)
                 df2.set_index("date", inplace=True)
-                
+
                 # Intersección de fechas
                 common_dates = df1.index.intersection(df2.index)
                 close1 = df1.loc[common_dates, "close"]
@@ -51,11 +53,11 @@ class PairTradingEngine:
 
                 # Calcular Ratio (asset1 / asset2)
                 ratio = close1 / close2
-                
+
                 # Z-Score de los últimos 60 días
                 if len(ratio) < 60:
                     continue
-                    
+
                 recent_ratio = ratio.tail(60)
                 z_score_series = self._calculate_zscore(recent_ratio)
                 current_z = float(z_score_series.iloc[-1])

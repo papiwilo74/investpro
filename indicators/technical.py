@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from config import IndicatorParams, INDICATOR_PARAMS, intraday_indicator_params
+from config import INDICATOR_PARAMS, IndicatorParams, intraday_indicator_params
 
 HAS_CUPY = False
 try:

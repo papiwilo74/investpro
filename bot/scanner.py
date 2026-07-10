@@ -6,12 +6,13 @@ para aprovechar CPU multi-core (i7-13650HX: 14 cores / 20 hilos) y GPU (RTX 4060
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Iterable
 
 import pandas as pd
 
+from bot.safety import SignalJournal
 from config import (
     NASDAQ_100_UNIVERSE,
     SCANNER_CONFIG,
@@ -22,7 +23,6 @@ from config import (
 from data.fetcher import DataFetcher
 from indicators.signals import SignalGenerator
 from indicators.technical import TechnicalIndicators
-from bot.safety import SignalJournal
 
 
 @dataclass

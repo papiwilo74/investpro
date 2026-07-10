@@ -6,11 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 # ── Raíz del proyecto ─────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
