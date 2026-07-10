@@ -38,7 +38,7 @@ class RiskController:
         def _alert_sent(key: str) -> None:
             self._last_critical_alerts[key] = now
 
-        daily_loss = self._risk.daily_loss_pct if hasattr(self._risk, 'daily_loss_pct') else 0.0
+        daily_loss = self._risk.daily_loss_pct if hasattr(self._risk, "daily_loss_pct") else 0.0
         if daily_loss < -0.02 and _should_alert("daily_loss_critical"):
             alerts.append({"level": "critical", "event": "daily_loss", "msg": f"Daily loss {daily_loss:.1%}"})
             _alert_sent("daily_loss_critical")
@@ -47,11 +47,11 @@ class RiskController:
             alerts.append({"level": "warning", "event": "daily_loss", "msg": f"Daily loss {daily_loss:.1%}"})
             _alert_sent("daily_loss_warning")
 
-        if getattr(self._risk, 'circuit_breaker_active', False) and _should_alert("circuit_breaker"):
+        if getattr(self._risk, "circuit_breaker_active", False) and _should_alert("circuit_breaker"):
             alerts.append({"level": "critical", "event": "circuit_breaker", "msg": "Circuit breaker active"})
             _alert_sent("circuit_breaker")
 
-        if getattr(self._risk, 'account_liquidated', False) and _should_alert("account_floor"):
+        if getattr(self._risk, "account_liquidated", False) and _should_alert("account_floor"):
             alerts.append({"level": "critical", "event": "account_floor", "msg": "Account floor hit"})
             _alert_sent("account_floor")
 
@@ -83,15 +83,13 @@ class RiskController:
 
         leverage = cfg.min_leverage + (cfg.max_leverage - cfg.min_leverage) * min(confidence, 1.0)
 
-        daily_pnl = getattr(self._risk, 'daily_loss_pct', 0.0)
+        daily_pnl = getattr(self._risk, "daily_loss_pct", 0.0)
         if daily_pnl <= cfg.leverage_daily_loss_hard_pct:
             return 1.0
         if daily_pnl <= cfg.leverage_daily_loss_soft_pct:
             leverage *= 0.5
 
-        unrealized_pnl_values = [
-            p.get("unrealized_pl", 0) for p in positions.values() if isinstance(p, dict)
-        ]
+        unrealized_pnl_values = [p.get("unrealized_pl", 0) for p in positions.values() if isinstance(p, dict)]
         if unrealized_pnl_values:
             avg_unrealized_pnl = sum(unrealized_pnl_values) / max(len(unrealized_pnl_values), 1)
             if equity > 0 and avg_unrealized_pnl / equity <= cfg.leverage_unrealized_soft_pct:
@@ -167,8 +165,7 @@ class RiskController:
 
     def update_risk_state(self, equity: float, positions: dict[str, Any]) -> None:
         self._risk.set_portfolio_value(equity)
-        for ticker, pos in positions.items():
-            self._risk.set_position(ticker, pos)
+        self._risk.set_positions(list(positions.values()))
         self._risk.reset_daily()
 
     def check_unrealized_drawdown(self) -> None:
