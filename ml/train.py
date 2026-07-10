@@ -5,11 +5,15 @@ Guarda modelos en formato nativo XGBoost (JSON) + metadatos en JSON separado.
 from __future__ import annotations
 
 import json
+import logging
 import pickle
+import time
 from pathlib import Path
 from typing import Dict, Any
 
 import pandas as pd
+
+logger = logging.getLogger("inversion_helper.ml.train")
 from xgboost import XGBClassifier
 from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
@@ -142,13 +146,20 @@ class ModelTrainer:
         # 5. Evaluar en el set de prueba
         y_pred = model.predict(X_test)
 
+        # Baseline naive: predecir la dirección del día anterior (persistencia).
+        # El modelo debe vencer a este baseline para tener edge real OOS.
+        y_test_shifted = y_test.shift(1).fillna(y_test.iloc[0] if len(y_test) > 0 else 0).astype(int)
+        baseline_accuracy = float(accuracy_score(y_test, y_test_shifted)) if len(y_test) > 0 else 0.5
+
         metrics = {
             "accuracy": float(accuracy_score(y_test, y_pred)),
             "precision": float(precision_score(y_test, y_pred, zero_division=0)),
             "recall": float(recall_score(y_test, y_pred, zero_division=0)),
             "f1": float(f1_score(y_test, y_pred, zero_division=0)),
             "train_size": len(X_train),
-            "test_size": len(X_test)
+            "test_size": len(X_test),
+            "baseline_accuracy": baseline_accuracy,
+            "rel_vs_baseline": float(accuracy_score(y_test, y_pred)) - baseline_accuracy,
         }
 
         # 6. Importancia de features
@@ -169,10 +180,19 @@ class ModelTrainer:
             "feature_importances": importances,
             "features_list": list(X.columns),
             "best_params": best_params,
-            "optimized": optimize
+            "optimized": optimize,
+            "rel_vs_baseline": metrics["rel_vs_baseline"],
+            "trained_at": time.time(),
         }
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2, ensure_ascii=False, cls=_NumpyEncoder)
+
+        # 7b. Evaluar contra el Model Gate (decide si el bot web puede usarlo)
+        try:
+            from ml.model_gate import model_gate
+            model_gate.evaluate_metadata(ticker, metadata)
+        except Exception as exc:
+            logger.warning("ModelGate eval falló para %s: %s", ticker, exc)
 
         # 8. Eliminar pickle legacy si existe
         legacy_pkl = base_path.with_suffix(".pkl")

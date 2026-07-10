@@ -1,16 +1,18 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from typing import List
+from typing import Any
 import numpy as np
 import pandas as pd
 from portfolio.optimizer import PortfolioOptimizer
+from bot.portfolio_allocator import PortfolioAllocator
 from api.utils import sanitize_for_json
 
 router = APIRouter()
 optimizer = PortfolioOptimizer()
+allocator = PortfolioAllocator()
 
 class PortfolioOptimizeRequest(BaseModel):
-    tickers: List[str]
+    tickers: list[str]
     period: str = "1y"
     risk_free_rate: float = 0.04
 
@@ -68,5 +70,45 @@ async def optimize_portfolio(req: PortfolioOptimizeRequest):
             "frontier": frontier_points
         })
         
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class AllocateRequest(BaseModel):
+    tickers: list[str]
+    method: str = "risk_parity"
+    max_weight: float = 0.15
+    equity: float = 100_000.0
+
+
+class RebalanceRequest(BaseModel):
+    target_weights: dict[str, float]
+    current_positions: dict[str, dict[str, Any]]
+    equity: float
+
+
+@router.post("/allocate")
+async def compute_allocation(req: AllocateRequest):
+    try:
+        tickers = [t.upper().strip() for t in req.tickers]
+        alloc = PortfolioAllocator(
+            method=req.method, max_weight=req.max_weight,
+        )
+        weights = alloc.compute_target_weights(tickers)
+        usd = alloc.target_allocations_usd(tickers, req.equity)
+        return sanitize_for_json({
+            "weights": weights,
+            "allocations_usd": usd,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/rebalance")
+async def compute_rebalance(req: RebalanceRequest):
+    try:
+        alloc = PortfolioAllocator()
+        plan = alloc.rebalance_plan(req.target_weights, req.current_positions, req.equity)
+        return sanitize_for_json({"plan": plan})
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

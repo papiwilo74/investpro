@@ -114,6 +114,27 @@ class TradingBot:
         self.macro_tracker = MacroTracker()
         self.hedge_monitor = HedgeMonitor() if strategy_mode == "web" else None
         self.perf_tracker = PerformanceTracker() if strategy_mode == "web" else None
+        self.shadow_trader = None
+        if strategy_mode == "web":
+            try:
+                from bot.shadow_trader import ShadowTrader
+                self.shadow_trader = ShadowTrader(fetcher=self.fetcher)
+            except Exception as exc:
+                logger.warning("ShadowTrader no disponible: %s", exc)
+        self.portfolio_allocator = None
+        if strategy_mode == "web":
+            try:
+                from bot.portfolio_allocator import PortfolioAllocator
+                self.portfolio_allocator = PortfolioAllocator(fetcher=self.fetcher)
+            except Exception as exc:
+                logger.warning("PortfolioAllocator no disponible: %s", exc)
+        self.smart_router = None
+        if strategy_mode == "web":
+            try:
+                from broker.smart_router import SmartOrderRouter
+                self.smart_router = SmartOrderRouter(self.client)
+            except Exception as exc:
+                logger.warning("SmartOrderRouter no disponible: %s", exc)
         self.is_running = False
         self._thread = None
         self.logs = []
@@ -294,6 +315,18 @@ class TradingBot:
             f"tamano={decision.position_size_pct:.1%}"
         )
 
+    def _route_order(self, symbol: str, qty: int, side: str, ref_price: float,
+                     use_limit: bool = True) -> dict:
+        """Punto único de ejecución: usa SmartOrderRouter si está disponible,
+        sino cae al place_smart_order legacy."""
+        if self.smart_router is not None and qty > 0:
+            return self.smart_router.execute(
+                symbol, qty, side, ref_price, strategy="auto", use_limit=use_limit
+            )
+        return self.client.place_smart_order(
+            symbol, qty, side, ref_price, use_limit=use_limit, limit_offset_pct=0.005
+        )
+
     def _reset_daily_order_counter_if_needed(self):
         today = datetime.now().date()
         if today != self._orders_date:
@@ -312,9 +345,17 @@ class TradingBot:
                                 leverage=leverage, confidence=confidence)
 
     def _get_ml_prediction(self, ticker: str, df) -> tuple[str | None, float | None]:
-        # En modo web no usamos ML para evitar overfitting / modelos obsoletos
+        # En modo web: el Model Gate decide por-ticker si el ML está aprobado OOS.
+        # Si el gate NO aprueba el modelo → fail-closed (None) y el bot opera solo con TA/ensemble.
+        # En modo legacy: siempre intenta cargar el modelo (comportamiento anterior).
         if self.strategy_mode == "web":
-            return None, None
+            try:
+                from ml.model_gate import model_gate
+                if not model_gate.is_approved(ticker):
+                    return None, None
+            except Exception as exc:
+                logger.warning("ModelGate no disponible para %s: %s", ticker, exc)
+                return None, None
         model_data = self.trainer.load_model(ticker)
         if model_data is None:
             self._log(f"ML sin modelo para {ticker}")
@@ -465,6 +506,9 @@ class TradingBot:
                                     self._log(f"ML re-entrenado para {t}")
                             except Exception as e:
                                 self._log(f"Error re-entrenando {t}: {e}")
+                    else:
+                        # Modo web: champion/challenger basado en performance + drift
+                        await self._run_champion_challenger_cycle(ticker)
 
                 if not self._check_connection():
                     self._log("Broker no conectado. Reintentando en 60s...")
@@ -501,6 +545,21 @@ class TradingBot:
                     # ── Regime Rotation: LONG/SHORT según mercado ────────
                     await self._manage_rotation_hedge()
 
+                    # ── Shadow trader: resolver señales maduras + drift ──
+                    if self.shadow_trader is not None:
+                        try:
+                            resolved = self.shadow_trader.resolve_matured()
+                            if resolved > 0:
+                                self._log(f"SHADOW: {resolved} señales resueltas")
+                            drifts = self.shadow_trader.check_drift()
+                            for d in drifts:
+                                msg = (f"DRIFT {d['ticker']}: live acc={d['live_accuracy']:.1%} "
+                                       f"({d['samples']} samples) < {d['threshold']:.1%}")
+                                self._log(msg)
+                                notifier.send("model_drift", msg, "warning")
+                        except Exception as exc:
+                            logger.warning("ShadowTrader loop error: %s", exc)
+
                     self._daily_telemetry_snapshot()
 
                 self._save_position_states()
@@ -525,6 +584,36 @@ class TradingBot:
 
             self._log(f"Escaneo finalizado. Durmiendo {sleep_seconds // 60} minutos.")
             await asyncio.sleep(sleep_seconds)
+
+    async def _run_champion_challenger_cycle(self, single_ticker: str | None) -> None:
+        """Ciclo diario champion/challenger para el modo web.
+
+        Re-entrena solo si: el campeón tiene > N días O la accuracy en vivo
+        (reportada por el ShadowTrader) cayó bajo el drift floor.
+        El challenger solo reemplaza al campeón si lo vence OOS por el margen.
+        """
+        try:
+            from ml.champion_challenger import champion_challenger as cc
+        except Exception as exc:
+            logger.warning("ChampionChallenger no disponible: %s", exc)
+            return
+
+        ml_tickers = [single_ticker] if single_ticker else WATCHLIST
+        for t in ml_tickers:
+            try:
+                live_acc = None
+                if self.shadow_trader is not None:
+                    live_acc = self.shadow_trader.live_accuracy(t)
+                should, reason = cc.should_retrain(t, live_accuracy=live_acc)
+                if not should:
+                    continue
+                self._log(f"CHAMPION/CHALLENGER {t}: re-entrenando ({reason})")
+                result = cc.run_cycle(t, self.trainer)
+                self._log(
+                    f"CHAMPION/CHALLENGER {t}: {result.get('decision')} — {result.get('reason')}"
+                )
+            except Exception as exc:
+                logger.warning("Champion/Challenger cycle falló para %s: %s", t, exc)
 
     async def _scan_and_trade_universe(self, interval: str = "1d"):
         """Escanea el universo y evalúa cada ticker con el mismo pipeline unificado."""
@@ -551,15 +640,31 @@ class TradingBot:
             self._log("Scanner sin oportunidades; usando watchlist de respaldo.")
             scan_tickers = WATCHLIST
 
+        # ── Portfolio Allocator: pesos objetivo por risk-parity ──────
+        target_allocations: dict[str, float] = {}
+        if self.portfolio_allocator is not None and equity > 0:
+            try:
+                target_allocations = self.portfolio_allocator.target_allocations_usd(
+                    scan_tickers, equity, positions
+                )
+                if target_allocations:
+                    top = sorted(target_allocations.items(), key=lambda x: -x[1])[:5]
+                    alloc_str = ", ".join(f"{t}=${v:,.0f}" for t, v in top)
+                    self._log(f"PORTFOLIO ALLOCATOR: {alloc_str}")
+            except Exception as exc:
+                logger.warning("PortfolioAllocator falló, usando sizing por defecto: %s", exc)
+
         for t in scan_tickers:
             if not self.is_running:
                 break
             if not self._can_place_order():
                 self._log(f"Limite diario de ordenes alcanzado ({BROKER_CONFIG.max_daily_orders}).")
                 break
+            target_usd = target_allocations.get(t, 0.0)
             invested = await self._evaluate_and_trade(
                 t, "1d", single_ticker=False,
                 buying_power=buying_power, equity=equity, positions=positions,
+                target_usd=target_usd,
             )
             if invested and invested > 0:
                 buying_power -= invested
@@ -573,10 +678,13 @@ class TradingBot:
         buying_power: float | None = None,
         equity: float | None = None,
         positions: dict[str, dict] | None = None,
+        target_usd: float = 0.0,
     ) -> float:
         """Pipeline unificado de análisis + ejecución para un ticker.
 
         Retorna el monto invertido en USD (0.0 si no se ejecutó compra).
+        `target_usd` proviene del PortfolioAllocator (risk-parity) y limita
+        el tamaño de la entrada al peso objetivo de cartera.
         """
         invested = 0.0
         try:
@@ -637,6 +745,18 @@ class TradingBot:
                 sentiment_label=sentiment_label,
             ))
 
+            # ── Shadow trading: registrar señal del ensemble para medir accuracy en vivo ──
+            if self.shadow_trader is not None and self.brain.last_ensemble_result is not None:
+                try:
+                    self.shadow_trader.record_signal(
+                        ticker=ticker,
+                        ensemble_result=self.brain.last_ensemble_result,
+                        entry_price=last_close,
+                        regime=ticker_regime if isinstance(ticker_regime, str) else "BULL",
+                    )
+                except Exception as exc:
+                    logger.debug("ShadowTrader record falló %s: %s", ticker, exc)
+
             if decision.action == "BUY" and not has_position:
                 # Filtro Multi-Timeframe: bloquea si el semanal es bajista o no hay momentum
                 mtf_result = self._check_mtf(ticker, df)
@@ -681,7 +801,10 @@ class TradingBot:
                             "action": advisor_decision["action"],
                         }
 
-                    invested = await self._execute_buy(ticker, decision, last_close, equity, buying_power, positions, df) or 0.0
+                    invested = await self._execute_buy(
+                        ticker, decision, last_close, equity, buying_power, positions, df,
+                        target_usd=target_usd,
+                    ) or 0.0
                 else:
                     self._log(f"CHECKLIST RECHAZA BUY {ticker}")
             elif decision.action == "SHORT" and not has_position:
@@ -815,7 +938,7 @@ class TradingBot:
                 if qty <= 0 or current_price <= 0:
                     continue
                 self._log(f"HEDGE SELL {ticker}: qty={qty}")
-                res = self.client.place_smart_order(ticker, qty, "SELL", current_price, use_limit=False)
+                res = self._route_order(ticker, qty, "SELL", current_price, use_limit=False)
                 if res.get("status") == "success":
                     self.state.remove_position(ticker)
                     notifier.panic(0, f"Vendido {ticker} por hedge automático")
@@ -861,14 +984,14 @@ class TradingBot:
                     buy_qty = int(missing // sh_current)
                     if buy_qty > 0 and self._can_place_order():
                         self._log(f"ROTATION: Breadth {level}, comprando SH como cobertura ({target_pct:.0%})")
-                        res = self.client.place_smart_order("SH", buy_qty, "BUY", sh_current, use_limit=True)
+                        res = self._route_order("SH", buy_qty, "BUY", sh_current, use_limit=True)
                         if res.get("status") == "success":
                             notifier.send("rotation", f"🛡️ Cobertura SH comprada: {buy_qty} @ ${sh_current:.2f} ({target_pct:.0%} portafolio)", "info")
             elif level in ("HEALTHY", "NEUTRAL"):
                 # No necesitamos SH — vender si está en cartera
                 if sh_qty > 0 and sh_current > 0:
                     self._log(f"ROTATION: Breadth {level}, vendiendo cobertura SH")
-                    res = self.client.place_smart_order("SH", int(sh_qty), "SELL", sh_current, use_limit=True)
+                    res = self._route_order("SH", int(sh_qty), "SELL", sh_current, use_limit=True)
                     if res.get("status") == "success":
                         self.state.remove_position("SH")
                         notifier.send("rotation", f"✅ Cobertura SH vendida: mercado sano", "info")
@@ -1135,9 +1258,7 @@ class TradingBot:
                 continue
 
             self._log(f"DCA 2ª tranche {ticker}: {qty} @ ${live_price:.2f} (caída {drop:+.2%})")
-            res = self.client.place_smart_order(
-                ticker, qty, "BUY", live_price, use_limit=True, limit_offset_pct=0.005
-            )
+            res = self._route_order(ticker, qty, "BUY", live_price, use_limit=True)
             if res.get("status") == "success":
                 fill = res.get("filled_avg_price", live_price)
                 self._record_order(
@@ -1158,8 +1279,13 @@ class TradingBot:
         buying_power: float,
         positions: dict[str, dict],
         df: pd.DataFrame | None = None,
+        target_usd: float = 0.0,
     ) -> float:
-        """Ejecuta una orden de compra con apalancamiento x2-x3 y DCA escalonado."""
+        """Ejecuta una orden de compra con apalancamiento x2-x3 y DCA escalonado.
+
+        `target_usd` (del PortfolioAllocator) acota el tamaño al peso objetivo
+        de cartera; si el sizing por Kelly/ATR excede el target, se recorta.
+        """
         if not self._can_place_order():
             self._log(f"Limite diario de ordenes alcanzado.")
             return 0.0
@@ -1174,6 +1300,10 @@ class TradingBot:
 
         # Sizing: position_size_pct del cerebro × leverage
         max_invest = equity * decision.position_size_pct * leverage
+        # ── Cap por Portfolio Allocator (risk-parity) ──────────────────
+        if target_usd > 0 and target_usd < max_invest:
+            max_invest = target_usd * leverage
+            self._log(f"ALLOCATOR cap {ticker}: sizing recortado a ${max_invest:,.0f} (target=${target_usd:,.0f})")
         invest_amount = min(max_invest, buying_power)
         if invest_amount <= ref_price:
             return 0.0
@@ -1210,12 +1340,12 @@ class TradingBot:
             f"ORDEN BUY {ticker}{lev_tag}: qty={qty} | inversion=${qty * ref_price:,.2f} | "
             f"poder=${buying_power:,.2f} | razon={decision.reason}"
         )
-        res = self.client.place_smart_order(ticker, qty, "BUY", ref_price, use_limit=True, limit_offset_pct=0.005)
+        res = self._route_order(ticker, qty, "BUY", ref_price, use_limit=True)
         if res.get("status") == "success":
             fill_price = res.get("filled_avg_price", ref_price)
             self._record_order(ticker, "BUY", qty, fill_price, res.get("order_id"),
                                leverage=leverage, confidence=decision.confidence)
-            self._log(f"EJECUTADA BUY {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')}")
+            self._log(f"EJECUTADA BUY {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')} | strategy={res.get('strategy', 'smart')}")
             self.state.save_position(ticker, decision.side, fill_price, qty=qty)
             if df is not None:
                 self.brain.on_position_opened(ticker, fill_price, df)
@@ -1295,12 +1425,12 @@ class TradingBot:
             f"ORDEN SHORT {ticker}{lev_tag}: qty={qty} | inversion=${qty * ref_price:,.2f} | "
             f"razon={decision.reason}"
         )
-        res = self.client.place_smart_order(ticker, qty, "SELL", ref_price, use_limit=True, limit_offset_pct=0.005)
+        res = self._route_order(ticker, qty, "SELL", ref_price, use_limit=True)
         if res.get("status") == "success":
             fill_price = res.get("filled_avg_price", ref_price)
             self._record_order(ticker, "SHORT", qty, fill_price, res.get("order_id"),
                                leverage=leverage, confidence=decision.confidence)
-            self._log(f"EJECUTADO SHORT {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')}")
+            self._log(f"EJECUTADO SHORT {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')} | strategy={res.get('strategy', 'smart')}")
             self.state.save_position(ticker, "SHORT", fill_price, qty=qty)
             self.brain.on_position_opened(ticker, fill_price, df, side="SHORT")
             self.brain.save_position_state(self.state, ticker, qty)
@@ -1333,7 +1463,7 @@ class TradingBot:
         # Precio en vivo para mejor ejecución
         live_price = self.client.get_latest_price(ticker, fallback=current_price)
         sell_ref = live_price if live_price and live_price > 0 else current_price
-        res = self.client.place_smart_order(ticker, qty, "SELL", sell_ref, use_limit=True, limit_offset_pct=0.005)
+        res = self._route_order(ticker, qty, "SELL", sell_ref, use_limit=True)
         if res.get("status") == "success":
             fill = res.get("filled_avg_price", sell_ref)
             self._record_order(ticker, decision.action, qty, fill, res.get("order_id"))

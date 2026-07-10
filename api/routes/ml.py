@@ -1,9 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+from typing import Any
 import pandas as pd
 from data.fetcher import DataFetcher
 from indicators.technical import TechnicalIndicators
 from ml.train import ModelTrainer
+from ml.model_gate import model_gate
+from ml.champion_challenger import champion_challenger
 from backtesting.engine import BacktestEngine
 from api.utils import sanitize_for_json
 
@@ -13,6 +16,12 @@ trainer = ModelTrainer()
 
 class MLTrainRequest(BaseModel):
     optimize: bool = False
+
+class GateEvaluateRequest(BaseModel):
+    accuracy: float
+    precision: float
+    test_size: int
+    rel_vs_baseline: float = 0.0
 
 @router.get("/{ticker}")
 async def get_ml_status(
@@ -125,4 +134,87 @@ async def simulate_ml_strategy(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ── ModelGate endpoints ─────────────────────────────────────────────
 
+@router.get("/gate/status")
+async def get_gate_status():
+    try:
+        return sanitize_for_json(model_gate.all_status())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/gate/{ticker}")
+async def get_gate_ticker(ticker: str):
+    try:
+        ticker = ticker.upper().strip()
+        status = model_gate.get_status(ticker)
+        if status is None:
+            return {"ticker": ticker, "approved": False, "reason": "no metadata evaluated"}
+        return sanitize_for_json(status)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/gate/{ticker}/evaluate")
+async def evaluate_gate(ticker: str, req: GateEvaluateRequest):
+    try:
+        ticker = ticker.upper().strip()
+        metadata = {
+            "metrics": {
+                "accuracy": req.accuracy,
+                "precision": req.precision,
+                "test_size": req.test_size,
+            },
+            "rel_vs_baseline": req.rel_vs_baseline,
+        }
+        approved = model_gate.evaluate_metadata(ticker, metadata)
+        return sanitize_for_json({
+            "ticker": ticker,
+            "approved": approved,
+            "status": model_gate.get_status(ticker),
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/gate/{ticker}/revoke")
+async def revoke_gate(ticker: str, reason: str = Query("manual", description="Reason for revocation")):
+    try:
+        ticker = ticker.upper().strip()
+        model_gate.revoke(ticker, reason)
+        return {"ticker": ticker, "approved": False, "reason": reason}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── ChampionChallenger endpoints ─────────────────────────────────────
+
+@router.get("/champion")
+async def get_all_champions():
+    try:
+        return sanitize_for_json(champion_challenger.all_champions())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/champion/{ticker}")
+async def get_champion(ticker: str):
+    try:
+        ticker = ticker.upper().strip()
+        champ = champion_challenger.get_champion(ticker)
+        if champ is None:
+            return {"ticker": ticker, "has_champion": False}
+        return sanitize_for_json(champ)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/champion/{ticker}/retrain-check")
+async def check_retrain(ticker: str, live_accuracy: float | None = Query(None)):
+    try:
+        ticker = ticker.upper().strip()
+        should, reason = champion_challenger.should_retrain(ticker, live_accuracy=live_accuracy)
+        return {"ticker": ticker, "should_retrain": should, "reason": reason}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

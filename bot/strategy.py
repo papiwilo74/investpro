@@ -520,6 +520,7 @@ class TradingBrain:
         self._rl_agent = rl_agent_instance or rl_agent
         self._kelly = kelly_instance or kelly_tracker
         self._ensemble = ensemble
+        self.last_ensemble_result = None  # poblado por _decide_entry para el ShadowTrader
         self._load_neural_if_needed()
 
     @classmethod
@@ -961,6 +962,9 @@ class TradingBrain:
                 ta_score=entry_score,
                 lstm_signal=lstm_signal,
             )
+            # Exponer el resultado del ensemble para que el ShadowTrader pueda
+            # registrar las señales por modelo y medir accuracy en vivo.
+            self.last_ensemble_result = ens_result
 
             if ens_result.consensus_direction == "BULLISH" and ens_result.confidence >= 0.3:
                 entry_score = max(entry_score, ens_result.blended_score)

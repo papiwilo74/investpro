@@ -1,12 +1,15 @@
 from collections import defaultdict
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 from api.utils import sanitize_for_json
 from api.schemas import BotConfig, BotStatus, DashboardResponse, HealthCheck, MLModelInfo, RiskConfigParams
 from broker.alpaca_client import AlpacaClient
+from broker.smart_router import SmartOrderRouter
 from bot.engine import TradingBot
 from bot.safety import SignalJournal
+from bot.shadow_trader import ShadowTrader
 from bot.strategy import kelly_tracker, create_web_bot_strategy_params
 from config import BROKER_CONFIG, WEB_RISK_CONFIG
 
@@ -19,6 +22,10 @@ public_router = APIRouter()
 bot = TradingBot(strategy_mode="web")
 client = bot.client
 journal = bot.journal
+
+# Hedge-fund modules
+shadow_trader = ShadowTrader(fetcher=bot.fetcher)
+smart_router = SmartOrderRouter(client)
 
 
 @router.get("/account")
@@ -416,6 +423,76 @@ async def get_broker_dashboard():
             "market_regime": regime,
             "market_breadth": breadth,
         })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── ShadowTrader endpoints ──────────────────────────────────────────
+
+@router.get("/shadow/stats")
+async def get_shadow_stats():
+    try:
+        return sanitize_for_json(shadow_trader.stats())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/shadow/drift")
+async def get_shadow_drift():
+    try:
+        return sanitize_for_json(shadow_trader.check_drift())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/shadow/accuracy/{ticker}")
+async def get_shadow_accuracy(
+    ticker: str,
+    model: str = Query("ensemble_blend", description="Model name to check accuracy for"),
+):
+    try:
+        ticker = ticker.upper().strip()
+        acc = shadow_trader.live_accuracy(ticker, model=model)
+        return {"ticker": ticker, "model": model, "live_accuracy": round(acc, 3)}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── SmartOrderRouter endpoints ──────────────────────────────────────
+
+class SmartRouterExecuteRequest(BaseModel):
+    symbol: str
+    qty: int
+    side: str
+    decision_price: float
+    strategy: str = "auto"
+    use_limit: bool = True
+
+
+@router.post("/smart-router/execute")
+async def execute_smart_order(req: SmartRouterExecuteRequest):
+    try:
+        result = smart_router.execute(
+            req.symbol, req.qty, req.side,
+            req.decision_price, strategy=req.strategy, use_limit=req.use_limit,
+        )
+        return sanitize_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/smart-router/slippage")
+async def get_slippage_stats(symbol: str | None = Query(None)):
+    try:
+        return sanitize_for_json(smart_router.slippage_stats(symbol))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/smart-router/slippage/{symbol}")
+async def get_slippage_per_symbol(symbol: str):
+    try:
+        return sanitize_for_json(smart_router.slippage_stats(symbol))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
