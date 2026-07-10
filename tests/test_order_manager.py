@@ -17,7 +17,7 @@ def mock_client():
 def mock_state():
     state = MagicMock()
     state.get_daily_order_count.return_value = 0
-    state.get.return_value = {}
+    state.get_state.return_value = {}
     return state
 
 
@@ -34,10 +34,12 @@ class TestOrderManager:
         manager._orders_today = 19
         manager._orders_date = date.today()
         from config import BROKER_CONFIG
+
         assert manager.can_place_order() == (19 < BROKER_CONFIG.max_daily_orders)
 
     def test_reset_daily_counter_on_new_day(self, manager):
         from datetime import timedelta
+
         yesterday = date.today() - timedelta(days=1)
         manager._orders_date = yesterday
         manager._orders_today = 10
@@ -67,20 +69,21 @@ class TestOrderManager:
     def test_orders_remaining(self, manager):
         remaining = manager.orders_remaining()
         from config import BROKER_CONFIG
+
         assert remaining == BROKER_CONFIG.max_daily_orders
 
     def test_pending_tranche_flow(self, manager, mock_state):
-        mock_state.get.return_value = {}
+        mock_state.get_state.return_value = {}
         manager.add_pending_tranche("AAPL", 500.0, "LONG", 1.5, 0.8, 150.0)
-        mock_state.set.assert_called_once()
-        call_args = mock_state.set.call_args[0]
+        mock_state.set_state.assert_called_once()
+        call_args = mock_state.set_state.call_args[0]
         assert call_args[0] == "pending_tranches"
         assert "AAPL" in call_args[1]
 
     def test_clear_pending_tranche(self, manager, mock_state):
-        mock_state.get.return_value = {"AAPL": {"remaining_usd": 500}}
+        mock_state.get_state.return_value = {"AAPL": {"remaining_usd": 500}}
         manager.clear_pending_tranche("AAPL")
-        mock_state.set.assert_called_once()
-        call_args = mock_state.set.call_args[0]
+        mock_state.set_state.assert_called_once()
+        call_args = mock_state.set_state.call_args[0]
         assert call_args[0] == "pending_tranches"
         assert "AAPL" not in call_args[1]

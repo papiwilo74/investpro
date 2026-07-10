@@ -98,8 +98,11 @@ class TradingBot:
             # Aplicar Hall of Fame del optimizador genético si existe
             params, hof_info = self._load_hof_params(params)
             if hof_info:
-                logger.info("Hall of Fame cargado: fitness=%.4f, %d params aplicados",
-                            hof_info["best_fitness"], hof_info["params_applied"])
+                logger.info(
+                    "Hall of Fame cargado: fitness=%.4f, %d params aplicados",
+                    hof_info["best_fitness"],
+                    hof_info["params_applied"],
+                )
                 self._hof_info = hof_info
             else:
                 self._hof_info = None
@@ -119,8 +122,10 @@ class TradingBot:
 
         self.brain = TradingBrain(params)
         self.market_regime = MarketRegimeFilter(fetcher=self.fetcher)
-        use_db = getattr(self, '_db_session', None) is not None
-        self.online_advisor = OnlineAdvisor(session=self._db_session if use_db else None) if strategy_mode == "web" else None
+        use_db = getattr(self, "_db_session", None) is not None
+        self.online_advisor = (
+            OnlineAdvisor(session=self._db_session if use_db else None) if strategy_mode == "web" else None
+        )
         self.mtf_filter = MTFFilter(fetcher=self.fetcher) if strategy_mode == "web" else None
         self.market_breadth = MarketBreadth(fetcher=self.fetcher) if strategy_mode == "web" else None
         self.macro_tracker = MacroTracker()
@@ -130,6 +135,7 @@ class TradingBot:
         if strategy_mode == "web":
             try:
                 from bot.shadow_trader import ShadowTrader
+
                 self.shadow_trader = ShadowTrader(fetcher=self.fetcher)
             except Exception as exc:
                 logger.warning("ShadowTrader no disponible: %s", exc)
@@ -137,6 +143,7 @@ class TradingBot:
         if strategy_mode == "web":
             try:
                 from bot.portfolio_allocator import PortfolioAllocator
+
                 self.portfolio_allocator = PortfolioAllocator(fetcher=self.fetcher)
             except Exception as exc:
                 logger.warning("PortfolioAllocator no disponible: %s", exc)
@@ -144,9 +151,28 @@ class TradingBot:
         if strategy_mode == "web":
             try:
                 from broker.smart_router import SmartOrderRouter
+
                 self.smart_router = SmartOrderRouter(self.client)
             except Exception as exc:
                 logger.warning("SmartOrderRouter no disponible: %s", exc)
+        # SignalExecutor: unifica ejecución de órdenes (buy/sell/short/DCA)
+        from bot.signal_executor import SignalExecutor
+
+        self._executor = SignalExecutor(
+            client=self.client,
+            fetcher=self.fetcher,
+            trainer=self.trainer,
+            brain=self.brain,
+            order_manager=self.order_manager,
+            risk_controller=self.risk_controller,
+            risk_manager=self.risk_manager,
+            state=self.state,
+            notifier=notifier,
+            online_advisor=self.online_advisor,
+            portfolio_allocator=self.portfolio_allocator,
+            sentiment=self.sentiment,
+            model_gate=None,
+        )
         self.is_running = False
         self._thread = None
         self.logs = []
@@ -222,6 +248,7 @@ class TradingBot:
         try:
             import json
             from pathlib import Path
+
             hof_path = Path(__file__).resolve().parent.parent / "data" / "genetic_hall_of_fame.json"
             if not hof_path.exists():
                 return base_params, None
@@ -241,24 +268,35 @@ class TradingBot:
 
             # Solo sobrescribir parámetros numéricos seguros (sizing, thresholds, stops)
             safe_keys = {
-                "buy_score_threshold", "sell_score_threshold",
-                "stop_loss_pct", "take_profit_pct",
-                "trailing_stop_atr_mult", "max_buy_rsi",
-                "max_position_size_pct", "min_position_size_pct",
-                "atr_risk_pct", "short_score_threshold",
-                "short_min_adx", "short_position_size_pct",
+                "buy_score_threshold",
+                "sell_score_threshold",
+                "stop_loss_pct",
+                "take_profit_pct",
+                "trailing_stop_atr_mult",
+                "max_buy_rsi",
+                "max_position_size_pct",
+                "min_position_size_pct",
+                "atr_risk_pct",
+                "short_score_threshold",
+                "short_min_adx",
+                "short_position_size_pct",
                 "short_momentum_threshold",
-                "trail_atr_base", "trail_atr_tight",
-                "min_adx_to_trade", "signal_smoothing_periods",
-                "confirmation_bars", "confirmation_min_ratio",
-                "max_hold_days", "breakeven_trigger_pct",
-                "target_annual_volatility", "cautious_regime_score_boost",
+                "trail_atr_base",
+                "trail_atr_tight",
+                "min_adx_to_trade",
+                "signal_smoothing_periods",
+                "confirmation_bars",
+                "confirmation_min_ratio",
+                "max_hold_days",
+                "breakeven_trigger_pct",
+                "target_annual_volatility",
+                "cautious_regime_score_boost",
             }
 
             merged = dict(base_params.__dict__)
             applied = {}
             for key, val in best_params.items():
-                if key in safe_keys and isinstance(val, (int, float)):
+                if key in safe_keys and isinstance(val, int | float):
                     merged[key] = val
                     applied[key] = val
 
@@ -303,8 +341,9 @@ class TradingBot:
         except (TypeError, ValueError):
             return "N/A"
 
-    def _decision_context(self, ticker, df, score, decision, has_position, pnl_pct,
-                          ml_direction, ml_probability, sentiment_label) -> str:
+    def _decision_context(
+        self, ticker, df, score, decision, has_position, pnl_pct, ml_direction, ml_probability, sentiment_label
+    ) -> str:
         last = df.iloc[-1]
         close = float(last["close"])
         sma_200 = last.get("sma_200")
@@ -331,8 +370,7 @@ class TradingBot:
             f"tamano={decision.position_size_pct:.1%}"
         )
 
-    async def _route_order(self, symbol: str, qty: int, side: str, ref_price: float,
-                           use_limit: bool = True) -> dict:
+    async def _route_order(self, symbol: str, qty: int, side: str, ref_price: float, use_limit: bool = True) -> dict:
         """Punto único de ejecución: delega a OrderManager (sin bloqueo)."""
         if self.smart_router is not None:
             self.order_manager._smart_router = self.smart_router
@@ -348,12 +386,19 @@ class TradingBot:
         self._reset_daily_order_counter_if_needed()
         return self._orders_today < BROKER_CONFIG.max_daily_orders
 
-    def _record_order(self, ticker: str, side: str, qty: float, price: float | None = None,
-                      order_id: str | None = None, leverage: float = 1.0, confidence: float = 0.0):
+    def _record_order(
+        self,
+        ticker: str,
+        side: str,
+        qty: float,
+        price: float | None = None,
+        order_id: str | None = None,
+        leverage: float = 1.0,
+        confidence: float = 0.0,
+    ):
         self._reset_daily_order_counter_if_needed()
         self._orders_today += 1
-        self.state.record_order(ticker, side, qty, price, order_id,
-                                leverage=leverage, confidence=confidence)
+        self.state.record_order(ticker, side, qty, price, order_id, leverage=leverage, confidence=confidence)
 
     def _get_ml_prediction(self, ticker: str, df) -> tuple[str | None, float | None]:
         # En modo web: el Model Gate decide por-ticker si el ML está aprobado OOS.
@@ -362,6 +407,7 @@ class TradingBot:
         if self.strategy_mode == "web":
             try:
                 from ml.model_gate import model_gate
+
                 if not model_gate.is_approved(ticker):
                     return None, None
             except Exception as exc:
@@ -450,7 +496,7 @@ class TradingBot:
     async def stop_async(self) -> None:
         """Detiene el bot iniciado con start_async()."""
         self.stop()
-        if hasattr(self, '_task') and self._task is not None:
+        if hasattr(self, "_task") and self._task is not None:
             self._task.cancel()
             try:
                 await self._task
@@ -484,16 +530,20 @@ class TradingBot:
 
             # 1. Pérdida diaria > -2%
             if pnl_pct_today <= -0.02 and _should_alert("daily_loss"):
-                notifier.send("daily_loss",
+                notifier.send(
+                    "daily_loss",
                     f"Pérdida del día: {pnl_pct_today:.2%}\nEquity: ${equity:,.0f}\nEl leverage se ha reducido a x1.0.",
-                    "critical")
+                    "critical",
+                )
                 _alert_sent("daily_loss")
 
             # 2. Pérdida diada > -1% (warning, no critical)
             elif pnl_pct_today <= -0.01 and _should_alert("daily_loss_warn"):
-                notifier.send("daily_loss_warn",
+                notifier.send(
+                    "daily_loss_warn",
                     f"⚠️ Pérdida del día: {pnl_pct_today:.2%}\nEquity: ${equity:,.0f}\nLeverage reducido a la mitad.",
-                    "warning")
+                    "warning",
+                )
                 _alert_sent("daily_loss_warn")
 
             # 3. Circuit breaker activo
@@ -588,8 +638,10 @@ class TradingBot:
                                 await self._auto_evaluate_models()
                             drifts = self.shadow_trader.check_drift()
                             for d in drifts:
-                                msg = (f"DRIFT {d['ticker']}: live acc={d['live_accuracy']:.1%} "
-                                       f"({d['samples']} samples) < {d['threshold']:.1%}")
+                                msg = (
+                                    f"DRIFT {d['ticker']}: live acc={d['live_accuracy']:.1%} "
+                                    f"({d['samples']} samples) < {d['threshold']:.1%}"
+                                )
                                 self._log(msg)
                                 notifier.send("model_drift", msg, "warning")
                         except Exception as exc:
@@ -630,6 +682,7 @@ class TradingBot:
         los thresholds y aprueba/revoca automáticamente en ModelGate.
         """
         from ml.model_gate import model_gate
+
         if self.shadow_trader is None:
             return
         try:
@@ -639,7 +692,7 @@ class TradingBot:
                     acc = self.shadow_trader.live_accuracy(ticker, model=model_key)
                     if acc is None:
                         continue
-                    sample_count = getattr(self.shadow_trader, '_SignalJournal__counts', {}).get(ticker, 0)
+                    sample_count = getattr(self.shadow_trader, "_SignalJournal__counts", {}).get(ticker, 0)
                     if sample_count < 15:
                         continue
                     metadata = {
@@ -652,7 +705,9 @@ class TradingBot:
                         self._log(f"MODEL GATE: {ticker} {model_name} auto-aprobado (accuracy={acc:.1%})")
                     elif not now_approved and was_approved:
                         self._log(f"MODEL GATE: {ticker} {model_name} revocado (accuracy={acc:.1%})")
-                        notifier.send("model_drift", f"ML {model_name} revocado para {ticker}: accuracy {acc:.1%}", "warning")
+                        notifier.send(
+                            "model_drift", f"ML {model_name} revocado para {ticker}: accuracy {acc:.1%}", "warning"
+                        )
         except Exception as exc:
             logger.warning("Auto-evaluate models falló: %s", exc)
 
@@ -697,7 +752,8 @@ class TradingBot:
                 decision = Decision(
                     action="BUY" if action == "BUY" else "SELL",
                     reason=f"rebalance {item.get('reason', '')}",
-                    confidence=0.5, position_size_pct=usd / equity,
+                    confidence=0.5,
+                    position_size_pct=usd / equity,
                 )
                 if action == "BUY":
                     await self._execute_buy(ticker, decision, price, equity, equity, positions, target_usd=usd)
@@ -733,9 +789,7 @@ class TradingBot:
                     continue
                 self._log(f"CHAMPION/CHALLENGER {t}: re-entrenando ({reason})")
                 result = cc.run_cycle(t, self.trainer)
-                self._log(
-                    f"CHAMPION/CHALLENGER {t}: {result.get('decision')} — {result.get('reason')}"
-                )
+                self._log(f"CHAMPION/CHALLENGER {t}: {result.get('decision')} — {result.get('reason')}")
             except Exception as exc:
                 logger.warning("Champion/Challenger cycle falló para %s: %s", t, exc)
 
@@ -768,9 +822,7 @@ class TradingBot:
         target_allocations: dict[str, float] = {}
         if self.portfolio_allocator is not None and equity > 0:
             try:
-                target_allocations = self.portfolio_allocator.target_allocations_usd(
-                    scan_tickers, equity, positions
-                )
+                target_allocations = self.portfolio_allocator.target_allocations_usd(scan_tickers, equity, positions)
                 if target_allocations:
                     top = sorted(target_allocations.items(), key=lambda x: -x[1])[:5]
                     alloc_str = ", ".join(f"{t}=${v:,.0f}" for t, v in top)
@@ -786,8 +838,12 @@ class TradingBot:
                 break
             target_usd = target_allocations.get(t, 0.0)
             invested = await self._evaluate_and_trade(
-                t, "1d", single_ticker=False,
-                buying_power=buying_power, equity=equity, positions=positions,
+                t,
+                "1d",
+                single_ticker=False,
+                buying_power=buying_power,
+                equity=equity,
+                positions=positions,
                 target_usd=target_usd,
             )
             if invested and invested > 0:
@@ -862,12 +918,19 @@ class TradingBot:
                 market_regime=ticker_regime,
             )
 
-            self._log(self._decision_context(
-                ticker=ticker, df=df, score=score, decision=decision,
-                has_position=has_position, pnl_pct=pnl_pct,
-                ml_direction=ml_direction, ml_probability=ml_probability,
-                sentiment_label=sentiment_label,
-            ))
+            self._log(
+                self._decision_context(
+                    ticker=ticker,
+                    df=df,
+                    score=score,
+                    decision=decision,
+                    has_position=has_position,
+                    pnl_pct=pnl_pct,
+                    ml_direction=ml_direction,
+                    ml_probability=ml_probability,
+                    sentiment_label=sentiment_label,
+                )
+            )
 
             # ── Shadow trading: registrar señal del ensemble para medir accuracy en vivo ──
             if self.shadow_trader is not None and self.brain.last_ensemble_result is not None:
@@ -888,8 +951,10 @@ class TradingBot:
                     self._log(f"MTF BLOQUEA BUY {ticker}: {mtf_result.block_reason}")
                     return 0.0
                 if mtf_result and mtf_result.passed:
-                    self._log(f"MTF CONFIRMA {ticker}: semanal={mtf_result.details.get('weekly_trend')}, "
-                             f"VWAP={mtf_result.daily_above_vwap}, ADX/DI={mtf_result.adx_strong}")
+                    self._log(
+                        f"MTF CONFIRMA {ticker}: semanal={mtf_result.details.get('weekly_trend')}, "
+                        f"VWAP={mtf_result.daily_above_vwap}, ADX/DI={mtf_result.adx_strong}"
+                    )
 
                 passed, checks = self._pre_trade_checklist(ticker, score, decision, market_regime)
                 self._log(f"CHECKLIST {ticker}: {' | '.join(checks)}")
@@ -925,10 +990,19 @@ class TradingBot:
                             "action": advisor_decision["action"],
                         }
 
-                    invested = await self._execute_buy(
-                        ticker, decision, last_close, equity, buying_power, positions, df,
-                        target_usd=target_usd,
-                    ) or 0.0
+                    invested = (
+                        await self._execute_buy(
+                            ticker,
+                            decision,
+                            last_close,
+                            equity,
+                            buying_power,
+                            positions,
+                            df,
+                            target_usd=target_usd,
+                        )
+                        or 0.0
+                    )
                 else:
                     self._log(f"CHECKLIST RECHAZA BUY {ticker}")
             elif decision.action == "SHORT" and not has_position:
@@ -943,7 +1017,9 @@ class TradingBot:
                 passed, checks = self._pre_trade_checklist(ticker, score, decision, market_regime, side="SHORT")
                 self._log(f"CHECKLIST SHORT {ticker}: {' | '.join(checks)}")
                 if passed:
-                    invested = await self._execute_short(ticker, decision, last_close, equity, buying_power, positions, df)
+                    invested = await self._execute_short(
+                        ticker, decision, last_close, equity, buying_power, positions, df
+                    )
                 else:
                     self._log(f"CHECKLIST RECHAZA SHORT {ticker}")
             elif decision.action in ("SELL", "COVER") and has_position:
@@ -1108,7 +1184,11 @@ class TradingBot:
                         self._log(f"ROTATION: Breadth {level}, comprando SH como cobertura ({target_pct:.0%})")
                         res = await self._route_order("SH", buy_qty, "BUY", sh_current, use_limit=True)
                         if res.get("status") == "success":
-                            notifier.send("rotation", f"🛡️ Cobertura SH comprada: {buy_qty} @ ${sh_current:.2f} ({target_pct:.0%} portafolio)", "info")
+                            notifier.send(
+                                "rotation",
+                                f"🛡️ Cobertura SH comprada: {buy_qty} @ ${sh_current:.2f} ({target_pct:.0%} portafolio)",
+                                "info",
+                            )
             elif level in ("HEALTHY", "NEUTRAL"):
                 # No necesitamos SH — vender si está en cartera
                 if sh_qty > 0 and sh_current > 0:
@@ -1147,8 +1227,15 @@ class TradingBot:
         except Exception as exc:
             logger.warning("Error en telemetría diaria: %s", exc)
 
-    def _log_trade_telemetry(self, ticker: str, side: str, entry_date: str | None = None,
-                              exit_reason: str | None = None, pnl_pct: float = 0, pnl_usd: float = 0) -> None:
+    def _log_trade_telemetry(
+        self,
+        ticker: str,
+        side: str,
+        entry_date: str | None = None,
+        exit_reason: str | None = None,
+        pnl_pct: float = 0,
+        pnl_usd: float = 0,
+    ) -> None:
         """Registra trade en el sistema de telemetría."""
         if not self.perf_tracker:
             return
@@ -1157,15 +1244,21 @@ class TradingBot:
             hold_days = None
             if entry_date and exit_reason:
                 try:
-                    entry = datetime.fromisoformat(str(entry_date).split("T")[0] if "T" in str(entry_date) else str(entry_date))
+                    entry = datetime.fromisoformat(
+                        str(entry_date).split("T")[0] if "T" in str(entry_date) else str(entry_date)
+                    )
                     hold_days = (datetime.now() - entry).days
                 except Exception:
                     pass
             self.perf_tracker.log_trade(
-                ticker=ticker, side=side,
-                entry_date=entry_date, exit_date=today,
-                pnl_pct=pnl_pct, pnl_usd=pnl_usd,
-                hold_days=hold_days, exit_reason=exit_reason,
+                ticker=ticker,
+                side=side,
+                entry_date=entry_date,
+                exit_date=today,
+                pnl_pct=pnl_pct,
+                pnl_usd=pnl_usd,
+                hold_days=hold_days,
+                exit_reason=exit_reason,
             )
         except Exception as exc:
             logger.warning("Error en telemetría de trade: %s", exc)
@@ -1207,12 +1300,14 @@ class TradingBot:
         except Exception:
             return 0.20
 
-    def _pre_trade_checklist(self, ticker: str, score: float, decision: Any, market_regime: dict, side: str = "LONG") -> tuple[bool, list[str]]:
+    def _pre_trade_checklist(
+        self, ticker: str, score: float, decision: Any, market_regime: dict, side: str = "LONG"
+    ) -> tuple[bool, list[str]]:
         """Checklist obligatorio antes de ejecutar una compra o short."""
         p = self._strategy_params
         checks: list[str] = []
         passed = True
-        is_short = (side == "SHORT" or (hasattr(decision, 'side') and decision.side == "SHORT"))
+        is_short = side == "SHORT" or (hasattr(decision, "side") and decision.side == "SHORT")
 
         # 0. Market Breadth (global — salud del mercado amplio)
         breadth = self._check_market_breadth()
@@ -1224,7 +1319,9 @@ class TradingBot:
                 elif not breadth.get("can_trade", True):
                     checks.append(f"⚠️ Breadth {breadth.get('level')}: shorts permitidos con cautela")
                 else:
-                    checks.append(f"⚠️ Market Breadth {breadth.get('level')}: mercado sano, short requiere confirmación fuerte")
+                    checks.append(
+                        f"⚠️ Market Breadth {breadth.get('level')}: mercado sano, short requiere confirmación fuerte"
+                    )
             else:
                 if not breadth.get("can_trade", True):
                     checks.append(f"❌ Market Breadth {breadth.get('level')}: {breadth.get('reason')}")
@@ -1282,115 +1379,7 @@ class TradingBot:
 
         return passed, checks
 
-    # ── APALANCAMIENTO DINÁMICO x2-x3 ──────────────────────────────────
-
-    def _compute_leverage(self, decision: Any, equity: float, positions: dict) -> float:
-        """Calcula el leverage dinámico x2-x3 según confianza, degradado por riesgo.
-
-        Nunca baja de 1.0. Si leverage_disabled en config → retorna 1.0.
-        """
-        cfg = BROKER_CONFIG
-        if not cfg.leverage_enabled:
-            return 1.0
-
-        base = cfg.min_leverage + (decision.confidence * (cfg.max_leverage - cfg.min_leverage))
-        leverage = base
-
-        # Degradar por pérdida del día
-        try:
-            acc = self.client.get_account_summary()
-            daily_pnl_pct = float(acc.get("pnl_pct_today", 0.0)) / 100.0
-            if daily_pnl_pct <= cfg.leverage_daily_loss_hard_pct:
-                self._log(f"🛡️ Pérdida día {daily_pnl_pct:.2%} → leverage x1.0 (sin apalancar)")
-                return 1.0
-            if daily_pnl_pct <= cfg.leverage_daily_loss_soft_pct:
-                leverage *= 0.5
-                self._log(f"⚠️ Pérdida día {daily_pnl_pct:.2%} → leverage reducido x{leverage:.1f}")
-        except Exception:
-            pass
-
-        # Degradar por drawdown no realizado
-        try:
-            pos_list = list(positions.values()) if isinstance(positions, dict) else list(positions)
-            if pos_list:
-                plpcs = [float(p.get("unrealized_plpc", 0.0)) for p in pos_list]
-                avg_unrealized = sum(plpcs) / len(plpcs)
-                if avg_unrealized <= cfg.leverage_unrealized_soft_pct:
-                    leverage *= 0.6
-                    self._log(f"⚠️ Unrealized avg {avg_unrealized:.2%} → leverage x{leverage:.1f}")
-        except Exception:
-            pass
-
-        return max(1.0, min(cfg.max_leverage, leverage))
-
-    # ── DCA ESCALONADO ──────────────────────────────────────────────────
-
-    def _add_pending_tranche(self, ticker: str, remaining_usd: float, side: str,
-                             leverage: float, confidence: float, entry_price: float) -> None:
-        tranches = self.state.get_state("pending_tranches", {}) or {}
-        tranches[ticker.upper()] = {
-            "remaining_usd": float(remaining_usd),
-            "side": side,
-            "leverage": float(leverage),
-            "confidence": float(confidence),
-            "entry_price": float(entry_price),
-            "created_at": datetime.now().isoformat(),
-        }
-        self.state.set_state("pending_tranches", tranches)
-
-    def _clear_pending_tranche(self, ticker: str) -> None:
-        tranches = self.state.get_state("pending_tranches", {}) or {}
-        tranches.pop(ticker.upper(), None)
-        self.state.set_state("pending_tranches", tranches)
-
-    async def _process_pending_tranches(self) -> None:
-        """Ejecuta la 2ª tranche del DCA si la señal sigue favorable."""
-        tranches = self.state.get_state("pending_tranches", {}) or {}
-        if not tranches:
-            return
-
-        open_symbols = [p["symbol"] for p in self.client.get_positions()]
-        cfg = BROKER_CONFIG
-        updated = dict(tranches)
-
-        for ticker, info in list(tranches.items()):
-            remaining_usd = float(info.get("remaining_usd", 0))
-            entry_price = float(info.get("entry_price", 0))
-            if remaining_usd <= 0 or entry_price <= 0:
-                updated.pop(ticker, None)
-                continue
-
-            if ticker not in open_symbols:
-                self._log(f"DCA cancelado {ticker}: posición cerrada")
-                updated.pop(ticker, None)
-                continue
-
-            live_price = self.client.get_latest_price(ticker, fallback=entry_price)
-            if not live_price or live_price <= 0:
-                continue
-
-            drop = (live_price / entry_price) - 1.0
-            if drop <= cfg.dca_cancel_drop_pct:
-                self._log(f"DCA cancelado {ticker}: precio cayó {drop:.2%} desde entrada")
-                updated.pop(ticker, None)
-                continue
-
-            qty = int(remaining_usd / live_price)
-            if qty <= 0:
-                continue
-
-            self._log(f"DCA 2ª tranche {ticker}: {qty} @ ${live_price:.2f} (caída {drop:+.2%})")
-            res = await self._route_order(ticker, qty, "BUY", live_price, use_limit=True)
-            if res.get("status") == "success":
-                fill = res.get("filled_avg_price", live_price)
-                self._record_order(
-                    ticker, "BUY", qty, fill, res.get("order_id"),
-                    leverage=float(info.get("leverage", 1.0)),
-                    confidence=float(info.get("confidence", 0.0)),
-                )
-            updated.pop(ticker, None)
-
-        self.state.set_state("pending_tranches", updated)
+    # ── Ejecución de órdenes: delega a SignalExecutor ──────────────────────
 
     async def _execute_buy(
         self,
@@ -1403,90 +1392,23 @@ class TradingBot:
         df: pd.DataFrame | None = None,
         target_usd: float = 0.0,
     ) -> float:
-        """Ejecuta una orden de compra con apalancamiento x2-x3 y DCA escalonado.
-
-        `target_usd` (del PortfolioAllocator) acota el tamaño al peso objetivo
-        de cartera; si el sizing por Kelly/ATR excede el target, se recorta.
-        """
         if not self._can_place_order():
             self._log("Limite diario de ordenes alcanzado.")
             return 0.0
-
-        # ── Apalancamiento dinámico x2-x3 (degradado por riesgo) ──────
-        leverage = self._compute_leverage(decision, equity, positions)
-        cfg = BROKER_CONFIG
-
-        # ── Precio en vivo del broker (snapshot) ───────────────────────
-        live_price = await self._run_sync(self.client.get_latest_price, ticker, fallback=last_close)
-        ref_price = live_price if live_price and live_price > 0 else last_close
-
-        # Sizing: position_size_pct del cerebro × leverage
-        max_invest = equity * decision.position_size_pct * leverage
-        # ── Cap por Portfolio Allocator (risk-parity) ──────────────────
-        if target_usd > 0 and target_usd < max_invest:
-            max_invest = target_usd * leverage
-            self._log(f"ALLOCATOR cap {ticker}: sizing recortado a ${max_invest:,.0f} (target=${target_usd:,.0f})")
-        invest_amount = min(max_invest, buying_power)
-        if invest_amount <= ref_price:
-            return 0.0
-
-        # Hard cap de exposición total (ajustado por leverage)
-        current_exposure = sum(float(p.get("market_value", 0)) for p in positions.values())
-        new_pct = (current_exposure + invest_amount) / equity if equity > 0 else 1.0
-        exposure_cap = min(0.90, 0.35 * leverage) if cfg.leverage_enabled else 0.35
-        if new_pct > exposure_cap:
-            self._log(
-                f"EXPOSICIÓN BLOQUEA BUY {ticker}: {new_pct:.1%} > {exposure_cap:.0%} "
-                f"(actual={current_exposure/equity:.1%} + nueva={invest_amount/equity:.1%})"
-            )
-            return 0.0
-
-        # DCA escalonado: primera tranche ahora, segunda tras confirmación
-        first_tranche = cfg.dca_first_tranche if cfg.leverage_enabled else 1.0
-        first_alloc = invest_amount * first_tranche
-
-        risk_check = self.risk_manager.check_entry(ticker, "BUY", first_alloc)
-        if not risk_check.approved:
-            self._log(f"RIESGO BLOQUEA BUY {ticker}: {'; '.join(risk_check.reasons)}")
-            return 0.0
-        if risk_check.warnings:
-            for w in risk_check.warnings:
-                self._log(f"RIESGO ADVERTENCIA {ticker}: {w}")
-
-        qty = int(first_alloc // ref_price)
-        if qty <= 0:
-            return 0.0
-
-        lev_tag = f" x{leverage:.1f}" if cfg.leverage_enabled and leverage > 1.0 else ""
-        self._log(
-            f"ORDEN BUY {ticker}{lev_tag}: qty={qty} | inversion=${qty * ref_price:,.2f} | "
-            f"poder=${buying_power:,.2f} | razon={decision.reason}"
+        result = await self._run_sync(
+            self._executor.execute_buy,
+            ticker,
+            decision,
+            last_close,
+            equity,
+            buying_power,
+            positions,
+            df=df,
+            target_usd=target_usd,
         )
-        res = await self._route_order(ticker, qty, "BUY", ref_price, use_limit=True)
-        if res.get("status") == "success":
-            fill_price = res.get("filled_avg_price", ref_price)
-            self._record_order(ticker, "BUY", qty, fill_price, res.get("order_id"),
-                               leverage=leverage, confidence=decision.confidence)
-            self._log(f"EJECUTADA BUY {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')} | strategy={res.get('strategy', 'smart')}")
-            self.state.save_position(ticker, decision.side, fill_price, qty=qty)
-            if df is not None:
-                self.brain.on_position_opened(ticker, fill_price, df)
-            self.brain.save_position_state(self.state, ticker, qty)
-            if df is not None:
-                self._log_trade_telemetry(ticker, "BUY", entry_date=str(df.index[-1]) if len(df) > 0 else None)
-            notifier.new_buy(ticker, qty, fill_price, qty * fill_price)
-
-            # Programar 2ª tranche del DCA
-            if cfg.leverage_enabled and first_tranche < 1.0:
-                remaining = invest_amount * (1.0 - first_tranche)
-                if remaining > 0:
-                    self._add_pending_tranche(ticker, remaining, decision.side,
-                                              leverage, decision.confidence, fill_price)
-                    self._log(f"DCA: 2ª tranche (${remaining:,.0f}) programada para {ticker}")
-            return qty * fill_price
-        else:
-            self._log(f"Error enviando orden para {ticker}: {res.get('msg')}")
-            return 0.0
+        if result > 0:
+            self._log(f"BUY {ticker}: ${result:,.2f}")
+        return result
 
     async def _execute_short(
         self,
@@ -1498,70 +1420,22 @@ class TradingBot:
         positions: dict[str, dict],
         df: pd.DataFrame,
     ) -> float:
-        """Ejecuta una venta en corto (short sell) con apalancamiento x2-x3."""
         if not self._can_place_order():
             self._log("Limite diario de ordenes alcanzado (SHORT)")
             return 0.0
-
-        # ── Apalancamiento dinámico x2-x3 ──────────────────────────────
-        leverage = self._compute_leverage(decision, equity, positions)
-        cfg = BROKER_CONFIG
-
-        # ── Precio en vivo del broker ──────────────────────────────────
-        live_price = self.client.get_latest_price(ticker, fallback=last_close)
-        ref_price = live_price if live_price and live_price > 0 else last_close
-
-        max_invest = equity * decision.position_size_pct * leverage
-        invest_amount = min(max_invest, buying_power * 0.5)
-        if invest_amount <= ref_price:
-            return 0.0
-
-        # Hard cap: shorts limitados (ajustado por leverage)
-        current_exposure = sum(float(p.get("market_value", 0)) for p in positions.values())
-        new_pct = (current_exposure + invest_amount) / equity if equity > 0 else 1.0
-        short_cap = min(0.50, 0.25 * leverage) if cfg.leverage_enabled else 0.25
-        if new_pct > short_cap:
-            self._log(f"EXPOSICIÓN BLOQUEA SHORT {ticker}: {new_pct:.1%} > {short_cap:.0%}")
-            return 0.0
-
-        # Limite de shorts simultáneos
-        short_count = sum(1 for p in positions.values() if p.get("side", "LONG") == "SHORT")
-        if short_count >= 2:
-            self._log(f"SHORT BLOQUEADO: máximo 2 shorts simultáneos (actual: {short_count})")
-            return 0.0
-
-        risk_check = self.risk_manager.check_entry(ticker, "SHORT", invest_amount)
-        if not risk_check.approved:
-            self._log(f"RIESGO BLOQUEA SHORT {ticker}: {'; '.join(risk_check.reasons)}")
-            return 0.0
-        if risk_check.warnings:
-            for w in risk_check.warnings:
-                self._log(f"RIESGO ADVERTENCIA SHORT {ticker}: {w}")
-
-        qty = int(invest_amount // ref_price)
-        if qty <= 0:
-            return 0.0
-
-        lev_tag = f" x{leverage:.1f}" if cfg.leverage_enabled and leverage > 1.0 else ""
-        self._log(
-            f"ORDEN SHORT {ticker}{lev_tag}: qty={qty} | inversion=${qty * ref_price:,.2f} | "
-            f"razon={decision.reason}"
+        result = await self._run_sync(
+            self._executor.execute_short,
+            ticker,
+            decision,
+            last_close,
+            equity,
+            buying_power,
+            positions,
+            df=df,
         )
-        res = await self._route_order(ticker, qty, "SELL", ref_price, use_limit=True)
-        if res.get("status") == "success":
-            fill_price = res.get("filled_avg_price", ref_price)
-            self._record_order(ticker, "SHORT", qty, fill_price, res.get("order_id"),
-                               leverage=leverage, confidence=decision.confidence)
-            self._log(f"EJECUTADO SHORT {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')} | strategy={res.get('strategy', 'smart')}")
-            self.state.save_position(ticker, "SHORT", fill_price, qty=qty)
-            self.brain.on_position_opened(ticker, fill_price, df, side="SHORT")
-            self.brain.save_position_state(self.state, ticker, qty)
-            self._log_trade_telemetry(ticker, "SHORT", entry_date=str(df.index[-1]) if len(df) > 0 else None)
-            notifier.send("new_trade", f"🔻 SHORT {ticker}{lev_tag}: {qty} shares @ ${fill_price:.2f} = ${qty * fill_price:,.0f}", "warning")
-            return qty * fill_price
-        else:
-            self._log(f"Error short {ticker}: {res.get('msg')}")
-            return 0.0
+        if result > 0:
+            self._log(f"SHORT {ticker}: ${result:,.2f}")
+        return result
 
     async def _execute_sell(
         self,
@@ -1571,48 +1445,14 @@ class TradingBot:
         equity: float,
         pnl_pct: float,
     ) -> None:
-        qty = float(position["qty"])
-        if decision.partial_exit_fraction > 0:
-            qty = max(1, int(qty * decision.partial_exit_fraction))
-        qty = int(qty)
-        if qty <= 0:
-            return
+        self._log(f"ORDEN {decision.action} {ticker}: pnl={pnl_pct:.2%} | razon={decision.reason}")
+        await self._run_sync(self._executor.execute_sell, ticker, decision, position, equity, pnl_pct)
 
-        self._log(
-            f"ORDEN {decision.action} {ticker}: qty={qty} | pnl={pnl_pct:.2%} | razon={decision.reason}"
-        )
-        current_price = float(position.get("current_price", 0))
-        # Precio en vivo para mejor ejecución
-        live_price = await self._run_sync(self.client.get_latest_price, ticker, fallback=current_price)
-        sell_ref = live_price if live_price and live_price > 0 else current_price
-        res = await self._route_order(ticker, qty, "SELL", sell_ref, use_limit=True)
-        if res.get("status") == "success":
-            fill = res.get("filled_avg_price", sell_ref)
-            self._record_order(ticker, decision.action, qty, fill, res.get("order_id"))
-            # Cancelar DCA pendiente al cerrar posición
-            self._clear_pending_tranche(ticker)
-            pnl_usd = pnl_pct * equity * getattr(decision, "position_size_pct", 0.10)
-            self.risk_manager.record_trade(ticker, decision.action, pnl_pct, pnl_usd)
-            # Telemetry
-            self._log_trade_telemetry(ticker, decision.action, exit_reason=decision.reason, pnl_pct=pnl_pct, pnl_usd=pnl_usd)
-            # Entrenar Online Learning Advisor con el resultado real
-            advisor_ctx = self._pending_advisor_decisions.pop(ticker, None)
-            if advisor_ctx and self.online_advisor:
-                self.online_advisor.learn_from_trade(
-                    score=advisor_ctx["score"],
-                    adx=advisor_ctx["adx"],
-                    rsi=advisor_ctx["rsi"],
-                    annual_volatility=advisor_ctx["annual_vol"],
-                    market_regime=advisor_ctx["market_regime"],
-                    action_taken=advisor_ctx["action"],
-                    pnl_pct=pnl_pct,
-                )
-                self._log(f"ONLINE ADVISOR APRENDE {ticker}: accion={advisor_ctx['action']} pnl={pnl_pct:.2%}")
-            self._log(f"EJECUTADA {decision.action} {ticker}: qty={qty} | order_id={res.get('order_id', 'N/A')}")
-            self.state.remove_position(ticker)
-            notifier.new_sell(ticker, qty, pnl_pct, decision.reason)
-        else:
-            self._log(f"Error enviando orden para {ticker}: {res.get('msg')}")
+    # ── DCA escalonado: delega a SignalExecutor internamente ─────────────
+
+    async def _process_pending_tranches(self) -> None:
+        """Procesa tranches de DCA pendientes."""
+        await self._run_sync(self._executor.process_pending_tranches)
 
     def run_forever(self, ticker: str | None = None, interval: str = "1d", sleep_seconds: int = 3600):
         if self.intraday:
