@@ -40,6 +40,10 @@ LIMIT_RETEST_TIMEOUT = 15
 LIMIT_RETEST_MAX_ATTEMPTS = 2
 SLIPPAGE_ALERT_BPS = 50.0      # alertar si slippage > 50 bps
 
+ICEBERG_MIN_SLICES = 4          # número mínimo de slices para iceberg
+ICEBERG_MAX_VISIBLE_PCT = 0.30  # máximo visible como fracción del total
+ICEBERG_SLICE_INTERVAL = 45     # segundos entre slices iceberg
+
 
 class SmartOrderRouter:
     """Ejecución inteligente de órdenes con tracking de slippage."""
@@ -57,6 +61,9 @@ class SmartOrderRouter:
         self.twap_threshold = twap_threshold
         self.twap_slices = twap_slices
         self.twap_interval = twap_interval
+        self.iceberg_min_slices = ICEBERG_MIN_SLICES
+        self.iceberg_max_visible_pct = ICEBERG_MAX_VISIBLE_PCT
+        self.iceberg_slice_interval = ICEBERG_SLICE_INTERVAL
         self._init_db()
 
     # ── DB ─────────────────────────────────────────────────────────────
@@ -196,6 +203,66 @@ class SmartOrderRouter:
             }
         except Exception:
             return {"count": 0, "avg_bps": None, "worst_bps": None}
+
+    def _iceberg_execute(self, symbol: str, total_qty: int, side: str, decision_price: float) -> dict:
+        """Simula iceberg: parte la orden en N child orders visibles parcialmente.
+
+        Cada child order muestra solo una fracción del total para ocultar
+        la intención real. Las órdenes se espacían en el tiempo.
+        """
+        visible_qty = max(1, int(total_qty * self.iceberg_max_visible_pct))
+        slices = max(self.iceberg_min_slices, total_qty // visible_qty)
+        if slices < 2:
+            return self._twap_execute(symbol, total_qty, side, decision_price)
+
+        base_qty = total_qty // slices
+        remainder = total_qty - base_qty * slices
+        total_filled = 0.0
+        fill_prices: list[float] = []
+        order_ids: list[str] = []
+        statuses: list[str] = []
+        all_failed = True
+
+        for i in range(slices):
+            slice_qty = base_qty + (remainder if i == slices - 1 else 0)
+            if slice_qty <= 0:
+                continue
+            ref = self.client.get_latest_price(symbol, fallback=decision_price) or decision_price
+            result = self._limit_retest(symbol, slice_qty, side, ref)
+            if result.get("status") == "success":
+                fill = float(result.get("filled_avg_price", ref))
+                total_filled += float(result.get("qty", slice_qty))
+                fill_prices.append(fill)
+                order_ids.append(result.get("order_id", ""))
+                statuses.append("filled")
+                all_failed = False
+            else:
+                statuses.append(result.get("status", "failed"))
+                self._log_execution(
+                    symbol, side, slice_qty, decision_price, None,
+                    None, result.get("status", "failed"), "iceberg_slice_failed",
+                )
+            if i < slices - 1:
+                time.sleep(self.iceberg_slice_interval)
+
+        avg_fill = sum(fill_prices) / len(fill_prices) if fill_prices else decision_price
+        self._log_execution(
+            symbol, side, total_filled, decision_price, avg_fill,
+            ",".join(order_ids) if order_ids else None,
+            "partial" if total_filled < total_qty else "filled", "iceberg",
+        )
+        if all_failed:
+            return {"status": "error", "msg": "all iceberg slices failed"}
+        return {
+            "status": "success",
+            "order_id": order_ids[0] if order_ids else None,
+            "symbol": symbol,
+            "qty": total_filled,
+            "filled_avg_price": avg_fill,
+            "side": side,
+            "strategy": "iceberg",
+            "slice_statuses": statuses,
+        }
 
     # ── Estrategias de ejecución ───────────────────────────────────────
 

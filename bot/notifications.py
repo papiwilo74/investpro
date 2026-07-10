@@ -21,6 +21,12 @@ from pathlib import Path
 import requests
 
 
+DEFAULT_SUBSCRIBED_EVENTS: set[str] = {
+    "circuit_breaker", "account_floor", "panic", "bot_started", "bot_stopped",
+    "new_trade", "daily_summary", "model_drift",
+}
+
+
 class NotificationService:
     """Envía notificaciones a Telegram. Usa variables de entorno para config."""
 
@@ -31,9 +37,24 @@ class NotificationService:
         self._enabled = bool(self._telegram_token and self._telegram_chat_id) or bool(self._discord_webhook)
         self._rate_limit: dict[str, float] = {}
         self._log_path = Path(__file__).resolve().parent.parent / "data" / "notifications.log"
+        self._subscribed_events: set[str] = set(DEFAULT_SUBSCRIBED_EVENTS)
+
+    def subscribe(self, event: str) -> None:
+        self._subscribed_events.add(event)
+
+    def unsubscribe(self, event: str) -> None:
+        self._subscribed_events.discard(event)
+
+    def subscribed_events(self) -> list[str]:
+        return sorted(self._subscribed_events)
+
+    def is_subscribed(self, event: str) -> bool:
+        return event in self._subscribed_events
 
     def send(self, event: str, message: str, level: str = "info") -> bool:
         """Envía notificación por todos los canales configurados."""
+        if event not in self._subscribed_events:
+            return False
         if not self._enabled:
             self._log_local(event, message, level)
             return False

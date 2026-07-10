@@ -117,6 +117,14 @@ async def serve_index():
         return FileResponse(index_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     return {"message": "Inversion Helper API is running. Place index.html in frontend/ to serve the UI."}
 
+
+@app.get("/performance", summary="Dashboard de performance")
+async def serve_performance():
+    perf_file = frontend_path / "performance.html"
+    if perf_file.exists():
+        return FileResponse(perf_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    return {"message": "Performance page not found"}
+
 # Montar resto de recursos estáticos en /static
 app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
 

@@ -275,6 +275,17 @@ class StrategyParams:
     use_neural_brain: bool = False
     neural_brain_min_confidence: float = 0.35
 
+    # ── ADAPTIVE STOP-LOSS / TAKE-PROFIT (basado en ATR + volatilidad + régimen) ─
+    use_adaptive_sltp: bool = True
+    adaptive_sltp_atr_mult_stop: float = 2.0    # stop-loss = ATR * mult (si no hay régimen bear)
+    adaptive_sltp_atr_mult_stop_bear: float = 1.5  # stop ajustado en mercado bajista
+    adaptive_sltp_atr_mult_tp: float = 3.0      # take-profit = ATR * mult
+    adaptive_sltp_vol_lookback: int = 20         # velas para calcular volatilidad relativa
+    adaptive_sltp_min_stop_pct: float = -0.02   # stop mínimo absoluto
+    adaptive_sltp_max_stop_pct: float = -0.12   # stop máximo absoluto
+    adaptive_sltp_min_tp_pct: float = 0.03      # tp mínimo absoluto
+    adaptive_sltp_max_tp_pct: float = 0.30      # tp máximo absoluto
+
     # ── MEJORAS DE SALIDA PARA WIN RATE ──────────────────────────────
     # Time-based exit: cerrar si no pasa nada en N días
     use_time_based_exit: bool = True
@@ -388,8 +399,16 @@ class PositionState:
             fraction += p.partial_tp2_fraction
         return fraction
 
-    def should_exit(self, current_price: float, rsi: float = 50.0, regime: str = "BULL", current_date=None) -> tuple[bool, str]:
-        """Retorna (should_exit, reason)."""
+    def should_exit(
+        self, current_price: float, rsi: float = 50.0, regime: str = "BULL",
+        current_date=None, stop_loss_pct: float | None = None,
+        take_profit_pct: float | None = None,
+    ) -> tuple[bool, str]:
+        """Retorna (should_exit, reason).
+        
+        stop_loss_pct/take_profit_pct: overrides dinámicos (adaptive SL/TP).
+        Si no se proveen, usa los valores fijos de StrategyParams.
+        """
         p = self.params
 
         # ── Time-based exit ───────────────────────────────────────────
@@ -457,10 +476,12 @@ class PositionState:
                         return True, f"trailing-stop RL ({current_price:.2f} <= {trailing_stop:.2f})"
                 return False, ""
 
-            if pnl_pct <= p.stop_loss_pct:
+            effective_sl = stop_loss_pct if stop_loss_pct is not None else p.stop_loss_pct
+            effective_tp = take_profit_pct if take_profit_pct is not None else p.take_profit_pct
+            if pnl_pct <= effective_sl:
                 return True, f"stop-loss ({pnl_pct:.2%})"
 
-            if pnl_pct >= p.take_profit_pct:
+            if pnl_pct >= effective_tp:
                 return True, f"take-profit ({pnl_pct:.2%})"
 
             if p.use_trailing_stop and self.entry_atr > 0:
@@ -599,6 +620,54 @@ class TradingBrain:
         size = atr_size * vol_multiplier * kelly_multiplier * conviction_boost
         return max(p.min_position_size_pct, min(p.max_position_size_pct, size))
 
+    def _adaptive_sltp(
+        self, df: pd.DataFrame, current_index: int, regime: str | None = None,
+    ) -> tuple[float, float]:
+        """Calcula stop-loss y take-profit dinámicos según ATR + volatilidad + régimen.
+
+        Retorna (stop_loss_pct, take_profit_pct) como fracciones.
+        """
+        p = self.params
+        if not p.use_adaptive_sltp:
+            return p.stop_loss_pct, p.take_profit_pct
+
+        last = df.iloc[current_index]
+        close = float(last["close"])
+        atr = last.get("atr")
+
+        if pd.isna(atr) or atr is None or float(atr) <= 0 or close <= 0:
+            return p.stop_loss_pct, p.take_profit_pct
+
+        atr_pct = float(atr) / close
+
+        # Ajustar multiplicador según régimen de mercado
+        mult_stop = p.adaptive_sltp_atr_mult_stop
+        if regime and regime.upper() in ("BEAR", "CORRECTION", "UNHEALTHY"):
+            mult_stop = p.adaptive_sltp_atr_mult_stop_bear
+
+        # Calcular SL/TP desde ATR
+        stop_pct = -(atr_pct * mult_stop)
+        tp_pct = atr_pct * p.adaptive_sltp_atr_mult_tp
+
+        # Ajustar por volatilidad relativa
+        if current_index >= p.adaptive_sltp_vol_lookback:
+            try:
+                returns = df["close"].iloc[current_index - p.adaptive_sltp_vol_lookback:current_index + 1].pct_change().dropna()
+                recent_vol = float(returns.std())
+                median_vol = float(returns.rolling(p.adaptive_sltp_vol_lookback // 2).std().median())
+                if median_vol > 0 and recent_vol > median_vol * 1.5:
+                    vol_ratio = recent_vol / median_vol
+                    stop_pct *= min(1.0, 1.0 / vol_ratio)
+                    tp_pct *= min(1.5, vol_ratio)
+            except Exception:
+                pass
+
+        # Aplicar límites absolutos
+        stop_pct = max(p.adaptive_sltp_min_stop_pct, min(p.adaptive_sltp_max_stop_pct, stop_pct))
+        tp_pct = max(p.adaptive_sltp_min_tp_pct, min(p.adaptive_sltp_max_tp_pct, tp_pct))
+
+        return stop_pct, tp_pct
+
     def _check_dip(self, df: pd.DataFrame, current_index: int) -> bool:
         """Detecta Buy the Dip: caída >= dip_drop_pct en N días + RSI sobrevendido."""
         p = self.params
@@ -732,7 +801,11 @@ class TradingBrain:
                                 confidence=0.8, side=pos.side, partial_exit_fraction=partial_frac)
 
             current_date = df.index[idx] if idx is not None and idx < len(df) else None
-            should_exit, reason = pos.should_exit(close, rsi=rsi, regime=market_regime, current_date=current_date)
+            adaptive_sl, adaptive_tp = self._adaptive_sltp(df, idx, market_regime)
+            should_exit, reason = pos.should_exit(
+                close, rsi=rsi, regime=market_regime, current_date=current_date,
+                stop_loss_pct=adaptive_sl, take_profit_pct=adaptive_tp,
+            )
             if should_exit:
                 pnl = pos.current_pnl_pct(close)
                 self._kelly.record(pnl)

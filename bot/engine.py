@@ -585,6 +585,7 @@ class TradingBot:
                             resolved = self.shadow_trader.resolve_matured()
                             if resolved > 0:
                                 self._log(f"SHADOW: {resolved} señales resueltas")
+                                await self._auto_evaluate_models()
                             drifts = self.shadow_trader.check_drift()
                             for d in drifts:
                                 msg = (f"DRIFT {d['ticker']}: live acc={d['live_accuracy']:.1%} "
@@ -595,6 +596,9 @@ class TradingBot:
                             logger.warning("ShadowTrader loop error: %s", exc)
 
                     self._daily_telemetry_snapshot()
+
+                    # Rebalancear portafolio si hay desviaciones
+                    await self._rebalance_portfolio()
 
                 self._save_position_states()
 
@@ -618,6 +622,92 @@ class TradingBot:
 
             self._log(f"Escaneo finalizado. Durmiendo {sleep_seconds // 60} minutos.")
             await asyncio.sleep(sleep_seconds)
+
+    async def _auto_evaluate_models(self) -> None:
+        """Auto-evalúa modelos ML usando ShadowTrader live accuracy y actualiza ModelGate.
+
+        Después de cada resolución de señales, revisa qué modelos cumplen
+        los thresholds y aprueba/revoca automáticamente en ModelGate.
+        """
+        from ml.model_gate import model_gate
+        if self.shadow_trader is None:
+            return
+        try:
+            models_map = {"xgboost": "XGB", "ensemble_blend": "ENS"}
+            for ticker in WATCHLIST:
+                for model_key, model_name in models_map.items():
+                    acc = self.shadow_trader.live_accuracy(ticker, model=model_key)
+                    if acc is None:
+                        continue
+                    sample_count = getattr(self.shadow_trader, '_SignalJournal__counts', {}).get(ticker, 0)
+                    if sample_count < 15:
+                        continue
+                    metadata = {
+                        "metrics": {"accuracy": acc, "precision": acc * 0.9, "test_size": sample_count},
+                        "rel_vs_baseline": max(0.0, acc - 0.50),
+                    }
+                    was_approved = model_gate.is_approved(ticker)
+                    now_approved = model_gate.evaluate_metadata(ticker, metadata)
+                    if now_approved and not was_approved:
+                        self._log(f"MODEL GATE: {ticker} {model_name} auto-aprobado (accuracy={acc:.1%})")
+                    elif not now_approved and was_approved:
+                        self._log(f"MODEL GATE: {ticker} {model_name} revocado (accuracy={acc:.1%})")
+                        notifier.send("model_drift", f"ML {model_name} revocado para {ticker}: accuracy {acc:.1%}", "warning")
+        except Exception as exc:
+            logger.warning("Auto-evaluate models falló: %s", exc)
+
+    async def _rebalance_portfolio(self) -> None:
+        """Ejecuta rebalanceo del portafolio usando PortfolioAllocator.
+
+        Si las desviaciones de peso objetivo superan el threshold,
+        genera órdenes BUY/SELL para rebalancear.
+        """
+        if self.portfolio_allocator is None:
+            return
+        try:
+            acc = await self._run_sync(self.client.get_account_summary)
+            if not acc:
+                return
+            equity = acc.get("equity", 0.0)
+            if equity <= 0:
+                return
+            positions = {p["symbol"]: p for p in await self._run_sync(self.client.get_positions)}
+            tickers = list(positions.keys()) + WATCHLIST[:10]
+            plan = self.portfolio_allocator.rebalance_plan(
+                target_weights={t: 1.0 / len(tickers) for t in tickers},
+                current_positions=positions,
+                equity=equity,
+            )
+            if not plan:
+                return
+            for item in plan:
+                if not self._can_place_order():
+                    break
+                ticker = item["ticker"]
+                action = item["action"]
+                usd = item["usd"]
+                if usd <= 0:
+                    continue
+                price = await self._run_sync(self.client.get_latest_price, ticker, fallback=0)
+                if not price or price <= 0:
+                    continue
+                qty = int(usd / price)
+                if qty <= 0:
+                    continue
+                decision = Decision(
+                    action="BUY" if action == "BUY" else "SELL",
+                    reason=f"rebalance {item.get('reason', '')}",
+                    confidence=0.5, position_size_pct=usd / equity,
+                )
+                if action == "BUY":
+                    await self._execute_buy(ticker, decision, price, equity, equity, positions, target_usd=usd)
+                else:
+                    pos = positions.get(ticker, {"qty": qty, "current_price": price})
+                    await self._execute_sell(ticker, decision, pos, equity, 0.0)
+                tickers_plan = [p["ticker"] for p in plan[:3]]
+                self._log(f"REBALANCE: {', '.join(tickers_plan)}")
+        except Exception as exc:
+            logger.warning("Rebalance falló: %s", exc)
 
     async def _run_champion_challenger_cycle(self, single_ticker: str | None) -> None:
         """Ciclo diario champion/challenger para el modo web.

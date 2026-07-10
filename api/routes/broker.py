@@ -6,7 +6,10 @@ from pydantic import BaseModel
 
 from api.schemas import HealthCheck
 from api.utils import sanitize_for_json
+import asyncio
+
 from bot.engine import TradingBot
+from bot.notifications import notifier
 from bot.shadow_trader import ShadowTrader
 from bot.strategy import kelly_tracker
 from broker.smart_router import SmartOrderRouter
@@ -310,6 +313,67 @@ async def get_ml_status():
         "models": status,
         "note": "El bot web no usa ML en sus decisiones para evitar overfitting."
     }
+
+
+# ── Notificaciones configurables ──────────────────────────────────────
+
+NOTIFICATION_EVENTS = [
+    "circuit_breaker", "account_floor", "panic", "bot_started", "bot_stopped",
+    "new_trade", "daily_summary", "model_drift", "hedge_alert",
+]
+
+
+@router.get("/notifications/subscriptions")
+async def get_notification_subscriptions():
+    return {"subscribed": notifier.subscribed_events(), "available": NOTIFICATION_EVENTS}
+
+
+@router.post("/notifications/subscribe")
+async def subscribe_notification(event: str = Query(...)):
+    if event not in NOTIFICATION_EVENTS:
+        raise HTTPException(status_code=400, detail=f"Evento inválido. Opciones: {', '.join(NOTIFICATION_EVENTS)}")
+    notifier.subscribe(event)
+    return {"subscribed": notifier.subscribed_events()}
+
+
+@router.post("/notifications/unsubscribe")
+async def unsubscribe_notification(event: str = Query(...)):
+    notifier.unsubscribe(event)
+    return {"subscribed": notifier.subscribed_events()}
+
+
+# ── Walk-Forward Validation ───────────────────────────────────────────
+
+@router.post("/validation/walk-forward")
+async def run_walk_forward(ticker: str = Query("AAPL"), period: str = Query("2y")):
+    try:
+        from data.fetcher import DataFetcher
+        from indicators.technical import TechnicalIndicators
+        from indicators.signals import SignalGenerator
+        from backtesting.validation import run_validation
+
+        async def _run():
+            fetcher = DataFetcher()
+            df = fetcher.get_data(ticker, period=period, interval="1d")
+            if df.empty:
+                return {"status": "error", "msg": f"No data for {ticker}"}
+            df = TechnicalIndicators.add_all(df)
+            df = SignalGenerator.add_signal_columns(df)
+            report = run_validation(df, ticker, period=period)
+            return {
+                "status": "ok",
+                "ticker": ticker,
+                "verdict": report.verdict,
+                "flags": report.flags,
+                "oos_sharpe": (report.oos_metrics or {}).get("sharpe_ratio", 0),
+                "is_sharpe": (report.is_metrics or {}).get("sharpe_ratio", 0),
+                "mc_avg_return": report.monte_carlo.avg_return if report.monte_carlo else 0,
+                "mc_sharpe_p5": report.monte_carlo.sharpe_p5 if report.monte_carlo else 0,
+                "total_windows": len(report.walk_forward_results) if report.walk_forward_results else 0,
+            }
+        return await _run()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/dashboard")

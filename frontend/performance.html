@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Performance — InvestPro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .card { @apply bg-white dark:bg-gray-800 rounded-2xl shadow-premium dark:shadow-dark-premium p-6; }
+    .metric-value { @apply text-2xl font-bold text-gray-900 dark:text-white; }
+    .metric-label { @apply text-sm text-gray-500 dark:text-gray-400; }
+    .positive { @apply text-emerald-600 dark:text-emerald-400; }
+    .negative { @apply text-red-600 dark:text-red-400; }
+  </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Performance</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1">Métricas en vivo del bot</p>
+      </div>
+      <a href="/" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">← Dashboard</a>
+    </div>
+
+    <div id="metrics-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div class="card">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Equity Curve</h3>
+        <div id="equity-chart" style="height: 300px;"></div>
+      </div>
+      <div class="card">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Drawdown</h3>
+        <div id="drawdown-chart" style="height: 300px;"></div>
+      </div>
+    </div>
+
+    <div class="card mb-8">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Rolling Metrics (30d)</h3>
+      <div id="rolling-chart" style="height: 300px;"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Trade Log</h3>
+      <div class="overflow-x-auto">
+        <table id="trade-table" class="w-full text-sm text-left">
+          <thead class="text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+            <tr>
+              <th class="pb-2">Ticker</th>
+              <th class="pb-2">Side</th>
+              <th class="pb-2">Entry</th>
+              <th class="pb-2">Exit</th>
+              <th class="pb-2">P&L</th>
+              <th class="pb-2">Hold</th>
+              <th class="pb-2">Reason</th>
+            </tr>
+          </thead>
+          <tbody id="trade-body" class="divide-y dark:divide-gray-700"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function load() {
+      try {
+        const [telemetry, trades, equityData] = await Promise.all([
+          fetch('/api/broker/telemetry/metrics').then(r => r.json()),
+          fetch('/api/broker/telemetry/summary').then(r => r.json()),
+          fetch('/api/broker/telemetry/equity?days=90').then(r => r.json()),
+        ]);
+        renderMetrics(telemetry);
+        renderCharts(equityData);
+      } catch (e) {
+        console.error('Error loading performance data:', e);
+      }
+    }
+
+    function renderMetrics(data) {
+      const grid = document.getElementById('metrics-grid');
+      const items = [
+        { label: 'Sharpe (30d)', value: data.sharpe_30d?.toFixed(2) || 'N/A', color: (data.sharpe_30d || 0) >= 1 ? 'positive' : 'negative' },
+        { label: 'Win Rate (30d)', value: data.win_rate_30d ? (data.win_rate_30d * 100).toFixed(1) + '%' : 'N/A', color: (data.win_rate_30d || 0) >= 0.5 ? 'positive' : 'negative' },
+        { label: 'Max DD (30d)', value: data.max_dd_30d ? (data.max_dd_30d * 100).toFixed(1) + '%' : 'N/A', color: 'negative' },
+        { label: 'Profit Factor', value: data.profit_factor_30d?.toFixed(2) || 'N/A', color: (data.profit_factor_30d || 0) >= 1.5 ? 'positive' : '' },
+        { label: 'Kelly %', value: data.rolling_kelly ? (data.rolling_kelly * 100).toFixed(1) + '%' : 'N/A', color: '' },
+        { label: 'Avg Win', value: data.avg_win_30d ? (data.avg_win_30d * 100).toFixed(2) + '%' : 'N/A', color: 'positive' },
+        { label: 'Avg Loss', value: data.avg_loss_30d ? (data.avg_loss_30d * 100).toFixed(2) + '%' : 'N/A', color: 'negative' },
+      ];
+      grid.innerHTML = items.map(i => `
+        <div class="card text-center">
+          <div class="metric-value ${i.color}">${i.value}</div>
+          <div class="metric-label mt-1">${i.label}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderCharts(equityData) {
+      const isDark = document.documentElement.classList.contains('dark');
+      const textColor = isDark ? '#9CA3AF' : '#6B7280';
+      const gridColor = isDark ? '#374151' : '#E5E7EB';
+
+      if (!equityData || !equityData.length) return;
+
+      const sorted = [...equityData].reverse();
+
+      // Equity Chart
+      const eqChart = LightweightCharts.createChart(document.getElementById('equity-chart'), {
+        layout: { textColor, background: { type: 'solid', color: 'transparent' } },
+        grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        rightPriceScale: { borderColor: gridColor },
+        timeScale: { borderColor: gridColor },
+      });
+      const eqLine = eqChart.addLineSeries({ color: '#6366f1', lineWidth: 2 });
+      eqLine.setData(sorted.map(d => ({ time: d.date, value: d.equity })));
+
+      // Drawdown Chart
+      const ddChart = LightweightCharts.createChart(document.getElementById('drawdown-chart'), {
+        layout: { textColor, background: { type: 'solid', color: 'transparent' } },
+        grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
+        rightPriceScale: { borderColor: gridColor },
+        timeScale: { borderColor: gridColor },
+      });
+
+      let peak = sorted[0]?.equity || 0;
+      const ddData = sorted.map(d => {
+        if (d.equity > peak) peak = d.equity;
+        const dd = peak > 0 ? (d.equity - peak) / peak : 0;
+        return { time: d.date, value: dd };
+      });
+      const ddArea = ddChart.addAreaSeries({ color: '#ef4444', lineWidth: 2, topColor: 'rgba(239, 68, 68, 0.3)', bottomColor: 'rgba(239, 68, 68, 0.0)' });
+      ddArea.setData(ddData);
+
+      // Rolling Sharpe
+      const rollChart = LightweightCharts.createChart(document.getElementById('rolling-chart'), {
+        layout: { textColor, background: { type: 'solid', color: 'transparent' } },
+        grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
+        rightPriceScale: { borderColor: gridColor },
+        timeScale: { borderColor: gridColor },
+      });
+    }
+
+    load();
+    setInterval(load, 60000);
+  </script>
+</body>
+</html>
