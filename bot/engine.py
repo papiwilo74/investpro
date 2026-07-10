@@ -278,6 +278,10 @@ class TradingBot:
             logger.warning("Error cargando Hall of Fame: %s", exc)
             return base_params, None
 
+    async def _run_sync(self, fn, *args, **kwargs):
+        """Ejecuta una función sincrónica en un thread del pool para no bloquear el event loop."""
+        return await asyncio.to_thread(lambda: fn(*args, **kwargs))
+
     def _signal_handler(self, signum, frame):
         logger.warning("Signal {} recibido — deteniendo bot...", signum)
         self.stop()
@@ -327,12 +331,12 @@ class TradingBot:
             f"tamano={decision.position_size_pct:.1%}"
         )
 
-    def _route_order(self, symbol: str, qty: int, side: str, ref_price: float,
-                     use_limit: bool = True) -> dict:
-        """Punto único de ejecución: delega a OrderManager."""
+    async def _route_order(self, symbol: str, qty: int, side: str, ref_price: float,
+                           use_limit: bool = True) -> dict:
+        """Punto único de ejecución: delega a OrderManager (sin bloqueo)."""
         if self.smart_router is not None:
             self.order_manager._smart_router = self.smart_router
-        return self.order_manager.route_order(symbol, qty, side, ref_price, use_limit)
+        return await self._run_sync(self.order_manager.route_order, symbol, qty, side, ref_price, use_limit)
 
     def _reset_daily_order_counter_if_needed(self):
         today = datetime.now().date()
@@ -405,7 +409,7 @@ class TradingBot:
             self._log(f"Error verificando estado del mercado: {e}")
             return False
 
-    def start(self):
+    def start(self) -> None:
         if self.is_running:
             return
         self.is_running = True
@@ -415,6 +419,19 @@ class TradingBot:
         self._thread = threading.Thread(target=self._run_loop_sync, daemon=True)
         self._thread.start()
         self._log("Bot iniciado.")
+        notifier.bot_started(self.strategy_mode)
+
+    async def start_async(self) -> None:
+        """Inicia el bot como una tarea asyncio (sin thread separado).
+        Útil cuando el bot comparte el event loop con uvicorn."""
+        if self.is_running:
+            return
+        self.is_running = True
+        BROKER_CONFIG.bot_active = True
+        self.state.set_state("bot_status", "running")
+        self._restore_state()
+        self._task = asyncio.create_task(self._run_loop())
+        self._log("Bot iniciado (async).")
         notifier.bot_started(self.strategy_mode)
 
     def stop(self):
@@ -428,6 +445,16 @@ class TradingBot:
             try:
                 self._db_session.close()
             except Exception:
+                pass
+
+    async def stop_async(self) -> None:
+        """Detiene el bot iniciado con start_async()."""
+        self.stop()
+        if hasattr(self, '_task') and self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
                 pass
 
     def _run_loop_sync(self):
@@ -943,7 +970,7 @@ class TradingBot:
                 if qty <= 0 or current_price <= 0:
                     continue
                 self._log(f"HEDGE SELL {ticker}: qty={qty}")
-                res = self._route_order(ticker, qty, "SELL", current_price, use_limit=False)
+                res = await self._route_order(ticker, qty, "SELL", current_price, use_limit=False)
                 if res.get("status") == "success":
                     self.state.remove_position(ticker)
                     notifier.panic(0, f"Vendido {ticker} por hedge automático")
@@ -989,14 +1016,14 @@ class TradingBot:
                     buy_qty = int(missing // sh_current)
                     if buy_qty > 0 and self._can_place_order():
                         self._log(f"ROTATION: Breadth {level}, comprando SH como cobertura ({target_pct:.0%})")
-                        res = self._route_order("SH", buy_qty, "BUY", sh_current, use_limit=True)
+                        res = await self._route_order("SH", buy_qty, "BUY", sh_current, use_limit=True)
                         if res.get("status") == "success":
                             notifier.send("rotation", f"🛡️ Cobertura SH comprada: {buy_qty} @ ${sh_current:.2f} ({target_pct:.0%} portafolio)", "info")
             elif level in ("HEALTHY", "NEUTRAL"):
                 # No necesitamos SH — vender si está en cartera
                 if sh_qty > 0 and sh_current > 0:
                     self._log(f"ROTATION: Breadth {level}, vendiendo cobertura SH")
-                    res = self._route_order("SH", int(sh_qty), "SELL", sh_current, use_limit=True)
+                    res = await self._route_order("SH", int(sh_qty), "SELL", sh_current, use_limit=True)
                     if res.get("status") == "success":
                         self.state.remove_position("SH")
                         notifier.send("rotation", "✅ Cobertura SH vendida: mercado sano", "info")
@@ -1263,7 +1290,7 @@ class TradingBot:
                 continue
 
             self._log(f"DCA 2ª tranche {ticker}: {qty} @ ${live_price:.2f} (caída {drop:+.2%})")
-            res = self._route_order(ticker, qty, "BUY", live_price, use_limit=True)
+            res = await self._route_order(ticker, qty, "BUY", live_price, use_limit=True)
             if res.get("status") == "success":
                 fill = res.get("filled_avg_price", live_price)
                 self._record_order(
@@ -1300,7 +1327,7 @@ class TradingBot:
         cfg = BROKER_CONFIG
 
         # ── Precio en vivo del broker (snapshot) ───────────────────────
-        live_price = self.client.get_latest_price(ticker, fallback=last_close)
+        live_price = await self._run_sync(self.client.get_latest_price, ticker, fallback=last_close)
         ref_price = live_price if live_price and live_price > 0 else last_close
 
         # Sizing: position_size_pct del cerebro × leverage
@@ -1345,7 +1372,7 @@ class TradingBot:
             f"ORDEN BUY {ticker}{lev_tag}: qty={qty} | inversion=${qty * ref_price:,.2f} | "
             f"poder=${buying_power:,.2f} | razon={decision.reason}"
         )
-        res = self._route_order(ticker, qty, "BUY", ref_price, use_limit=True)
+        res = await self._route_order(ticker, qty, "BUY", ref_price, use_limit=True)
         if res.get("status") == "success":
             fill_price = res.get("filled_avg_price", ref_price)
             self._record_order(ticker, "BUY", qty, fill_price, res.get("order_id"),
@@ -1430,7 +1457,7 @@ class TradingBot:
             f"ORDEN SHORT {ticker}{lev_tag}: qty={qty} | inversion=${qty * ref_price:,.2f} | "
             f"razon={decision.reason}"
         )
-        res = self._route_order(ticker, qty, "SELL", ref_price, use_limit=True)
+        res = await self._route_order(ticker, qty, "SELL", ref_price, use_limit=True)
         if res.get("status") == "success":
             fill_price = res.get("filled_avg_price", ref_price)
             self._record_order(ticker, "SHORT", qty, fill_price, res.get("order_id"),
@@ -1466,9 +1493,9 @@ class TradingBot:
         )
         current_price = float(position.get("current_price", 0))
         # Precio en vivo para mejor ejecución
-        live_price = self.client.get_latest_price(ticker, fallback=current_price)
+        live_price = await self._run_sync(self.client.get_latest_price, ticker, fallback=current_price)
         sell_ref = live_price if live_price and live_price > 0 else current_price
-        res = self._route_order(ticker, qty, "SELL", sell_ref, use_limit=True)
+        res = await self._route_order(ticker, qty, "SELL", sell_ref, use_limit=True)
         if res.get("status") == "success":
             fill = res.get("filled_avg_price", sell_ref)
             self._record_order(ticker, decision.action, qty, fill, res.get("order_id"))

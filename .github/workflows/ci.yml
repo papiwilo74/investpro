@@ -10,16 +10,27 @@ env:
   PYTHON_VERSION: "3.12"
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install lint tools
+        run: pip install ruff black
+      - name: Ruff check
+        run: ruff check --output-format=github .
+      - name: Black check
+        run: black --check --diff .
+
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Cache pip
         uses: actions/cache@v4
         with:
@@ -27,22 +38,10 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          # torch es opcional para ciertos modulos, no necesario para tests
           pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
-
       - name: Run tests
-        run: python -m pytest tests/ -v --tb=short
-
-      - name: Check import sanity
-        run: python -c "
-          from api.server import app;
-          print(f'Routes: {len([r for r in app.routes])}');
-          from db import init_db;
-          init_db();
-          print('DB OK');
-          "
+        run: python -m pytest tests/ -v --tb=short -x

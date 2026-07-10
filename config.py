@@ -26,8 +26,28 @@ class _EnvSettings(BaseSettings):
     ALPACA_BASE_URL: str = "https://paper-api.alpaca.markets"
     ALPACA_PAPER: bool = True
 
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
+
+    PORT: int = 8000
+    HOST: str = "0.0.0.0"
+
+    RENDER_EXTERNAL_URL: str = ""
+    CLOUD_APP_URL: str = ""
+
 
 _env = _EnvSettings()
+
+
+def validate_secrets() -> list[str]:
+    """Valida que las credenciales críticas estén configuradas.
+    Retorna lista de warnings (vacía si todo ok)."""
+    warnings: list[str] = []
+    if not _env.ALPACA_API_KEY:
+        warnings.append("ALPACA_API_KEY no configurada — broker no disponible")
+    if not _env.ALPACA_SECRET_KEY:
+        warnings.append("ALPACA_SECRET_KEY no configurada — broker no disponible")
+    return warnings
 
 # ── Watchlist por defecto ─────────────────────────────────────────────
 WATCHLIST: list[str] = [

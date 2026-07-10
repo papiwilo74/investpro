@@ -233,17 +233,17 @@ class TestDecisionContext:
 
 
 class TestRouteOrder:
-    def test_delegates_to_order_manager(self, bot):
+    async def test_delegates_to_order_manager(self, bot):
         bot.order_manager.route_order.return_value = {"id": "test"}
         bot.smart_router = None
-        result = bot._route_order("AAPL", 10, "buy", 150.0)
+        result = await bot._route_order("AAPL", 10, "buy", 150.0)
         assert result == {"id": "test"}
         bot.order_manager.route_order.assert_called_once_with("AAPL", 10, "buy", 150.0, True)
 
-    def test_sets_smart_router_when_available(self, bot):
+    async def test_sets_smart_router_when_available(self, bot):
         bot.order_manager.route_order.return_value = {"id": "test"}
         bot.smart_router = MagicMock()
-        bot._route_order("AAPL", 10, "buy", 150.0)
+        await bot._route_order("AAPL", 10, "buy", 150.0)
         assert bot.order_manager._smart_router is bot.smart_router
 
 

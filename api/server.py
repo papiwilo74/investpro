@@ -8,6 +8,9 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -19,7 +22,44 @@ from api.routes import advisor, analysis, backtest, broker, market, ml, portfoli
 from config import WATCHLIST
 from ml.ensemble import ensemble
 
-app = FastAPI(title="Inversion Helper API", version="2.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator:
+    """Gestión de ciclo de vida: validar secrets, keepalive, detener bot al salir."""
+    from config import validate_secrets
+    _warnings = validate_secrets()
+    if _warnings:
+        import logging
+        for _w in _warnings:
+            logging.warning(_w)
+
+    base_url = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("CLOUD_APP_URL")
+    if base_url:
+        _start_keepalive(base_url)
+
+    yield
+
+    from api.routes.broker import bot
+    if bot.is_running:
+        await bot.stop_async()
+
+
+app = FastAPI(
+    title="Inversion Helper API",
+    version="2.0.0",
+    description="API de trading automatizado con análisis técnico, ML y gestión de riesgo.\n\n"
+                "## Modos de operación\n"
+                "- **Broker**: Paper trading con Alpaca, gestión de posiciones y órdenes\n"
+                "- **Machine Learning**: Predicción de tendencias, ensemble adaptativo\n"
+                "- **Backtest**: Simulación histórica de estrategias\n"
+                "- **Análisis**: Indicadores técnicos, señales compuestas\n"
+                "- **Advisor**: Asistente online para decisiones de trading",
+    summary="Inversion Helper - Trading bot API",
+    contact={"name": "Inversion Helper", "url": "https://github.com/papiwilo74/investpro"},
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 # Registrar autenticación JWT
 register_auth_routes(app)
@@ -53,13 +93,15 @@ app.include_router(broker.router, prefix="/api/broker", tags=["Broker"])
 app.include_router(broker.public_router, prefix="/api/broker", tags=["Broker Public"])
 
 # Endpoint de Watchlist
-@app.get("/api/watchlist")
+@app.get("/api/watchlist", summary="Lista de tickers en watchlist")
 async def get_watchlist():
+    """Retorna los tickers monitoreados por el bot."""
     return WATCHLIST
 
 # Estado del Ensemble Adaptativo
-@app.get("/api/ensemble/status")
+@app.get("/api/ensemble/status", summary="Estado del ensemble adaptativo ML")
 async def get_ensemble_status():
+    """Métricas en vivo del AdaptiveEnsemble: pesos, agreement, accuracy por régimen."""
     from api.utils import sanitize_for_json
     return sanitize_for_json(ensemble.get_status())
 
@@ -89,25 +131,22 @@ async def no_cache_static(request: Request, call_next):
 
 
 # ── Keep-alive: auto-ping cada 10 min para que Render no duerma ────────
-@app.on_event("startup")
-async def _start_keepalive():
-    """Background task que se auto-pinga para evitar que el servicio sleep."""
-    base_url = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("CLOUD_APP_URL")
+@app.get("/api/_ping", include_in_schema=False)
+async def _keepalive_ping():
+    """Endpoint interno para keepalive."""
+    return {"ok": True}
 
-    if not base_url:
-        # En local o sin URL configurada, no hacer nada
-        return
 
+def _start_keepalive(base_url: str) -> None:
+    """Lanza background task que se auto-pinga para evitar que Render duerma el servicio."""
     async def _ping_loop():
         import urllib.request
         while True:
             try:
                 await asyncio.sleep(600)  # 10 min
-                url = f"{base_url}/api/broker/health"
-                urllib.request.urlopen(url, timeout=10)
+                urllib.request.urlopen(f"{base_url}/api/_ping", timeout=10)
             except Exception:
                 pass
-
     asyncio.create_task(_ping_loop())
 
 

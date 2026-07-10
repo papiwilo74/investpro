@@ -116,9 +116,9 @@ async def toggle_bot():
         if not client.is_connected():
             raise HTTPException(status_code=400, detail="Bot bloqueado: broker no conectado.")
         if bot.is_running:
-            bot.stop()
+            await bot.stop_async()
         else:
-            bot.start()
+            await bot.start_async()
         return {"active": bot.is_running, "strategy_mode": bot.strategy_mode}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
