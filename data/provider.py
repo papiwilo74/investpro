@@ -73,7 +73,10 @@ class DataProvider(ABC):
 
 
 class YFinanceProvider(DataProvider):
-    """Provider basado en yfinance (gratuito, sin autenticación)."""
+    """Provider basado en yfinance (gratuito, sin autenticación). Con rate limiter global."""
+
+    _last_request: float = 0.0
+    _min_interval: float = 0.6  # segundos mínimo entre requests
 
     def name(self) -> str:
         return "yfinance"
@@ -85,6 +88,11 @@ class YFinanceProvider(DataProvider):
         interval: str = "1d",
     ) -> pd.DataFrame:
         import yfinance as yf
+
+        elapsed = time.time() - YFinanceProvider._last_request
+        if elapsed < YFinanceProvider._min_interval:
+            time.sleep(YFinanceProvider._min_interval - elapsed)
+        YFinanceProvider._last_request = time.time()
 
         t0 = time.time()
         stock = yf.Ticker(ticker)
