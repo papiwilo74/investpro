@@ -29,6 +29,7 @@ vaderSentiment>=3.3
 
 # Base de datos
 sqlalchemy>=2.0
+psycopg2-binary>=2.9
 
 # Autenticación JWT
 python-jose[cryptography]>=3.5

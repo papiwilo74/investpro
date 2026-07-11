@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, develop]
   pull_request:
-    branches: [master, main]
+    branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   PYTHON_VERSION: "3.12"
@@ -17,12 +21,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install lint tools
-        run: pip install ruff black
-      - name: Ruff check
-        run: ruff check --output-format=github .
-      - name: Black check
-        run: black --check --diff .
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: mypy
+        run: uv run mypy . --ignore-missing-imports || true
 
   test:
     runs-on: ubuntu-latest
@@ -31,17 +44,38 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Cache pip
-        uses: actions/cache@v4
+      - uses: astral-sh/setup-uv@v5
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          enable-cache: true
+
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
+        run: uv sync --dev
+
       - name: Run tests
-        run: python -m pytest tests/ -v --tb=short -x
+        run: uv run pytest -v --timeout=60 -x --tb=short
+        env:
+          PYTHONPATH: .
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Bandit
+        run: uv run bandit -r . -f json -o bandit_report.json || true
+
+      - name: Upload bandit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report
+          path: bandit_report.json

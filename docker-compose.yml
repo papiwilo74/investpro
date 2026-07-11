@@ -1,37 +1,12 @@
 services:
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-investpro}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-investpro_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-investpro}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-investpro}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   app:
     build: .
-    restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"
-    depends_on:
-      db:
-        condition: service_healthy
+      - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-investpro}:${POSTGRES_PASSWORD:-investpro_secret}@db:5432/${POSTGRES_DB:-investpro}
-      ALPACA_API_KEY: ${ALPACA_API_KEY:-}
-      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}
-      ALPACA_BASE_URL: ${ALPACA_BASE_URL:-https://paper-api.alpaca.markets}
-      ALPACA_PAPER: ${ALPACA_PAPER:-true}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-      PORT: "8000"
-      HOST: "0.0.0.0"
-
-volumes:
-  postgres_data:
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=development
+    volumes:
+      - ./logs:/app/logs
+      - ./data/cache:/app/data/cache
+    restart: unless-stopped

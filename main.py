@@ -29,6 +29,8 @@ from config import BACKTEST_PARAMS, INDICATOR_PARAMS
 from data.fetcher import DataFetcher
 from indicators.signals import SignalGenerator
 from indicators.technical import TechnicalIndicators
+from ml.panel_model import PanelModelTrainer as PanelTrainer
+from ml.panel_model import predict_panel, train_panel_model
 from ml.train import ModelTrainer
 from portfolio.optimizer import PortfolioOptimizer
 
@@ -520,6 +522,80 @@ def run_full_validation(
     print()
 
 
+def run_panel_training(
+    tickers_str: str | None = None,
+    period: str = "2y",
+    force: bool = False,
+) -> None:
+    """Entrena el modelo panel multi-ticker (cross-sectional)."""
+    from config import WATCHLIST
+
+    tickers = [t.strip().upper() for t in tickers_str.split(",")] if tickers_str else WATCHLIST
+
+    print(f"\n{'=' * 60}")
+    print(f"  PANEL MODEL (MULTI-TICKER) — {len(tickers)} tickers")
+    print(f"  Periodo: {period} | Force: {force}")
+    print(f"{'=' * 60}\n")
+
+    print("Tickers:")
+    for t in tickers:
+        print(f"  - {t}")
+    print()
+
+    try:
+        result = train_panel_model(tickers=tickers, period=period, force=force)
+        if result is None:
+            print("[!] No se pudo entrenar el modelo panel.")
+            return
+        print(f"\n  Modelo panel listo.")
+        print(f"  Tipo:          {result.get('model_type', 'N/A')}")
+        print(f"  Avg accuracy:  {result.get('avg_accuracy', 0):.3f}")
+        print(f"  Avg precision: {result.get('avg_precision', 0):.3f}")
+        print(f"  Folds CV:      {result.get('n_folds', 0)}")
+        print(f"  Total samples: {result.get('total_samples', 0)}")
+        print(f"  Tickers:       {result.get('n_tickers', 0)}")
+        print(f"  Entrenado:     {time.strftime('%Y-%m-%d %H:%M', time.localtime(result.get('trained_at', 0)))}")
+        print()
+
+        if result.get("cv_metrics"):
+            print("  CV fold breakdown:")
+            for m in result["cv_metrics"]:
+                print(f"    Fold {m['fold']}: acc={m['accuracy']:.3f} prec={m['precision']:.3f} "
+                      f"rec={m['recall']:.3f} f1={m['f1']:.3f} "
+                      f"(train={m['train_size']} test={m['test_size']})")
+            print()
+
+    except Exception as e:
+        print(f"\n[ERROR] Panel training falló: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+def run_panel_predict(ticker: str, period: str = "3mo") -> None:
+    """Predice usando el modelo panel para un ticker específico."""
+    print(f"\n{'=' * 60}")
+    print(f"  PANEL MODEL PREDICT — {ticker.upper()}")
+    print(f"{'=' * 60}\n")
+
+    try:
+        result = predict_panel(ticker, period=period)
+        if result is None:
+            print("[!] No hay modelo panel entrenado. Ejecuta --train-panel primero.")
+            return
+        print(f"  Dirección:     {result.get('direction', 'N/A')}")
+        print(f"  Probabilidad:  {result.get('probability', 0):.2%}")
+        print(f"  Predicción:    {result.get('prediction', -1)}")
+        print(f"  Model type:    {result.get('model_type', 'N/A')}")
+        print(f"  Avg accuracy:  {result.get('avg_accuracy', 0):.2%}")
+        print()
+    except Exception as e:
+        print(f"\n[ERROR] Panel predict falló: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Inversion Helper - Analisis tecnico, backtesting, optimizacion de portafolio y Machine Learning",
@@ -700,6 +776,23 @@ def main() -> None:
         type=int,
         default=8000,
         help="Puerto para la Web App (default: 8000)",
+    )
+    parser.add_argument(
+        "--train-panel",
+        default=None,
+        nargs="?",
+        const="auto",
+        help="Entrenar modelo panel multi-ticker. Opcional: tickers separados por coma (default: WATCHLIST)",
+    )
+    parser.add_argument(
+        "--panel-predict",
+        default=None,
+        help="Predecir con modelo panel para ticker específico (ej: AAPL)",
+    )
+    parser.add_argument(
+        "--panel-force",
+        action="store_true",
+        help="Forzar re-entreno del modelo panel aunque ya exista",
     )
     parser.add_argument(
         "--full-validation",
@@ -907,6 +1000,11 @@ def main() -> None:
             if metrics["win_rate"] > 0.55 and metrics["profit_factor"] > 1.2:
                 print("  [+] VENTAJA MATEMÁTICA CONFIRMADA. (Edge positivo)")
         print(f"{'-' * 50}\n")
+    elif args.train_panel is not None:
+        tickers = None if args.train_panel == "auto" else args.train_panel
+        run_panel_training(tickers_str=tickers, period=args.period, force=args.panel_force)
+    elif args.panel_predict:
+        run_panel_predict(args.panel_predict, period=args.period)
     elif args.full_validation:
         run_full_validation(
             ticker=args.ticker or "AAPL",

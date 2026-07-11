@@ -10,6 +10,7 @@ extend-exclude = '''
 /(
     \.eggs
   | \.git
+  | \.github
   | \.hg
   | \.mypy_cache
   | \.nox
@@ -43,6 +44,40 @@ ignore = [
     "E402",  # module import not at top (needed for __init__)
 ]
 
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = false
+disallow_any_unimported = false
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["ta", "loguru", "yfinance", "alpaca-py", "prometheus_client", "structlog", "gymnasium", "hmmlearn", "stable_baselines3", "torch"]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", ".git"]
+skips = ["B101", "B301", "B403", "B404", "B603", "B607"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning", "ignore::PendingDeprecationWarning"]
+
+[tool.coverage.run]
+source = ["."]
+omit = ["tests/*", ".venv/*", "**/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "def __repr__", "if __name__ == .__main__.:"]
+
 [tool.ruff.format]
 quote-style = "double"
 
@@ -53,9 +88,42 @@ quote-style = "double"
 [tool.ruff.lint.isort]
 known-first-party = ["api", "app", "backtesting", "bot", "broker", "config", "data", "db", "frontend", "indicators", "logging_config", "ml", "portfolio"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-asyncio_mode = "auto"
+[dependency-groups]
+dev = [
+    "alembic>=1.18.5",
+    "alpaca-py>=0.43.5",
+    "bandit>=1.9.4",
+    "fastapi>=0.139.0",
+    "loguru>=0.7.3",
+    "mypy>=2.2.0",
+    "numpy>=2.5.1",
+    "pandas>=3.0.3",
+    "plotly>=6.9.0",
+    "prometheus-client>=0.25.0",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.2",
+    "pytest>=9.1.1",
+    "pytest-timeout>=2.4.0",
+    "python-dotenv>=1.2.2",
+    "python-jose[cryptography]>=3.5.0",
+    "requests>=2.34.2",
+    "ruff>=0.15.21",
+    "scikit-learn>=1.9.0",
+    "sqlalchemy>=2.0.51",
+    "psycopg2-binary>=2.9.10",
+    "streamlit>=1.59.1",
+    "structlog>=26.1.0",
+    "ta>=0.11.0",
+    "uvicorn>=0.51.0",
+    "vadersentiment>=3.3.2",
+    "xgboost>=3.3.0",
+    "yfinance>=1.5.1",
+    "gymnasium>=1.1.1",
+    "hmmlearn>=0.3.3",
+    "httpx>=0.28.1",
+    "pytz>=2024.2",
+    "schedule>=1.2.2",
+    "scipy>=1.14.1",
+    "stable-baselines3>=2.5.0",
+    "torch>=2.5.1",
+]

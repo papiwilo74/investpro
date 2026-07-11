@@ -1,21 +1,33 @@
-name: Deploy to Render
+name: Deploy
 
 on:
   push:
     branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+  PYTHON_VERSION: "3.12"
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Render deploy
-        if: env.RENDER_DEPLOY_HOOK_URL != ''
+      - uses: actions/checkout@v4
+
+      - name: Render Deploy
+        if: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
-          curl -X POST "$RENDER_DEPLOY_HOOK_URL"
-      - name: Skip deploy hook
-        if: env.RENDER_DEPLOY_HOOK_URL == ''
-        run: echo "RENDER_DEPLOY_HOOK_URL not set — skipping manual trigger. Render auto-deploy will handle this push if a Blueprint is linked."
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+        shell: bash
+
+      - name: Telegram notification
+        if: ${{ secrets.TELEGRAM_BOT_TOKEN && secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d "text=🚀 *Deploy completado*%0A%60${{ github.repository }}%60%0ARama: \`${{ github.ref_name }}\`%0ACommit: \`${{ github.sha }}\`" \
+            -d "parse_mode=Markdown"

@@ -19,14 +19,14 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-MODEL_NAMES = ["xgboost", "neural_brain", "rl_agent", "online_advisor", "ta_classic", "lstm"]
+MODEL_NAMES = ["xgboost", "neural_brain", "rl_agent", "online_advisor", "ta_classic", "lstm", "panel"]
 REGIMES = ["BULL", "BEAR", "LATERAL", "HIGH_VOL"]
 
 DEFAULT_WEIGHTS: dict[str, dict[str, float]] = {
-    "BULL":     {"xgboost": 0.25, "neural_brain": 0.20, "rl_agent": 0.10, "online_advisor": 0.15, "ta_classic": 0.20, "lstm": 0.10},
-    "BEAR":     {"xgboost": 0.15, "neural_brain": 0.25, "rl_agent": 0.20, "online_advisor": 0.20, "ta_classic": 0.10, "lstm": 0.10},
-    "LATERAL":  {"xgboost": 0.15, "neural_brain": 0.15, "rl_agent": 0.15, "online_advisor": 0.20, "ta_classic": 0.25, "lstm": 0.10},
-    "HIGH_VOL": {"xgboost": 0.20, "neural_brain": 0.25, "rl_agent": 0.15, "online_advisor": 0.15, "ta_classic": 0.10, "lstm": 0.15},
+    "BULL":     {"xgboost": 0.22, "neural_brain": 0.18, "rl_agent": 0.09, "online_advisor": 0.13, "ta_classic": 0.18, "lstm": 0.09, "panel": 0.11},
+    "BEAR":     {"xgboost": 0.13, "neural_brain": 0.22, "rl_agent": 0.18, "online_advisor": 0.18, "ta_classic": 0.09, "lstm": 0.09, "panel": 0.11},
+    "LATERAL":  {"xgboost": 0.13, "neural_brain": 0.13, "rl_agent": 0.13, "online_advisor": 0.18, "ta_classic": 0.22, "lstm": 0.09, "panel": 0.12},
+    "HIGH_VOL": {"xgboost": 0.18, "neural_brain": 0.22, "rl_agent": 0.13, "online_advisor": 0.13, "ta_classic": 0.09, "lstm": 0.13, "panel": 0.12},
 }
 
 # Hiperparámetros del ensemble
@@ -188,6 +188,7 @@ class AdaptiveEnsemble:
                 for regime, models in data.get("weights", {}).items():
                     if regime in self._weights:
                         self._weights[regime].update(models)
+                        self._normalize_weights(regime)
         except Exception:
             pass
 
@@ -262,6 +263,7 @@ class AdaptiveEnsemble:
         online_advisor_signal: ModelSignal | None = None,
         ta_score: float = 0.0,
         lstm_signal: ModelSignal | None = None,
+        panel_signal: ModelSignal | None = None,
     ) -> EnsembleResult:
         if regime not in self._weights:
             regime = "BULL"
@@ -280,6 +282,8 @@ class AdaptiveEnsemble:
             signals["ta_classic"] = ModelSignal(direction=dir_, score=ta_score, probability=abs(ta_score))
         if lstm_signal:
             signals["lstm"] = lstm_signal
+        if panel_signal:
+            signals["panel"] = panel_signal
 
         if not signals:
             return EnsembleResult(regime=regime)

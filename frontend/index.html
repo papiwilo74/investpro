@@ -1,29 +1,12 @@
 <!DOCTYPE html>
-<html lang="es" class="light">
+<html lang="es" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InvestPro — Asesor de Inversiones</title>
-  
-  <!-- Tailwind CSS CDN -->
+  <script>(function(){var t=localStorage.getItem('investpro-theme');document.documentElement.className=t==='light'?'light':'dark'})();</script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-          },
-          boxShadow: {
-            'premium': '0 10px 30px -10px rgba(0, 0, 0, 0.05), 0 1px 3px 0 rgba(0, 0, 0, 0.02)',
-            'premium-hover': '0 20px 40px -15px rgba(0, 0, 0, 0.1), 0 1px 10px 0 rgba(0, 0, 0, 0.03)',
-            'dark-premium': '0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-          }
-        }
-      }
-    }
-  </script>
+  <script>tailwind.config={darkMode:'class'}</script>
   
   <!-- CDNs Adicionales -->
   <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>

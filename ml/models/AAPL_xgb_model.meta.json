@@ -1,32 +1,34 @@
 {
   "ticker": "AAPL",
   "metrics": {
-    "accuracy": 0.49504950495049505,
-    "precision": 0.4166666666666667,
-    "recall": 0.46511627906976744,
-    "f1": 0.43956043956043955,
+    "accuracy": 0.39603960396039606,
+    "precision": 0.35714285714285715,
+    "recall": 0.4444444444444444,
+    "f1": 0.39603960396039606,
     "train_size": 400,
-    "test_size": 101
+    "test_size": 101,
+    "baseline_accuracy": 0.7722772277227723,
+    "rel_vs_baseline": -0.37623762376237624
   },
   "feature_importances": {
-    "feat_return_1d": 0.034428730607032776,
-    "feat_return_3d": 0.028068337589502335,
-    "feat_return_5d": 0.03025849722325802,
-    "feat_return_10d": 0.0673101544380188,
-    "feat_volatility_5d": 0.043719056993722916,
-    "feat_volatility_10d": 0.08277715742588043,
-    "feat_rsi": 0.04233640432357788,
-    "feat_macd_diff": 0.046506013721227646,
-    "feat_bollinger_pct_b": 0.04679961875081062,
-    "feat_dist_sma_20": 0.05625733360648155,
-    "feat_dist_sma_50": 0.09747299551963806,
-    "feat_dist_sma_200": 0.08887112140655518,
-    "feat_dist_vwap": 0.03311421722173691,
-    "feat_cmf": 0.061880212277173996,
-    "feat_vol_change": 0.033360693603754044,
-    "feat_macro_spy_return": 0.031927451491355896,
-    "feat_macro_spy_trend": 0.11284706741571426,
-    "feat_macro_vix": 0.06206493079662323
+    "feat_return_1d": 0.040573593229055405,
+    "feat_return_3d": 0.040683548897504807,
+    "feat_return_5d": 0.058424435555934906,
+    "feat_return_10d": 0.0781082808971405,
+    "feat_volatility_5d": 0.046021588146686554,
+    "feat_volatility_10d": 0.07536433637142181,
+    "feat_rsi": 0.046430349349975586,
+    "feat_macd_diff": 0.0653802752494812,
+    "feat_bollinger_pct_b": 0.05584767460823059,
+    "feat_dist_sma_20": 0.04384905472397804,
+    "feat_dist_sma_50": 0.0800943598151207,
+    "feat_dist_sma_200": 0.07042427361011505,
+    "feat_dist_vwap": 0.046054691076278687,
+    "feat_cmf": 0.04870876297354698,
+    "feat_vol_change": 0.034454718232154846,
+    "feat_macro_spy_return": 0.031057164072990417,
+    "feat_macro_spy_trend": 0.08767995238304138,
+    "feat_macro_vix": 0.05084288865327835
   },
   "features_list": [
     "feat_return_1d",
@@ -50,8 +52,10 @@
   ],
   "best_params": {
     "learning_rate": 0.1,
-    "max_depth": 5,
-    "n_estimators": 200
+    "max_depth": 7,
+    "n_estimators": 50
   },
-  "optimized": true
+  "optimized": true,
+  "rel_vs_baseline": -0.37623762376237624,
+  "trained_at": 1783795133.3986058
 }

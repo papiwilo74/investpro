@@ -25,7 +25,7 @@ from bot.safety import SignalJournal
 from bot.scanner import MarketScanner
 from bot.state_manager import BotStateManager
 from bot.strategy import Decision, StrategyParams, TradingBrain, create_web_bot_strategy_params
-from broker.alpaca_client import AlpacaClient
+from broker import create_broker_client
 from config import BROKER_CONFIG, WATCHLIST, WEB_RISK_CONFIG
 from data.fetcher import DataFetcher
 from db import SessionLocal
@@ -58,7 +58,7 @@ class TradingBot:
     ):
         self.intraday = intraday
         self.strategy_mode = strategy_mode
-        self.client = AlpacaClient()
+        self.client = create_broker_client()
         self.fetcher = DataFetcher()
         self.trainer = ModelTrainer()
         self.sentiment = SentimentAnalyzer() if use_sentiment else None
@@ -446,10 +446,11 @@ class TradingBot:
         return self._connection_ok
 
     def is_market_open(self) -> bool:
-        if not self.client.client:
-            return False
         try:
-            clock = self.client.client.get_clock()
+            inner = getattr(self.client, 'client', None)
+            if not inner:
+                return True  # Paper mode: always open
+            clock = inner.get_clock()
             return clock.is_open
         except Exception as e:
             self._log(f"Error verificando estado del mercado: {e}")

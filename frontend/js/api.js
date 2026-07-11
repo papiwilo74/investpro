@@ -187,10 +187,6 @@ class ApiClient {
   async cancelGeneticJob(jobId) {
     return this._fetch(`/api/backtest/genetic/${jobId}/cancel`, { method: 'POST' });
   }
-
-  async getEnsembleStatus() {
-    return this._fetch(`/api/ensemble/status`);
-  }
 }
 
 // Exportar cliente único

@@ -151,7 +151,7 @@ class JobManager:
                     if not proc.is_alive():
                         # Proceso murió sin dejar mensaje → abortar
                         raise TimeoutError("Worker process died unexpectedly")
-                    msg = queue.get(timeout=15)  # I/O wait, libera GIL
+                    msg = queue.get(timeout=300)  # I/O wait, libera GIL (hasta 5 min por generación)
                     msg_type = msg.get("type", "")
 
                     if msg_type == "started":
@@ -166,13 +166,16 @@ class JobManager:
                         job.error = msg.get("error", "Error desconocido")
                         job.status = "failed"
                         break
-            except Exception:
-                # Timeout o proceso muerto
+            except TimeoutError:
                 if proc.is_alive():
                     proc.terminate()
                 if job.status not in ("completed", "failed", "cancelled"):
-                    job.error = "Job timeout o proceso terminado inesperadamente"
+                    job.error = "Worker process died unexpectedly"
                     job.status = "failed"
+            except Exception:
+                # Queue timeout: proceso sigue vivo, reintentar
+                if job.status not in ("completed", "failed", "cancelled"):
+                    job.status = "running"
             finally:
                 job.finished_at = time.time()
                 if proc.is_alive():

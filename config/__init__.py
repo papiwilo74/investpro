@@ -1,53 +1,30 @@
-"""
-Configuración centralizada de Inversion Helper.
-Usa pydantic-settings para validar variables de entorno al arrancar.
+"""Configuración centralizada — Pydantic Settings + backward compat.
+
+Uso moderno:
+  from config import settings, feature_flags
+
+Uso legacy (sigue funcionando):
+  from config import WATCHLIST, BROKER_CONFIG, RISK_CONFIG, PROJECT_ROOT
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from config.settings import Settings
+from config.settings import feature_flags as _ff
+from config.settings import settings as _settings
 
-# ── Raíz del proyecto ─────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parent
-
-
-# ── Settings con validación de .env ────────────────────────────────────
-class _EnvSettings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    ALPACA_API_KEY: str = ""
-    ALPACA_SECRET_KEY: str = ""
-    ALPACA_BASE_URL: str = "https://paper-api.alpaca.markets"
-    ALPACA_PAPER: bool = True
-
-    TELEGRAM_BOT_TOKEN: str = ""
-    TELEGRAM_CHAT_ID: str = ""
-
-    PORT: int = 8000
-    HOST: str = "0.0.0.0"
-
-    RENDER_EXTERNAL_URL: str = ""
-    CLOUD_APP_URL: str = ""
+# ── Re-exportar Settings unificados ──────────────────────────────────
+settings: Settings = _settings
+feature_flags = _ff
+PROJECT_ROOT = _settings.project_root
 
 
-_env = _EnvSettings()
-
-
+# ── Validación (backward compat) ─────────────────────────────────────
 def validate_secrets() -> list[str]:
-    """Valida que las credenciales críticas estén configuradas.
-    Retorna lista de warnings (vacía si todo ok)."""
-    warnings: list[str] = []
-    if not _env.ALPACA_API_KEY:
-        warnings.append("ALPACA_API_KEY no configurada — broker no disponible")
-    if not _env.ALPACA_SECRET_KEY:
-        warnings.append("ALPACA_SECRET_KEY no configurada — broker no disponible")
-    return warnings
+    return _settings.validate()
+
 
 # ── Watchlist por defecto ─────────────────────────────────────────────
 WATCHLIST: list[str] = [
@@ -65,7 +42,7 @@ NASDAQ_100_UNIVERSE: list[str] = [
 
 SP500_LIQUID_UNIVERSE: list[str] = [
     "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "GOOG", "BRK-B", "LLY",
-    "AVGO", "JPM", "TSLA", "UNH", "XOM", "V", "MA", "COST", "PG", "JNJ",
+    "AVGO", "JPM", "TSLA", "UNH", "V", "MA", "COST", "PG", "JNJ",
     "HD", "WMT", "NFLX", "ABBV", "BAC", "KO", "MRK", "CVX", "CRM", "AMD",
     "PEP", "TMO", "ADBE", "LIN", "WFC", "MCD", "CSCO", "ABT", "ACN", "DIS",
     "QCOM", "INTU", "IBM", "GE", "VZ", "AMAT", "TXN", "CAT", "DHR", "NOW",
@@ -96,7 +73,6 @@ class IndicatorParams:
 
 
 def intraday_indicator_params() -> IndicatorParams:
-    """Retorna IndicatorParams ajustados para intradía (5m/15m)."""
     return IndicatorParams(
         sma_periods=[9, 20, 50],
         ema_periods=[5, 13],
@@ -118,17 +94,17 @@ def intraday_indicator_params() -> IndicatorParams:
 # ── Parámetros de backtesting ─────────────────────────────────────────
 @dataclass
 class BacktestParams:
-    initial_capital: float = 100_000.0
-    commission_pct: float = 0.001
-    slippage_pct: float = 0.0005
-    risk_free_rate: float = 0.04
+    initial_capital: float = _settings.INITIAL_CAPITAL
+    commission_pct: float = _settings.COMMISSION_PCT
+    slippage_pct: float = _settings.SLIPPAGE_PCT
+    risk_free_rate: float = _settings.RISK_FREE_RATE
 
 
 # ── Configuración de caché ────────────────────────────────────────────
 @dataclass
 class CacheConfig:
     cache_dir: str = ""
-    ttl_hours: int = 24
+    ttl_hours: int = int(_settings.DATA_CACHE_TTL_HOURS)
 
     def __post_init__(self) -> None:
         if not self.cache_dir:
@@ -140,27 +116,24 @@ SIGNAL_WEIGHTS_TREND: dict[str, float] = {
     "rsi": 0.06, "macd": 0.20, "bollinger": 0.06,
     "sma_cross": 0.20, "momentum": 0.25, "volume": 0.08, "obv": 0.15,
 }
-
 SIGNAL_WEIGHTS_RANGE: dict[str, float] = {
     "rsi": 0.25, "macd": 0.08, "bollinger": 0.20,
     "sma_cross": 0.05, "momentum": 0.08, "volume": 0.16, "obv": 0.18,
 }
-
 SIGNAL_WEIGHTS_MOMENTUM: dict[str, float] = {
     "rsi": 0.04, "macd": 0.15, "bollinger": 0.04,
     "sma_cross": 0.15, "momentum": 0.40, "volume": 0.08, "obv": 0.14,
 }
-
 SIGNAL_WEIGHTS: dict[str, float] = SIGNAL_WEIGHTS_TREND
 
 
-# ── Configuración del Broker (Alpaca) ──────────────────────────────────
+# ── Configuración del Broker ──────────────────────────────────────────
 @dataclass
 class BrokerConfig:
-    api_key: str = _env.ALPACA_API_KEY
-    secret_key: str = _env.ALPACA_SECRET_KEY
-    base_url: str = _env.ALPACA_BASE_URL
-    paper: bool = _env.ALPACA_PAPER
+    api_key: str = _settings.ALPACA_API_KEY
+    secret_key: str = _settings.ALPACA_SECRET_KEY
+    base_url: str = _settings.ALPACA_BASE_URL
+    paper: bool = _settings.ALPACA_PAPER
     max_position_size_pct: float = 0.10
     buy_score_threshold: float = 0.05
     sell_score_threshold: float = -0.30
@@ -171,50 +144,46 @@ class BrokerConfig:
     min_ml_buy_probability: float = 0.55
     max_daily_orders: int = 20
     bot_active: bool = False
-    # ── Apalancamiento (modo Hedge Fund para el bot web) ────────────
-    leverage_enabled: bool = True       # Activado por defecto
-    min_leverage: float = 2.0           # Apalancamiento mínimo
-    max_leverage: float = 3.0           # Apalancamiento máximo (sin x4/x5)
-    # Degradación automática del leverage según riesgo del día
-    leverage_daily_loss_soft_pct: float = -1.0   # -1% día → leverage *= 0.5
-    leverage_daily_loss_hard_pct: float = -2.0   # -2% día → leverage = 1.0 (sin apalancar)
-    leverage_unrealized_soft_pct: float = -3.0   # unrealized avg -3% → leverage *= 0.6
-    # DCA escalonado: fracción de la primera tranche (la resta va tras confirmación)
+    leverage_enabled: bool = _settings.LEVERAGE_ENABLED
+    min_leverage: float = _settings.MIN_LEVERAGE
+    max_leverage: float = _settings.MAX_LEVERAGE
+    leverage_daily_loss_soft_pct: float = -1.0
+    leverage_daily_loss_hard_pct: float = -2.0
+    leverage_unrealized_soft_pct: float = -3.0
     dca_first_tranche: float = 0.60
-    dca_cancel_drop_pct: float = -0.03  # Cancelar 2ª tranche si precio cae >3% desde entrada
+    dca_cancel_drop_pct: float = -0.03
 
 
 @dataclass
 class ScannerConfig:
-    default_universe: str = "nasdaq100"
-    max_scan_tickers: int = 60
-    min_avg_volume: int = 1_000_000
-    min_price: float = 5.0
-    max_atr_pct: float = 0.08
-    min_atr_pct: float = 0.005
-    min_adx: float = 15.0
-    min_score: float = 0.05
+    default_universe: str = _settings.SCANNER_DEFAULT_UNIVERSE
+    max_scan_tickers: int = _settings.SCANNER_MAX_TICKERS
+    min_avg_volume: int = _settings.SCANNER_MIN_AVG_VOLUME
+    min_price: float = _settings.SCANNER_MIN_PRICE
+    max_atr_pct: float = _settings.SCANNER_MAX_ATR_PCT
+    min_atr_pct: float = _settings.SCANNER_MIN_ATR_PCT
+    min_adx: float = _settings.SCANNER_MIN_ADX
+    min_score: float = _settings.SCANNER_MIN_SCORE
     min_trend_score: float = 0.0
 
 
 # ── Risk Manager ─────────────────────────────────────────────────────
 @dataclass
 class RiskConfig:
-    max_daily_loss_pct: float = -0.02
-    max_weekly_drawdown_pct: float = -0.05
-    max_sector_exposure_pct: float = 0.25
-    max_position_concentration_pct: float = 0.12
-    max_total_exposure_pct: float = 0.65
-    consecutive_loss_limit: int = 3
-    circuit_breaker_minutes: int = 60
+    max_daily_loss_pct: float = _settings.MAX_DAILY_LOSS_PCT
+    max_weekly_drawdown_pct: float = _settings.MAX_WEEKLY_DRAWDOWN_PCT
+    max_sector_exposure_pct: float = _settings.MAX_SECTOR_EXPOSURE_PCT
+    max_position_concentration_pct: float = _settings.MAX_POSITION_CONCENTRATION_PCT
+    max_total_exposure_pct: float = _settings.MAX_TOTAL_EXPOSURE_PCT
+    consecutive_loss_limit: int = _settings.CONSECUTIVE_LOSS_LIMIT
+    circuit_breaker_minutes: int = _settings.CIRCUIT_BREAKER_MINUTES
     correlation_threshold: float = 0.70
     min_trades_before_risk: int = 5
     var_confidence_pct: float = 95.0
     max_var_daily_pct: float = -0.02
-    # Production safeguards
-    account_floor_pct: float = 0.85  # Liquidar si equity < 85% del valor inicial
-    max_unrealized_drawdown_pct: float = -0.10  # DD máximo de posiciones abiertas
-    max_beta_exposure_pct: float = 2.0  # Beta-weighted exposure máxima
+    account_floor_pct: float = 0.85
+    max_unrealized_drawdown_pct: float = -0.10
+    max_beta_exposure_pct: float = 2.0
 
 
 # ── Instancias por defecto ────────────────────────────────────────────
@@ -225,7 +194,6 @@ BROKER_CONFIG = BrokerConfig()
 SCANNER_CONFIG = ScannerConfig()
 RISK_CONFIG = RiskConfig()
 
-# Configuración conservadora para el bot web (menos riesgo, más validación)
 WEB_RISK_CONFIG = RiskConfig(
     max_daily_loss_pct=-0.015,
     max_weekly_drawdown_pct=-0.04,

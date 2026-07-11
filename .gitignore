@@ -70,4 +70,13 @@ Thumbs.db
 .agents/
 
 data/inversion_helper.db
+data/inversion_helper.db-shm
+data/inversion_helper.db-wal
+
+# ══════════════════════════════════════════════════════════
+#  OBSERVABILIDAD
+# ══════════════════════════════════════════════════════════
+bandit_report.json
+.prometheus_*
+alert_queue.json
 

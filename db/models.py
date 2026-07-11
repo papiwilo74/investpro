@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, JSON, String, Text
 
 from db import Base
 
@@ -66,6 +66,23 @@ class AdvisorState(Base):
     visits = Column(Text, nullable=False, default="[0,0,0]")
     rewards = Column(Text, nullable=False, default="[[],[],[]]")
     total_updates = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PaperState(Base):
+    """Singleton paper trading state (id=1). Persiste cash, posiciones,
+    órdenes, trades y curva de equity — compatible SQLite y PostgreSQL."""
+
+    __tablename__ = "paper_state"
+
+    id = Column(Integer, primary_key=True, default=1)
+    cash = Column(Float, nullable=False, default=100000.0)
+    initial_cash = Column(Float, nullable=False, default=100000.0)
+    order_counter = Column(Integer, nullable=False, default=0)
+    positions = Column(JSON, nullable=False, default=list)
+    orders = Column(JSON, nullable=False, default=list)
+    trades = Column(JSON, nullable=False, default=list)
+    equity_history = Column(JSON, nullable=False, default=list)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

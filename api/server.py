@@ -13,25 +13,38 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from api.auth import register_auth_routes
 from api.middleware import add_error_handlers, add_rate_limiting_middleware, add_security_headers_middleware
+from api.metrics import metrics_endpoint
 from api.routes import advisor, analysis, backtest, broker, market, ml, portfolio
-from config import WATCHLIST
+from config import WATCHLIST, feature_flags, settings
 from ml.ensemble import ensemble
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
-    """Gestión de ciclo de vida: validar secrets, keepalive, detener bot al salir."""
-    from config import validate_secrets
-    _warnings = validate_secrets()
+    """Gestión de ciclo de vida: validar settings, keepalive, detener bot al salir."""
+    from config import settings, validate_secrets
+    _warnings = settings.validate()
     if _warnings:
         import logging
         for _w in _warnings:
             logging.warning(_w)
+
+    from config import feature_flags
+    app.state.feature_flags = feature_flags
+
+    # Limpiar caché expirada al arrancar
+    try:
+        from data.cache_manager import cache_manager
+        expired = cache_manager.clear_expired()
+        if expired:
+            logging.info("Limpieza de caché: %d entradas expiradas eliminadas", expired)
+    except Exception:
+        pass
 
     base_url = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("CLOUD_APP_URL")
     if base_url:
@@ -98,6 +111,22 @@ async def get_watchlist():
     """Retorna los tickers monitoreados por el bot."""
     return WATCHLIST
 
+# Feature flags
+@app.get("/api/config/flags", summary="Feature flags activos")
+async def get_feature_flags():
+    """Retorna los feature flags según el ambiente actual."""
+    return {"env": settings.ENV, "flags": feature_flags.to_dict()}
+
+# Estado del caché de datos
+@app.get("/api/data/info", summary="Estado de la capa de datos y caché")
+async def get_data_info():
+    """Métricas de la capa de datos: provider, caché, calidad."""
+    from data.data_manager import data_manager
+    dm = data_manager.health()
+    from data.cache_manager import cache_manager
+    dm["cache_index"] = cache_manager.to_dict()
+    return dm
+
 # Estado del Ensemble Adaptativo
 @app.get("/api/ensemble/status", summary="Estado del ensemble adaptativo ML")
 async def get_ensemble_status():
@@ -118,6 +147,10 @@ async def serve_index():
     return {"message": "Inversion Helper API is running. Place index.html in frontend/ to serve the UI."}
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    return Response(content=b"", media_type="image/x-icon")
+
 @app.get("/performance", summary="Dashboard de performance")
 async def serve_performance():
     perf_file = frontend_path / "performance.html"
@@ -136,6 +169,27 @@ async def no_cache_static(request: Request, call_next):
     if path.startswith("/static/") and (path.endswith(".js") or path.endswith(".css")):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
+
+
+# ── Live Monitoring ────────────────────────────────────────────────────
+@app.get("/api/performance/live")
+async def live_performance():
+    """Payload combinado para el dashboard de monitoreo en vivo."""
+    result: dict[str, object] = {"bot_status": "unknown", "metrics": {}, "equity_curve": [], "active_positions": [], "recent_trades": [], "available": True}
+
+    try:
+        from api.utils import sanitize_for_json
+        from api.routes.broker import bot
+        result["bot_status"] = "running" if bot.is_running else "stopped"
+        if bot.perf_tracker is not None:
+            result["metrics"] = sanitize_for_json(bot.perf_tracker.get_latest_metrics())
+            result["equity_curve"] = sanitize_for_json(bot.perf_tracker.get_equity_curve(days=90))
+        if hasattr(bot, "state_manager") and bot.state_manager is not None:
+            result["active_positions"] = sanitize_for_json(bot.state_manager.get_positions())
+    except Exception:
+        result["available"] = False
+
+    return result
 
 
 # ── Keep-alive: auto-ping cada 10 min para que Render no duerma ────────
@@ -161,13 +215,24 @@ def _start_keepalive(base_url: str) -> None:
 # ── Health check para la plataforma (Render/Fly.io) ────────────────────
 @app.get("/health")
 async def platform_health():
-    """Health check real: verifica broker, bot y DB.
+    """Health check real: verifica broker, bot, DB y data layer.
 
     No basta con responder 200 — el servicio puede estar vivo
     pero el bot colgado. Este endpoint verifica componentes críticos.
     """
-    checks = {"api": "ok"}
+    checks: dict[str, object] = {"api": "ok"}
     status_code = 200
+
+    # Data layer health
+    try:
+        from data.data_manager import data_manager
+        dm_health = data_manager.health()
+        checks["data"] = dm_health
+        if dm_health.get("quality_check", {}).get("status") != "ok":
+            status_code = 503
+    except Exception as e:
+        checks["data"] = f"error: {e}"
+        status_code = 503
 
     # Verificar broker
     try:
@@ -188,8 +253,15 @@ async def platform_health():
     except Exception:
         checks["bot"] = "unknown"
 
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, Response
     return JSONResponse(
         content={"status": "ok" if status_code == 200 else "degraded", "checks": checks},
         status_code=status_code,
     )
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics():
+    """Exposición de métricas Prometheus para scraping."""
+    data, status, headers = metrics_endpoint()
+    return Response(content=data, status_code=status, headers=headers)
