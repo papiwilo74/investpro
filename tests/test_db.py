@@ -1,133 +1,214 @@
-"""Tests for the SQLAlchemy database layer."""
+from __future__ import annotations
+
 from datetime import datetime
 
-from db.repositories import AdvisorRepository, KellyRepository, RiskRepository
+import pytest
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import Session, sessionmaker
+
+from db import Base, get_session, init_db
+from db.models import PaperState
 
 
-class TestKellyRepository:
-    def test_add_and_get_trades(self, _clean_db):
-        repo = KellyRepository(_clean_db)
-        repo.add_trade(0.05)
-        repo.add_trade(-0.02)
-        repo.add_trade(0.03)
-        trades = repo.get_all_trades()
-        assert len(trades) == 3
-        assert trades == [0.05, -0.02, 0.03]
-
-    def test_empty_repo(self, _clean_db):
-        repo = KellyRepository(_clean_db)
-        assert repo.count() == 0
-        assert repo.get_all_trades() == []
-
-    def test_clear(self, _clean_db):
-        repo = KellyRepository(_clean_db)
-        repo.add_trade(0.1)
-        repo.add_trade(-0.05)
-        assert repo.count() == 2
-        repo.clear()
-        assert repo.count() == 0
-
-    def test_fractional_default(self, _clean_db):
-        repo = KellyRepository(_clean_db)
-        repo.add_trade(0.05)
-        repo.add_trade(0.03, fractional=0.5)
-        trades = repo.get_all_trades()
-        assert trades == [0.05, 0.03]
+@pytest.fixture
+def db_engine():
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    Base.metadata.drop_all(bind=engine)
 
 
-class TestRiskRepository:
-    def test_initial_state(self, _clean_db):
-        repo = RiskRepository(_clean_db)
-        state = repo.get_state()
-        assert state["portfolio_value"] == 100000.0
-        assert state["consecutive_losses"] == 0
-        assert state["circuit_breaker_until"] is None
-        assert state["account_liquidated"] is False
-
-    def test_save_and_retrieve_state(self, _clean_db):
-        repo = RiskRepository(_clean_db)
-        repo.save_state(
-            portfolio_value=95000.0,
-            initial_portfolio_value=100000.0,
-            consecutive_losses=3,
-            circuit_breaker_until=datetime(2025, 6, 1, 12, 0, 0),
-            account_liquidated=False,
-        )
-        state = repo.get_state()
-        assert state["portfolio_value"] == 95000.0
-        assert state["consecutive_losses"] == 3
-        assert state["circuit_breaker_until"] == "2025-06-01T12:00:00"
-        assert state["account_liquidated"] is False
-
-    def test_trade_records(self, _clean_db):
-        repo = RiskRepository(_clean_db)
-        repo.add_trade_record("AAPL", "LONG", 0.05, 50.0)
-        repo.add_trade_record("TSLA", "SHORT", -0.02, -20.0)
-        records = repo.get_trade_records()
-        assert len(records) == 2
-        assert records[0]["ticker"] == "AAPL"
-        assert records[0]["pnl_pct"] == 0.05
-        assert records[1]["ticker"] == "TSLA"
-
-    def test_daily_pnl(self, _clean_db):
-        repo = RiskRepository(_clean_db)
-        repo.add_daily_pnl(100.0)
-        repo.add_daily_pnl(-50.0)
-        pnls = repo.get_daily_pnl()
-        assert len(pnls) == 2
-        assert pnls == [100.0, -50.0]
-
-    def test_clear_daily_pnl(self, _clean_db):
-        repo = RiskRepository(_clean_db)
-        repo.add_daily_pnl(100.0)
-        repo.clear_daily_pnl()
-        assert repo.get_daily_pnl() == []
-
-    def test_account_liquidated_flag(self, _clean_db):
-        repo = RiskRepository(_clean_db)
-        repo.save_state(
-            portfolio_value=50000.0,
-            initial_portfolio_value=100000.0,
-            consecutive_losses=10,
-            circuit_breaker_until=None,
-            account_liquidated=True,
-        )
-        state = repo.get_state()
-        assert state["account_liquidated"] is True
+@pytest.fixture
+def db_session(db_engine) -> Session:
+    factory = sessionmaker(bind=db_engine)
+    session = factory()
+    yield session
+    session.close()
 
 
-class TestAdvisorRepository:
-    def test_save_and_get_q_table(self, _clean_db):
-        repo = AdvisorRepository(_clean_db)
-        repo.save_state("state_1", [0.1, 0.2, 0.3], [5, 3, 2], [[0.1, 0.2], [0.3], [0.4]], 10)
-        repo.save_state("state_2", [0.4, 0.5, 0.6], [1, 1, 8], [[0.5], [0.6], [0.7, 0.8]], 20)
-        q_table = repo.get_q_table()
-        assert len(q_table) == 2
-        assert q_table["state_1"] == [0.1, 0.2, 0.3]
-        assert q_table["state_2"] == [0.4, 0.5, 0.6]
+class TestInitDb:
+    def test_creates_tables(self, monkeypatch):
+        engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        monkeypatch.setattr("db.engine", engine)
+        monkeypatch.setattr("db._is_sqlite", True)
+        init_db()
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        assert "paper_state" in tables
+        assert "risk_state" in tables
+        assert "kelly_trades" in tables
+        assert "risk_trade_records" in tables
+        assert "risk_daily_pnl" in tables
+        assert "advisor_states" in tables
+        assert "advisor_trade_log" in tables
 
-    def test_update_existing_state(self, _clean_db):
-        repo = AdvisorRepository(_clean_db)
-        repo.save_state("state_1", [0.1, 0.2, 0.3], [5, 3, 2], [[0.1], [0.2], [0.3]], 5)
-        repo.save_state("state_1", [0.9, 0.8, 0.7], [10, 8, 6], [[0.9], [0.8], [0.7]], 15)
-        q_table = repo.get_q_table()
-        assert q_table["state_1"] == [0.9, 0.8, 0.7]
-        visits = repo.get_visits()
-        assert visits["state_1"] == [10, 8, 6]
+    def test_idempotent(self, monkeypatch):
+        engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        monkeypatch.setattr("db.engine", engine)
+        monkeypatch.setattr("db._is_sqlite", True)
+        init_db()
+        init_db()
+        inspector = inspect(engine)
+        assert "paper_state" in inspector.get_table_names()
 
-    def test_empty_advisor(self, _clean_db):
-        repo = AdvisorRepository(_clean_db)
-        assert repo.get_q_table() == {}
-        assert repo.get_total_updates() == 0
-        assert repo.get_trade_log() == []
 
-    def test_trade_log(self, _clean_db):
-        repo = AdvisorRepository(_clean_db)
-        repo.add_trade_log("state_1", "ALLOW", 0.05, score=0.8, adx=25, rsi=55, vol=0.2, regime="BULL")
-        repo.add_trade_log("state_2", "BLOCK", -0.03, score=0.2, adx=15, rsi=30, vol=0.3, regime="BEAR")
-        log = repo.get_trade_log()
-        assert len(log) == 2
-        assert log[0]["action"] == "BLOCK"
-        assert log[1]["action"] == "ALLOW"
-        assert log[0]["state_key"] == "state_2"
-        assert log[1]["state_key"] == "state_1"
+class TestGetSession:
+    def test_yields_active_session(self, monkeypatch, db_engine):
+        factory = sessionmaker(bind=db_engine)
+        monkeypatch.setattr("db.SessionLocal", factory)
+        gen = get_session()
+        session = next(gen)
+        assert session.is_active
+        session.close()
+
+    def test_session_can_execute_queries(self, monkeypatch, db_engine):
+        factory = sessionmaker(bind=db_engine)
+        monkeypatch.setattr("db.SessionLocal", factory)
+        gen = get_session()
+        session = next(gen)
+        result = session.execute(text("SELECT 1"))
+        assert result.scalar() == 1
+        session.close()
+
+    def test_closes_on_generator_exit(self, monkeypatch, db_engine):
+        factory = sessionmaker(bind=db_engine)
+        monkeypatch.setattr("db.SessionLocal", factory)
+        gen = get_session()
+        session = next(gen)
+        original_close = session.close
+        closed = False
+
+        def tracking_close() -> None:
+            nonlocal closed
+            closed = True
+            original_close()
+
+        session.close = tracking_close  # type: ignore[method-assign]
+        gen.close()
+        assert closed
+
+
+class TestPaperStateModel:
+    def test_create(self, db_session: Session):
+        state = PaperState(id=1, cash=50000.0, initial_cash=50000.0)
+        db_session.add(state)
+        db_session.commit()
+        saved = db_session.get(PaperState, 1)
+        assert saved is not None
+        assert saved.cash == 50000.0
+        assert saved.initial_cash == 50000.0
+        assert saved.order_counter == 0
+        assert saved.positions == []
+        assert saved.orders == []
+        assert saved.trades == []
+        assert saved.equity_history == []
+
+    def test_read(self, db_session: Session):
+        state = PaperState(id=1, cash=75000.0, initial_cash=100000.0)
+        db_session.add(state)
+        db_session.commit()
+        loaded = db_session.get(PaperState, 1)
+        assert loaded.cash == 75000.0
+        assert loaded.initial_cash == 100000.0
+
+    def test_update(self, db_session: Session):
+        state = PaperState(id=1, cash=100000.0, initial_cash=100000.0)
+        db_session.add(state)
+        db_session.commit()
+        state.cash = 80000.0
+        state.order_counter = 5
+        db_session.commit()
+        updated = db_session.get(PaperState, 1)
+        assert updated.cash == 80000.0
+        assert updated.order_counter == 5
+
+    def test_update_positions_json(self, db_session: Session):
+        state = PaperState(id=1, cash=100000.0, initial_cash=100000.0)
+        db_session.add(state)
+        db_session.commit()
+        positions = [{"symbol": "AAPL", "qty": 10, "avg_entry_price": 150.0}]
+        state.positions = positions
+        db_session.commit()
+        updated = db_session.get(PaperState, 1)
+        assert updated.positions == positions
+        assert updated.positions[0]["symbol"] == "AAPL"
+
+    def test_update_orders_json(self, db_session: Session):
+        state = PaperState(id=1, cash=100000.0, initial_cash=100000.0)
+        db_session.add(state)
+        db_session.commit()
+        orders = [{"id": "ord1", "symbol": "AAPL", "status": "filled"}]
+        state.orders = orders
+        db_session.commit()
+        updated = db_session.get(PaperState, 1)
+        assert updated.orders == orders
+
+    def test_update_trades_json(self, db_session: Session):
+        state = PaperState(id=1, cash=100000.0, initial_cash=100000.0)
+        db_session.add(state)
+        db_session.commit()
+        trades = [{"symbol": "AAPL", "pnl": 150.0, "reason": "TP"}]
+        state.trades = trades
+        db_session.commit()
+        updated = db_session.get(PaperState, 1)
+        assert updated.trades == trades
+
+    def test_update_equity_history_json(self, db_session: Session):
+        state = PaperState(id=1, cash=100000.0, initial_cash=100000.0)
+        db_session.add(state)
+        db_session.commit()
+        history = [{"equity": 100000.0, "timestamp": "2024-01-01"}]
+        state.equity_history = history
+        db_session.commit()
+        updated = db_session.get(PaperState, 1)
+        assert updated.equity_history == history
+
+    def test_delete(self, db_session: Session):
+        state = PaperState(id=1, cash=100000.0, initial_cash=100000.0)
+        db_session.add(state)
+        db_session.commit()
+        db_session.delete(state)
+        db_session.commit()
+        assert db_session.get(PaperState, 1) is None
+
+    def test_updated_at_set_on_create(self, db_session: Session):
+        state = PaperState(id=1, cash=100000.0)
+        db_session.add(state)
+        db_session.commit()
+        assert state.updated_at is not None
+        assert isinstance(state.updated_at, datetime)
+
+    def test_updated_at_changes_on_update(self, db_session: Session):
+        state = PaperState(id=1, cash=100000.0)
+        db_session.add(state)
+        db_session.commit()
+        original = state.updated_at
+        state.cash = 90000.0
+        db_session.commit()
+        assert state.updated_at >= original
+
+    def test_singleton_upsert(self, db_session: Session):
+        state1 = PaperState(id=1, cash=100000.0, initial_cash=100000.0)
+        db_session.add(state1)
+        db_session.commit()
+        state2 = PaperState(id=1, cash=90000.0, initial_cash=100000.0)
+        db_session.merge(state2)
+        db_session.commit()
+        results = list(db_session.query(PaperState))
+        assert len(results) == 1
+        assert results[0].cash == 90000.0
+
+    def test_session_provider_integration(self, monkeypatch, db_engine):
+        factory = sessionmaker(bind=db_engine)
+        monkeypatch.setattr("db.SessionLocal", factory)
+        gen = get_session()
+        session = next(gen)
+        try:
+            state = PaperState(id=1, cash=50000.0, initial_cash=50000.0)
+            session.add(state)
+            session.commit()
+            result = session.get(PaperState, 1)
+            assert result is not None
+            assert result.cash == 50000.0
+        finally:
+            session.close()
