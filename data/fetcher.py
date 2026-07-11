@@ -8,6 +8,8 @@ Ahora soporta dos modos:
 
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pandas as pd
@@ -85,13 +87,55 @@ class DataFetcher:
 
         return results
 
+    async def async_get_data(
+        self,
+        ticker: str,
+        period: str = "1y",
+        interval: str = "1d",
+        force_refresh: bool = False,
+    ) -> pd.DataFrame:
+        """Versión async de get_data — no bloquea el event loop."""
+        return await asyncio.to_thread(self.get_data, ticker, period, interval, force_refresh)
+
+    async def async_fetch_batch(
+        self,
+        tickers: list[str],
+        period: str = "1y",
+        interval: str = "1d",
+        max_workers: int = 14,
+    ) -> dict[str, pd.DataFrame]:
+        """Versión async de fetch_batch — descarga paralela sin bloquear event loop."""
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=max(max_workers, 4)) as pool:
+            tasks = []
+            for ticker in tickers:
+                task = loop.run_in_executor(pool, self.get_data, ticker, period, interval)
+                tasks.append(task)
+            results_list = await asyncio.gather(*tasks, return_exceptions=True)
+
+        results: dict[str, pd.DataFrame] = {}
+        errors: dict[str, str] = {}
+        for ticker, res in zip(tickers, results_list):
+            if isinstance(res, Exception):
+                errors[ticker] = str(res)
+            else:
+                results[ticker] = res
+
+        if errors:
+            from loguru import logger
+
+            logger.warning("async_fetch_batch: {} errores en {} tickers", len(errors), len(tickers))
+            for t, e in list(errors.items())[:3]:
+                logger.warning("  {} → {}", t, e)
+
+        return results
+
     def clear_cache(self, ticker: str | None = None) -> int:
         """Invalida entradas de caché para un ticker o todo."""
         from data.cache_manager import cache_manager
 
         if ticker:
             return cache_manager.invalidate(ticker)
-        # No hay API para limpiar todo aún
         return 0
 
     @property
