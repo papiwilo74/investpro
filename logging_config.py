@@ -1,4 +1,5 @@
 """Configuración centralizada de logging — loguru (consola) + structlog (JSON a archivo)."""
+
 from __future__ import annotations
 
 import sys

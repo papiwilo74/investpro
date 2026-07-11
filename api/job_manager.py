@@ -9,6 +9,7 @@ Soporta dos modos:
 Comunicación proceso → padre vía multiprocessing.Queue (leída por un hilo
 ligero que solo hace queue.get(), operación I/O que libera el GIL).
 """
+
 from __future__ import annotations
 
 import multiprocessing as mp
@@ -143,6 +144,7 @@ class JobManager:
 
     def _start_queue_reader(self, job: Job, queue: mp.Queue, proc: mp.Process):
         """Hilo ligero que lee la cola y actualiza el job (NO hace CPU work)."""
+
         def _queue_reader():
             job.started_at = time.time()
             job.status = "running"
@@ -271,9 +273,9 @@ class JobManager:
         cutoff = now - max_age_hours * 3600
         with self._lock:
             to_remove = [
-                jid for jid, j in self._jobs.items()
-                if j.status in ("completed", "failed", "cancelled")
-                and j.finished_at and j.finished_at < cutoff
+                jid
+                for jid, j in self._jobs.items()
+                if j.status in ("completed", "failed", "cancelled") and j.finished_at and j.finished_at < cutoff
             ]
             for jid in to_remove:
                 del self._jobs[jid]

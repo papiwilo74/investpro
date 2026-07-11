@@ -119,7 +119,7 @@ class ApiClient {
   async getPositions() {
     return this._fetch(`/api/broker/positions`);
   }
-  
+
   async getOrders() {
     return this._fetch(`/api/broker/orders`);
   }

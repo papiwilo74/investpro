@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from api.utils import sanitize_for_json
 from backtesting.engine import BacktestEngine
 from data.fetcher import DataFetcher
+from indicators.signals import SignalGenerator
 from indicators.technical import TechnicalIndicators
 from ml.champion_challenger import champion_challenger
 from ml.model_gate import model_gate

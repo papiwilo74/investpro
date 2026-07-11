@@ -5,6 +5,7 @@ Ahora soporta dos modos:
   - DataFetcher (original, retrocompatible)
   - data_manager (nuevo, con DataProvider + CacheManager + SplitAdjuster)
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -35,6 +36,7 @@ class DataFetcher:
     def _is_cache_fresh(self, path: Path, ttl_hours: float | None = None) -> bool:
         """Método legacy: checkea archivo directo. Usar CacheManager en su lugar."""
         import time
+
         if not path.exists():
             return False
         ttl = ttl_hours if ttl_hours is not None else self.config.ttl_hours
@@ -63,10 +65,7 @@ class DataFetcher:
         errors: dict[str, str] = {}
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(self.get_data, ticker, period, interval): ticker
-                for ticker in tickers
-            }
+            futures = {executor.submit(self.get_data, ticker, period, interval): ticker for ticker in tickers}
             for future in as_completed(futures):
                 ticker = futures[future]
                 try:
@@ -76,6 +75,7 @@ class DataFetcher:
 
         if errors:
             from loguru import logger
+
             logger.warning("fetch_batch: {} errores en {} tickers", len(errors), len(tickers))
             for t, e in list(errors.items())[:3]:
                 logger.warning("  {} → {}", t, e)
@@ -84,6 +84,7 @@ class DataFetcher:
 
     def clear_cache(self, ticker: str | None = None) -> int:
         from data.cache_manager import cache_manager
+
         if ticker:
             return cache_manager.invalidate(ticker)
         # No hay API para limpiar todo aún

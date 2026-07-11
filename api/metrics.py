@@ -1,4 +1,5 @@
 """Prometheus metrics — expuestas en /metrics para scraping por Grafana Cloud / Prometheus."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -11,6 +12,7 @@ try:
         Info,
         generate_latest,
     )
+
     _HAS_PROMETHEUS = True
 except ImportError:
     _HAS_PROMETHEUS = False
@@ -92,10 +94,13 @@ else:
     class _NoopMetric:
         def labels(self, **kwargs: Any) -> _NoopMetric:
             return self
+
         def inc(self, amount: float = 1) -> None:
             pass
+
         def observe(self, amount: float) -> None:
             pass
+
         def set(self, value: float) -> None:
             pass
 

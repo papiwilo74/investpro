@@ -41,16 +41,24 @@ class RLExitAgent:
 
     def _discretize_state(self, pnl_pct: float, rsi: float, regime: str) -> str:
         # Discretizar PnL
-        if pnl_pct <= -0.015: pnl_state = "SEVERE_LOSS"
-        elif -0.015 < pnl_pct < 0.0: pnl_state = "SLIGHT_LOSS"
-        elif 0.0 <= pnl_pct < 0.02: pnl_state = "SLIGHT_GAIN"
-        elif 0.02 <= pnl_pct < 0.045: pnl_state = "MODERATE_GAIN"
-        else: pnl_state = "STRONG_GAIN"
+        if pnl_pct <= -0.015:
+            pnl_state = "SEVERE_LOSS"
+        elif -0.015 < pnl_pct < 0.0:
+            pnl_state = "SLIGHT_LOSS"
+        elif 0.0 <= pnl_pct < 0.02:
+            pnl_state = "SLIGHT_GAIN"
+        elif 0.02 <= pnl_pct < 0.045:
+            pnl_state = "MODERATE_GAIN"
+        else:
+            pnl_state = "STRONG_GAIN"
 
         # Discretizar RSI
-        if rsi < 35: rsi_state = "OVERSOLD"
-        elif rsi > 65: rsi_state = "OVERBOUGHT"
-        else: rsi_state = "NORMAL"
+        if rsi < 35:
+            rsi_state = "OVERSOLD"
+        elif rsi > 65:
+            rsi_state = "OVERBOUGHT"
+        else:
+            rsi_state = "NORMAL"
 
         return f"{pnl_state}|{rsi_state}|{regime}"
 

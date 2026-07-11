@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -112,7 +112,7 @@ class TestLoadHofParams:
         base = StrategyParams()
         with patch.object(Path, "exists", return_value=True):
             with patch.object(Path, "read_text", return_value="[]"):
-                result, info = TradingBot._load_hof_params(base)
+                _result, info = TradingBot._load_hof_params(base)
                 assert info is None
 
     def test_merges_safe_keys_from_hof(self):
@@ -121,11 +121,11 @@ class TestLoadHofParams:
         hof_json = '[{"params": {"buy_score_threshold": 0.5, "stop_loss_pct": -0.08, "use_neural_brain": true}, "fitness": 2.5, "generation": 10}]'
         with patch.object(Path, "exists", return_value=True), \
              patch.object(Path, "read_text", return_value=hof_json):
-            result, info = TradingBot._load_hof_params(base)
-            assert info is not None
-            assert result.buy_score_threshold == 0.5
-            assert result.stop_loss_pct == -0.08
-            assert result.use_neural_brain is False
+                _result, info = TradingBot._load_hof_params(base)
+                assert info is not None
+                assert _result.buy_score_threshold == 0.5
+                assert _result.stop_loss_pct == -0.08
+                assert _result.use_neural_brain is False
 
     def test_ignores_non_numeric_keys(self):
         from bot.engine import TradingBot
@@ -133,7 +133,7 @@ class TestLoadHofParams:
         hof_json = '[{"params": {"use_neural_brain": true, "some_unknown_key": "bad"}, "fitness": 1.0, "generation": 1}]'
         with patch.object(Path, "exists", return_value=True), \
              patch.object(Path, "read_text", return_value=hof_json):
-            result, info = TradingBot._load_hof_params(base)
+            _result, info = TradingBot._load_hof_params(base)
             assert info is not None
 
 
@@ -249,7 +249,6 @@ class TestRouteOrder:
 
 class TestCanPlaceOrder:
     def test_true_when_under_limit(self, bot):
-        from config import BROKER_CONFIG
         bot._orders_today = 0
         bot._orders_date = datetime.now().date()
         assert bot._can_place_order() is True

@@ -35,7 +35,8 @@ _LOCK = Lock()
 def _init_db() -> None:
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     with _LOCK, sqlite3.connect(str(_DB_PATH)) as conn:
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS cache_index (
                 ticker TEXT NOT NULL,
                 period TEXT NOT NULL,
@@ -47,7 +48,8 @@ def _init_db() -> None:
                 latency_ms REAL NOT NULL DEFAULT 0.0,
                 PRIMARY KEY (ticker, period, interval)
             )
-        """)
+        """
+        )
         conn.commit()
 
 
@@ -105,11 +107,14 @@ class CacheManager:
         prov = provider or df.attrs.get("_provider", "")
 
         with _LOCK, sqlite3.connect(str(_DB_PATH)) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO cache_index
                 (ticker, period, interval, cached_at, ttl_hours, rows, provider, latency_ms)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (ticker.upper(), period, interval, time.time(), ttl, len(df), prov, latency))
+            """,
+                (ticker.upper(), period, interval, time.time(), ttl, len(df), prov, latency),
+            )
             conn.commit()
 
     def get_entry(self, ticker: str, period: str, interval: str) -> CacheEntry | None:
@@ -150,9 +155,7 @@ class CacheManager:
         count = 0
         now = time.time()
         with _LOCK, sqlite3.connect(str(_DB_PATH)) as conn:
-            rows = conn.execute(
-                "SELECT ticker, period, interval, cached_at, ttl_hours FROM cache_index"
-            ).fetchall()
+            rows = conn.execute("SELECT ticker, period, interval, cached_at, ttl_hours FROM cache_index").fetchall()
             for ticker, period, interval, cached_at, ttl_hours in rows:
                 if now - cached_at > ttl_hours * 3600:
                     parquet = self._parquet_path(ticker, period, interval)
@@ -193,9 +196,14 @@ class CacheManager:
             ).fetchall()
         return {
             f"{t}_{p}_{i}": {
-                "ticker": t, "period": p, "interval": i,
-                "cached_at": c, "ttl_hours": ttl, "rows": r,
-                "provider": prov, "latency_ms": lat,
+                "ticker": t,
+                "period": p,
+                "interval": i,
+                "cached_at": c,
+                "ttl_hours": ttl,
+                "rows": r,
+                "provider": prov,
+                "latency_ms": lat,
             }
             for t, p, i, c, ttl, r, prov, lat in rows
         }

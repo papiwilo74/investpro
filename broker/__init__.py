@@ -12,6 +12,7 @@ def create_broker_client():
 
     if api_key and secret_key:
         from broker.alpaca_client import AlpacaClient
+
         client = AlpacaClient()
         if client.is_connected():
             logger.info("Broker: AlpacaClient conectado (paper={})", client.paper)
@@ -19,6 +20,7 @@ def create_broker_client():
         logger.warning("Broker: AlpacaClient no pudo conectar, usando PaperTradingClient")
 
     from broker.paper_client import PaperTradingClient
+
     client = PaperTradingClient()
     logger.info("Broker: PaperTradingClient activo (sin API keys reales)")
     return client

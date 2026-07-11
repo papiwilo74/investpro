@@ -159,7 +159,7 @@ class ShadowTrader:
             # Agrupar por ticker para minimizar descargas
             tickers_prices: dict[str, float] = {}
             for row in pending:
-                sig_id, ticker, model, predicted_dir, entry_price, sig_ts, horizon, regime = row
+                sig_id, ticker, model, predicted_dir, entry_price, _sig_ts, _horizon, regime = row
                 if ticker not in tickers_prices:
                     tickers_prices[ticker] = self._fetch_current_price(ticker, entry_price)
 

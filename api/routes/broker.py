@@ -6,8 +6,6 @@ from pydantic import BaseModel
 
 from api.schemas import HealthCheck
 from api.utils import sanitize_for_json
-import asyncio
-
 from bot.engine import TradingBot
 from bot.notifications import notifier
 from bot.shadow_trader import ShadowTrader
@@ -347,10 +345,10 @@ async def unsubscribe_notification(event: str = Query(...)):
 @router.post("/validation/walk-forward")
 async def run_walk_forward(ticker: str = Query("AAPL"), period: str = Query("2y")):
     try:
-        from data.fetcher import DataFetcher
-        from indicators.technical import TechnicalIndicators
-        from indicators.signals import SignalGenerator
         from backtesting.validation import run_validation
+        from data.fetcher import DataFetcher
+        from indicators.signals import SignalGenerator
+        from indicators.technical import TechnicalIndicators
 
         async def _run():
             fetcher = DataFetcher()

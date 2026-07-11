@@ -25,29 +25,52 @@ class FeatureFlags:
         return self._env in ("development", "staging") if level == "dev" else self._env == "production"
 
     @property
-    def train_ml(self) -> bool: return True
+    def train_ml(self) -> bool:
+        return True
+
     @property
-    def train_nn(self) -> bool: return True
+    def train_nn(self) -> bool:
+        return True
+
     @property
-    def live_trading(self) -> bool: return self._is("prod")
+    def live_trading(self) -> bool:
+        return self._is("prod")
+
     @property
-    def paper_trading(self) -> bool: return True
+    def paper_trading(self) -> bool:
+        return True
+
     @property
-    def web_app(self) -> bool: return True
+    def web_app(self) -> bool:
+        return True
+
     @property
-    def metrics(self) -> bool: return True
+    def metrics(self) -> bool:
+        return True
+
     @property
-    def alerts(self) -> bool: return True
+    def alerts(self) -> bool:
+        return True
+
     @property
-    def genetic_optimizer(self) -> bool: return self._is("dev")
+    def genetic_optimizer(self) -> bool:
+        return self._is("dev")
+
     @property
-    def intraday(self) -> bool: return self._is("dev")
+    def intraday(self) -> bool:
+        return self._is("dev")
+
     @property
-    def global_backtest(self) -> bool: return True
+    def global_backtest(self) -> bool:
+        return True
+
     @property
-    def full_validation(self) -> bool: return self._is("dev")
+    def full_validation(self) -> bool:
+        return self._is("dev")
+
     @property
-    def panel_model(self) -> bool: return True
+    def panel_model(self) -> bool:
+        return True
 
     def to_dict(self) -> dict[str, bool]:
         flags = {}

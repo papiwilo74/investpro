@@ -33,7 +33,7 @@ class NewsFetcher:
                     try:
                         date_obj = datetime.fromtimestamp(pub_time)
                         time_str = date_obj.strftime('%Y-%m-%d %H:%M')
-                    except:
+                    except Exception:
                         time_str = "Reciente"
                 elif isinstance(pub_time, str):
                     time_str = pub_time[:10] + " " + pub_time[11:16] # Extract YYYY-MM-DD HH:MM

@@ -447,7 +447,7 @@ class TradingBot:
 
     def is_market_open(self) -> bool:
         try:
-            inner = getattr(self.client, 'client', None)
+            inner = getattr(self.client, "client", None)
             if not inner:
                 return True  # Paper mode: always open
             clock = inner.get_clock()
@@ -806,7 +806,7 @@ class TradingBot:
         self._update_risk_state(equity, positions)
 
         scan_result = self.scanner.scan(
-            universe="nasdaq100" if self.strategy_mode == "web" else "nasdaq100",
+            universe="nasdaq100",
             period="1y",
             interval="1d",
             limit=10,

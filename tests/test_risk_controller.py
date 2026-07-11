@@ -121,7 +121,7 @@ class TestRiskController:
         assert any("Score" in r for r in reasons)
 
     def test_pre_trade_checklist_fails_market_regime(self, controller):
-        passed, reasons = controller.pre_trade_checklist(
+        passed, _reasons = controller.pre_trade_checklist(
             ticker="AAPL",
             score=0.5,
             confidence=0.8,
@@ -133,7 +133,7 @@ class TestRiskController:
         assert passed is False
 
     def test_pre_trade_checklist_fails_breadth(self, controller):
-        passed, reasons = controller.pre_trade_checklist(
+        passed, _reasons = controller.pre_trade_checklist(
             ticker="AAPL",
             score=0.5,
             confidence=0.8,

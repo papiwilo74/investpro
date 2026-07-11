@@ -1,36 +1,36 @@
 const Components = {
-  
+
   toast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
-    
+
     const toast = document.createElement('div');
     toast.className = `toast animate-slide-in flex items-center justify-between min-w-[280px] p-4 rounded-xl border shadow-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium transition-all duration-300`;
-    
+
     let emoji = '';
     let borderColor = 'border-l-4 border-l-blue-500';
     if (type === 'success') {
-      
+
       borderColor = 'border-l-4 border-l-emerald-500';
     } else if (type === 'error') {
-      
+
       borderColor = 'border-l-4 border-l-rose-500';
     } else if (type === 'warning') {
-      
+
       borderColor = 'border-l-4 border-l-amber-500';
     }
-    
+
     toast.className += ` ${borderColor}`;
-    
+
     toast.innerHTML = `
       <div class="flex items-center gap-3">
         <p class="text-sm font-semibold">${message}</p>
       </div>
       <span class="cursor-pointer ml-3 font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-white text-base" onclick="this.parentElement.remove()">×</span>
     `;
-    
+
     container.appendChild(toast);
-    
+
     // Auto-remove en 5 segundos
     setTimeout(() => {
       if (toast.parentElement) {
@@ -115,7 +115,7 @@ const Components = {
     } else if (action === 'VENTA') {
       actionBadge = 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20';
     }
-    
+
     return `
       <div class="glass rounded-xl px-5 py-4 flex justify-between items-center shadow-premium dark:shadow-none hover:shadow-premium-hover transition-all duration-300 hover:-translate-y-1">
         <div class="flex flex-col gap-1">
@@ -136,7 +136,7 @@ const Components = {
         </div>
       `;
     }
-    
+
     let rows = trades.map(t => {
       const pnlClass = t.pnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
       const pnlSymbol = t.pnl >= 0 ? '+' : '';
@@ -223,7 +223,7 @@ const Components = {
     const sorted = Object.entries(weights).sort((a, b) => b[1] - a[1]);
     let currentAngle = 0;
     const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#8b5cf6', '#ec4899'];
-    
+
     const gradientSlices = sorted.map(([asset, weight], idx) => {
       const angle = weight * 360;
       const col = colors[idx % colors.length];
@@ -231,7 +231,7 @@ const Components = {
       currentAngle += angle;
       return slice;
     }).join(', ');
-    
+
     const styleString = `background: conic-gradient(${gradientSlices})`;
 
     const legend = sorted.map(([asset, weight], idx) => {
@@ -268,29 +268,29 @@ const Components = {
     canvas.height = 300;
     canvas.style.width = '100%';
     canvas.style.height = '100%';
-    
+
     const ctx = canvas.getContext('2d');
-    
+
     setTimeout(() => {
       const isDark = document.documentElement.classList.contains('dark');
       const textCol = isDark ? '#94a3b8' : '#334155';
       const gridCol = isDark ? '#1e293b' : '#f1f5f9';
-      
+
       const width = canvas.width;
       const height = canvas.height;
       const padding = 40;
-      
+
       const vols = frontier.map(p => p.volatility);
       const rets = frontier.map(p => p.return);
-      
+
       const minX = Math.min(...vols) * 0.9;
       const maxX = Math.max(...vols) * 1.1;
       const minY = Math.min(...rets) * 0.9;
       const maxY = Math.max(...rets) * 1.1;
-      
+
       const mapX = (val) => padding + ((val - minX) / (maxX - minX)) * (width - 2 * padding);
       const mapY = (val) => height - padding - ((val - minY) / (maxY - minY)) * (height - 2 * padding);
-      
+
       // Dibujar grilla
       ctx.strokeStyle = gridCol;
       ctx.lineWidth = 1;
@@ -299,7 +299,7 @@ const Components = {
       ctx.lineTo(padding, height - padding);
       ctx.lineTo(width - padding, height - padding);
       ctx.stroke();
-      
+
       // Puntos de la frontera
       ctx.fillStyle = isDark ? '#3b82f625' : '#0284c715';
       frontier.forEach(p => {
@@ -307,7 +307,7 @@ const Components = {
         ctx.arc(mapX(p.volatility), mapY(p.return), 2.5, 0, 2 * Math.PI);
         ctx.fill();
       });
-      
+
       // Sharpe Máximo (Verde)
       ctx.fillStyle = '#10b981';
       ctx.strokeStyle = '#ffffff';
@@ -316,19 +316,19 @@ const Components = {
       ctx.arc(mapX(maxSharpe.volatility), mapY(maxSharpe.return), 8, 0, 2 * Math.PI);
       ctx.fill();
       ctx.stroke();
-      
+
       // Mínima Volatilidad (Azul)
       ctx.fillStyle = '#3b82f6';
       ctx.beginPath();
       ctx.arc(mapX(minVol.volatility), mapY(minVol.return), 8, 0, 2 * Math.PI);
       ctx.fill();
       ctx.stroke();
-      
+
       // Eje X e Y labels
       ctx.fillStyle = textCol;
       ctx.font = 'bold 9px sans-serif';
       ctx.fillText('Riesgo (Volatilidad)', width / 2 - 40, height - 10);
-      
+
       ctx.save();
       ctx.translate(12, height / 2 + 50);
       ctx.rotate(-Math.PI / 2);
@@ -822,7 +822,7 @@ const Components = {
     let colorClass = 'bg-slate-50 border-slate-200 dark:bg-slate-950 dark:border-slate-800';
     let textClass = 'text-slate-500';
     let dotColor = 'bg-slate-400';
-    
+
     if (sentimentLabel === 'ALCISTA') {
       colorClass = 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-500/20';
       textClass = 'text-emerald-600 dark:text-emerald-400';

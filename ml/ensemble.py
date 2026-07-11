@@ -12,6 +12,7 @@ Correcciones sobre v1:
   - Baseline-adjusted: medimos si el modelo es mejor que "predecir la dirección de ayer".
   - Shrinkage: cuando hay pocos samples, los pesos se contraen hacia los defaults.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,24 +24,56 @@ MODEL_NAMES = ["xgboost", "neural_brain", "rl_agent", "online_advisor", "ta_clas
 REGIMES = ["BULL", "BEAR", "LATERAL", "HIGH_VOL"]
 
 DEFAULT_WEIGHTS: dict[str, dict[str, float]] = {
-    "BULL":     {"xgboost": 0.22, "neural_brain": 0.18, "rl_agent": 0.09, "online_advisor": 0.13, "ta_classic": 0.18, "lstm": 0.09, "panel": 0.11},
-    "BEAR":     {"xgboost": 0.13, "neural_brain": 0.22, "rl_agent": 0.18, "online_advisor": 0.18, "ta_classic": 0.09, "lstm": 0.09, "panel": 0.11},
-    "LATERAL":  {"xgboost": 0.13, "neural_brain": 0.13, "rl_agent": 0.13, "online_advisor": 0.18, "ta_classic": 0.22, "lstm": 0.09, "panel": 0.12},
-    "HIGH_VOL": {"xgboost": 0.18, "neural_brain": 0.22, "rl_agent": 0.13, "online_advisor": 0.13, "ta_classic": 0.09, "lstm": 0.13, "panel": 0.12},
+    "BULL": {
+        "xgboost": 0.22,
+        "neural_brain": 0.18,
+        "rl_agent": 0.09,
+        "online_advisor": 0.13,
+        "ta_classic": 0.18,
+        "lstm": 0.09,
+        "panel": 0.11,
+    },
+    "BEAR": {
+        "xgboost": 0.13,
+        "neural_brain": 0.22,
+        "rl_agent": 0.18,
+        "online_advisor": 0.18,
+        "ta_classic": 0.09,
+        "lstm": 0.09,
+        "panel": 0.11,
+    },
+    "LATERAL": {
+        "xgboost": 0.13,
+        "neural_brain": 0.13,
+        "rl_agent": 0.13,
+        "online_advisor": 0.18,
+        "ta_classic": 0.22,
+        "lstm": 0.09,
+        "panel": 0.12,
+    },
+    "HIGH_VOL": {
+        "xgboost": 0.18,
+        "neural_brain": 0.22,
+        "rl_agent": 0.13,
+        "online_advisor": 0.13,
+        "ta_classic": 0.09,
+        "lstm": 0.13,
+        "panel": 0.12,
+    },
 }
 
 # Hiperparámetros del ensemble
-DECAY_HALFLIFE = 10        # samples para que el peso de un sample se reduzca a la mitad
+DECAY_HALFLIFE = 10  # samples para que el peso de un sample se reduzca a la mitad
 MIN_SAMPLES_PER_MODEL = 5  # mínimas muestras para ajuste (3 → 5 para reducir ruido)
 WEIGHT_ADJUST_INTERVAL = 10
-WEIGHT_MOMENTUM = 0.30     # máximo cambio relativo por ajuste
-ADJUST_STRENGTH = 0.12     # qué tan agresivo (0.15 → 0.12)
+WEIGHT_MOMENTUM = 0.30  # máximo cambio relativo por ajuste
+ADJUST_STRENGTH = 0.12  # qué tan agresivo (0.15 → 0.12)
 SHRINKAGE_STRENGTH = 0.05  # contracción hacia default cuando hay pocos samples
 BASELINE_LABEL = "_baseline"  # modelo sintético que siempre predice la dirección previa
 REGIME_AFFINITY = {
-    "BULL":     {"BULL": 1.0, "BEAR": 0.0, "LATERAL": 0.3, "HIGH_VOL": 0.2},
-    "BEAR":     {"BULL": 0.0, "BEAR": 1.0, "LATERAL": 0.3, "HIGH_VOL": 0.2},
-    "LATERAL":  {"BULL": 0.3, "BEAR": 0.3, "LATERAL": 1.0, "HIGH_VOL": 0.5},
+    "BULL": {"BULL": 1.0, "BEAR": 0.0, "LATERAL": 0.3, "HIGH_VOL": 0.2},
+    "BEAR": {"BULL": 0.0, "BEAR": 1.0, "LATERAL": 0.3, "HIGH_VOL": 0.2},
+    "LATERAL": {"BULL": 0.3, "BEAR": 0.3, "LATERAL": 1.0, "HIGH_VOL": 0.5},
     "HIGH_VOL": {"BULL": 0.4, "BEAR": 0.4, "LATERAL": 0.5, "HIGH_VOL": 1.0},
 }
 
@@ -70,9 +103,7 @@ class AccuracyTracker:
         self.min_samples = min_samples
         all_models = [*MODEL_NAMES, BASELINE_LABEL]
         self._history: dict[str, list[dict]] = {m: [] for m in all_models}
-        self._per_regime: dict[str, dict[str, list[dict]]] = {
-            r: {m: [] for m in all_models} for r in REGIMES
-        }
+        self._per_regime: dict[str, dict[str, list[dict]]] = {r: {m: [] for m in all_models} for r in REGIMES}
 
     def record(self, model: str, regime: str, actual_direction: str, predicted_direction: str, confidence: float):
         entry = {
@@ -130,7 +161,10 @@ class AccuracyTracker:
     def accuracy(self, model: str, regime: str | None = None) -> float:
         if regime and regime in self._per_regime:
             pooled = self._pool_regime_samples(model, regime)
-            if len([s for s in pooled if s["weight"] >= 0.5 * min(REGIME_AFFINITY[regime].values())]) >= self.min_samples:
+            if (
+                len([s for s in pooled if s["weight"] >= 0.5 * min(REGIME_AFFINITY[regime].values())])
+                >= self.min_samples
+            ):
                 return self._weighted_accuracy(pooled)
         samples = self._history.get(model, [])
         if len(samples) >= self.min_samples:
@@ -157,8 +191,7 @@ class AccuracyTracker:
                 "rel_vs_baseline": round(self.relative_performance(m), 3),
             }
             entry["per_regime"] = {
-                r: round(self.accuracy(m, r), 3)
-                for r in REGIMES if self.samples_count(m, r) >= self.min_samples
+                r: round(self.accuracy(m, r), 3) for r in REGIMES if self.samples_count(m, r) >= self.min_samples
             }
             result[m] = entry
         return result
@@ -168,9 +201,7 @@ class AdaptiveEnsemble:
     """Ensemble adaptativo con correcciones de data leakage y momentum de pesos."""
 
     def __init__(self, weights_path: str | None = None):
-        self._weights: dict[str, dict[str, float]] = {
-            r: dict(w) for r, w in DEFAULT_WEIGHTS.items()
-        }
+        self._weights: dict[str, dict[str, float]] = {r: dict(w) for r, w in DEFAULT_WEIGHTS.items()}
         self._tracker = AccuracyTracker()
         self._weights_path = weights_path or str(
             Path(__file__).resolve().parent.parent / "data" / "ensemble_weights.json"
@@ -335,7 +366,9 @@ class AdaptiveEnsemble:
             regime=regime,
         )
 
-    def record_outcome(self, model: str, regime: str, actual_direction: str, predicted_direction: str, confidence: float):
+    def record_outcome(
+        self, model: str, regime: str, actual_direction: str, predicted_direction: str, confidence: float
+    ):
         self._tracker.record(model, regime, actual_direction, predicted_direction, confidence)
 
     def record_ensemble_outcome(self, result: EnsembleResult, actual_price_change: float):

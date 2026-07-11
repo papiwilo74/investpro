@@ -17,8 +17,8 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from api.auth import register_auth_routes
-from api.middleware import add_error_handlers, add_rate_limiting_middleware, add_security_headers_middleware
 from api.metrics import metrics_endpoint
+from api.middleware import add_error_handlers, add_rate_limiting_middleware, add_security_headers_middleware
 from api.routes import advisor, analysis, backtest, broker, market, ml, portfolio
 from config import WATCHLIST, feature_flags, settings
 from ml.ensemble import ensemble
@@ -27,19 +27,23 @@ from ml.ensemble import ensemble
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     """Gestión de ciclo de vida: validar settings, keepalive, detener bot al salir."""
-    from config import settings, validate_secrets
+    from config import settings
+
     _warnings = settings.validate()
     if _warnings:
         import logging
+
         for _w in _warnings:
             logging.warning(_w)
 
     from config import feature_flags
+
     app.state.feature_flags = feature_flags
 
     # Limpiar caché expirada al arrancar
     try:
         from data.cache_manager import cache_manager
+
         expired = cache_manager.clear_expired()
         if expired:
             logging.info("Limpieza de caché: %d entradas expiradas eliminadas", expired)
@@ -53,6 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     yield
 
     from api.routes.broker import bot
+
     if bot.is_running:
         await bot.stop_async()
 
@@ -61,12 +66,12 @@ app = FastAPI(
     title="Inversion Helper API",
     version="2.0.0",
     description="API de trading automatizado con análisis técnico, ML y gestión de riesgo.\n\n"
-                "## Modos de operación\n"
-                "- **Broker**: Paper trading con Alpaca, gestión de posiciones y órdenes\n"
-                "- **Machine Learning**: Predicción de tendencias, ensemble adaptativo\n"
-                "- **Backtest**: Simulación histórica de estrategias\n"
-                "- **Análisis**: Indicadores técnicos, señales compuestas\n"
-                "- **Advisor**: Asistente online para decisiones de trading",
+    "## Modos de operación\n"
+    "- **Broker**: Paper trading con Alpaca, gestión de posiciones y órdenes\n"
+    "- **Machine Learning**: Predicción de tendencias, ensemble adaptativo\n"
+    "- **Backtest**: Simulación histórica de estrategias\n"
+    "- **Análisis**: Indicadores técnicos, señales compuestas\n"
+    "- **Advisor**: Asistente online para decisiones de trading",
     summary="Inversion Helper - Trading bot API",
     contact={"name": "Inversion Helper", "url": "https://github.com/papiwilo74/investpro"},
     lifespan=lifespan,
@@ -105,11 +110,13 @@ app.include_router(advisor.router, prefix="/api/advisor", tags=["Advisor"])
 app.include_router(broker.router, prefix="/api/broker", tags=["Broker"])
 app.include_router(broker.public_router, prefix="/api/broker", tags=["Broker Public"])
 
+
 # Endpoint de Watchlist
 @app.get("/api/watchlist", summary="Lista de tickers en watchlist")
 async def get_watchlist():
     """Retorna los tickers monitoreados por el bot."""
     return WATCHLIST
+
 
 # Feature flags
 @app.get("/api/config/flags", summary="Feature flags activos")
@@ -117,26 +124,33 @@ async def get_feature_flags():
     """Retorna los feature flags según el ambiente actual."""
     return {"env": settings.ENV, "flags": feature_flags.to_dict()}
 
+
 # Estado del caché de datos
 @app.get("/api/data/info", summary="Estado de la capa de datos y caché")
 async def get_data_info():
     """Métricas de la capa de datos: provider, caché, calidad."""
     from data.data_manager import data_manager
+
     dm = data_manager.health()
     from data.cache_manager import cache_manager
+
     dm["cache_index"] = cache_manager.to_dict()
     return dm
+
 
 # Estado del Ensemble Adaptativo
 @app.get("/api/ensemble/status", summary="Estado del ensemble adaptativo ML")
 async def get_ensemble_status():
     """Métricas en vivo del AdaptiveEnsemble: pesos, agreement, accuracy por régimen."""
     from api.utils import sanitize_for_json
+
     return sanitize_for_json(ensemble.get_status())
+
 
 # Configurar Frontend Estático si la carpeta existe
 frontend_path = Path(_PROJECT_ROOT) / "frontend"
 frontend_path.mkdir(parents=True, exist_ok=True)
+
 
 # Servir index.html en la raíz (sin cache para que los cambios JS se apliquen)
 @app.get("/")
@@ -151,6 +165,7 @@ async def serve_index():
 async def favicon():
     return Response(content=b"", media_type="image/x-icon")
 
+
 @app.get("/performance", summary="Dashboard de performance")
 async def serve_performance():
     perf_file = frontend_path / "performance.html"
@@ -158,8 +173,10 @@ async def serve_performance():
         return FileResponse(perf_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     return {"message": "Performance page not found"}
 
+
 # Montar resto de recursos estáticos en /static
 app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
+
 
 # Middleware para evitar cache del navegador en archivos JS/CSS (desarrollo)
 @app.middleware("http")
@@ -175,11 +192,19 @@ async def no_cache_static(request: Request, call_next):
 @app.get("/api/performance/live")
 async def live_performance():
     """Payload combinado para el dashboard de monitoreo en vivo."""
-    result: dict[str, object] = {"bot_status": "unknown", "metrics": {}, "equity_curve": [], "active_positions": [], "recent_trades": [], "available": True}
+    result: dict[str, object] = {
+        "bot_status": "unknown",
+        "metrics": {},
+        "equity_curve": [],
+        "active_positions": [],
+        "recent_trades": [],
+        "available": True,
+    }
 
     try:
-        from api.utils import sanitize_for_json
         from api.routes.broker import bot
+        from api.utils import sanitize_for_json
+
         result["bot_status"] = "running" if bot.is_running else "stopped"
         if bot.perf_tracker is not None:
             result["metrics"] = sanitize_for_json(bot.perf_tracker.get_latest_metrics())
@@ -201,14 +226,17 @@ async def _keepalive_ping():
 
 def _start_keepalive(base_url: str) -> None:
     """Lanza background task que se auto-pinga para evitar que Render duerma el servicio."""
+
     async def _ping_loop():
         import urllib.request
+
         while True:
             try:
                 await asyncio.sleep(600)  # 10 min
                 urllib.request.urlopen(f"{base_url}/api/_ping", timeout=10)
             except Exception:
                 pass
+
     asyncio.create_task(_ping_loop())
 
 
@@ -226,6 +254,7 @@ async def platform_health():
     # Data layer health
     try:
         from data.data_manager import data_manager
+
         dm_health = data_manager.health()
         checks["data"] = dm_health
         if dm_health.get("quality_check", {}).get("status") != "ok":
@@ -237,6 +266,7 @@ async def platform_health():
     # Verificar broker
     try:
         from broker.alpaca_client import AlpacaClient
+
         c = AlpacaClient()
         connected = c.is_connected()
         checks["broker"] = "ok" if connected else "disconnected"
@@ -249,11 +279,13 @@ async def platform_health():
     # Verificar bot
     try:
         from api.routes.broker import bot
+
         checks["bot"] = "running" if bot.is_running else "stopped"
     except Exception:
         checks["bot"] = "unknown"
 
-    from fastapi.responses import JSONResponse, Response
+    from fastapi.responses import JSONResponse
+
     return JSONResponse(
         content={"status": "ok" if status_code == 200 else "degraded", "checks": checks},
         status_code=status_code,

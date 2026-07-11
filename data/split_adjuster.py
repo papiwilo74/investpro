@@ -124,7 +124,7 @@ class SplitAdjuster:
                 # Buscar en una ventana de 3 días alrededor de la fecha del split
                 split_idx = df.index.searchsorted(pd.Timestamp(split.date))
                 if 0 < split_idx < len(daily_returns):
-                    nearby = daily_returns[max(0, split_idx - 1):min(len(daily_returns), split_idx + 2)]
+                    nearby = daily_returns[max(0, split_idx - 1) : min(len(daily_returns), split_idx + 2)]
                     if len(nearby) > 0:
                         best_match = nearby[np.argmin(np.abs(nearby - expected_jump))]
                         discrepancy = abs(best_match - expected_jump)
@@ -141,7 +141,9 @@ class SplitAdjuster:
         return {
             "ticker": report.ticker,
             "splits_found": [{"date": s.date, "ratio": s.ratio, "verified": s.verified} for s in report.splits_found],
-            "dividends_found": [{"date": d.date, "amount": d.amount, "adjusted": d.adjusted} for d in report.dividends_found],
+            "dividends_found": [
+                {"date": d.date, "amount": d.amount, "adjusted": d.adjusted} for d in report.dividends_found
+            ],
             "total_adjustments": report.total_adjustments,
             "price_discrepancy_pct": round(report.price_discrepancy_pct, 4),
             "verified": report.verified,

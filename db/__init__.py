@@ -4,6 +4,7 @@ Reemplaza gradualmente los archivos JSON para persistencia con
 integridad transaccional, consultas estructuradas y migraciones.
 Soporta SQLite (local) y PostgreSQL (Render/producción) via DATABASE_URL.
 """
+
 from __future__ import annotations
 
 import os
@@ -26,6 +27,7 @@ else:
     engine = create_engine(_DB_URL, echo=False)
 
 if _is_sqlite:
+
     @event.listens_for(engine, "connect")
     def _set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
@@ -33,6 +35,7 @@ if _is_sqlite:
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
+
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
@@ -51,4 +54,5 @@ def get_session():
 def init_db():
     """Create all tables. Safe to call multiple times (idempotent)."""
     import db.models
+
     Base.metadata.create_all(bind=engine)

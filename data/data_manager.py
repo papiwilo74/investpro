@@ -7,7 +7,14 @@ from typing import Any
 import pandas as pd
 
 from data.cache_manager import CacheManager, cache_manager
-from data.provider import DataProvider, DataQuality, YFinanceProvider, AlpacaDataProvider, PolygonProvider, create_provider
+from data.provider import (
+    AlpacaDataProvider,
+    DataProvider,
+    DataQuality,
+    PolygonProvider,
+    YFinanceProvider,
+    create_provider,
+)
 from data.split_adjuster import SplitAdjuster
 
 logger = logging.getLogger(__name__)
@@ -30,7 +37,7 @@ class DataManager:
 
     def _all_providers(self) -> list[DataProvider]:
         """Retorna [primary, *fallbacks]."""
-        return [self.provider] + self.fallback_providers
+        return [self.provider, *self.fallback_providers]
 
     def get_data(
         self,
@@ -54,13 +61,18 @@ class DataManager:
                     raise ValueError(f"empty data from {prov.name()}")
 
                 self.cache.set(
-                    ticker, period, interval, df,
+                    ticker,
+                    period,
+                    interval,
+                    df,
                     ttl_hours=self.default_ttl_hours,
                     provider=prov.name(),
                 )
 
                 if prov is not self.provider:
-                    logger.info("Failover: %s served data for %s (primary %s failed)", prov.name(), ticker, self.provider.name())
+                    logger.info(
+                        "Failover: %s served data for %s (primary %s failed)", prov.name(), ticker, self.provider.name()
+                    )
 
                 return df
             except Exception as e:
@@ -69,8 +81,7 @@ class DataManager:
                 logger.warning("DataManager failover: %s", msg)
 
         raise RuntimeError(
-            f"DataManager: all providers failed for {ticker} ({period}/{interval}). "
-            f"Errors: {'; '.join(errors)}"
+            f"DataManager: all providers failed for {ticker} ({period}/{interval}). " f"Errors: {'; '.join(errors)}"
         )
 
     def get_data_with_quality(

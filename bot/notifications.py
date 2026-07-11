@@ -20,7 +20,6 @@ from pathlib import Path
 
 import requests
 
-
 DEFAULT_SUBSCRIBED_EVENTS: set[str] = {
     "circuit_breaker", "account_floor", "panic", "bot_started", "bot_stopped",
     "new_trade", "daily_summary", "model_drift",

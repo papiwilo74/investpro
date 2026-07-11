@@ -42,6 +42,12 @@ select = [
 ignore = [
     "E501",  # line too long (black handles)
     "E402",  # module import not at top (needed for __init__)
+    "RUF001",  # ambiguous unicode in strings
+    "RUF002",  # ambiguous unicode in docstrings
+    "RUF003",  # ambiguous unicode in comments
+    "RUF006",  # create_task reference (intentional fire-and-forget)
+    "RUF012",  # mutable class attributes (common config patterns)
+    "RUF022",  # __all__ sorting (not critical)
 ]
 
 [tool.mypy]
@@ -84,6 +90,7 @@ quote-style = "double"
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["N802", "N803", "N806"]
+"ml/*.py" = ["N802", "N803", "N806", "N812", "F841"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["api", "app", "backtesting", "bot", "broker", "config", "data", "db", "frontend", "indicators", "logging_config", "ml", "portfolio"]

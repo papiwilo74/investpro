@@ -11,6 +11,7 @@ Uso
 from __future__ import annotations
 
 import os
+import time
 
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
@@ -29,7 +30,6 @@ from config import BACKTEST_PARAMS, INDICATOR_PARAMS
 from data.fetcher import DataFetcher
 from indicators.signals import SignalGenerator
 from indicators.technical import TechnicalIndicators
-from ml.panel_model import PanelModelTrainer as PanelTrainer
 from ml.panel_model import predict_panel, train_panel_model
 from ml.train import ModelTrainer
 from portfolio.optimizer import PortfolioOptimizer
@@ -547,7 +547,7 @@ def run_panel_training(
         if result is None:
             print("[!] No se pudo entrenar el modelo panel.")
             return
-        print(f"\n  Modelo panel listo.")
+        print("\n  Modelo panel listo.")
         print(f"  Tipo:          {result.get('model_type', 'N/A')}")
         print(f"  Avg accuracy:  {result.get('avg_accuracy', 0):.3f}")
         print(f"  Avg precision: {result.get('avg_precision', 0):.3f}")
@@ -560,14 +560,17 @@ def run_panel_training(
         if result.get("cv_metrics"):
             print("  CV fold breakdown:")
             for m in result["cv_metrics"]:
-                print(f"    Fold {m['fold']}: acc={m['accuracy']:.3f} prec={m['precision']:.3f} "
-                      f"rec={m['recall']:.3f} f1={m['f1']:.3f} "
-                      f"(train={m['train_size']} test={m['test_size']})")
+                print(
+                    f"    Fold {m['fold']}: acc={m['accuracy']:.3f} prec={m['precision']:.3f} "
+                    f"rec={m['recall']:.3f} f1={m['f1']:.3f} "
+                    f"(train={m['train_size']} test={m['test_size']})"
+                )
             print()
 
     except Exception as e:
         print(f"\n[ERROR] Panel training falló: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
@@ -592,6 +595,7 @@ def run_panel_predict(ticker: str, period: str = "3mo") -> None:
     except Exception as e:
         print(f"\n[ERROR] Panel predict falló: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

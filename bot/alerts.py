@@ -1,4 +1,5 @@
 """Alertas automáticas — Telegram y Discord con rate limiting y cola de reintentos."""
+
 from __future__ import annotations
 
 import asyncio
@@ -153,6 +154,7 @@ def flush_alerts() -> int:
             _last_send[msg.channel] = now
             sent += 1
             from api.metrics import record_alert
+
             record_alert(msg.channel, msg.level)
         else:
             msg.retries += 1

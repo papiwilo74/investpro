@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
@@ -23,13 +23,16 @@ def sample_df():
     dates = pd.date_range("2024-01-01", periods=10, freq="D")
     np.random.seed(42)
     prices = 100 + np.cumsum(np.random.randn(10) * 0.5)
-    return pd.DataFrame({
-        "open": prices * 0.99,
-        "high": prices * 1.01,
-        "low": prices * 0.98,
-        "close": prices,
-        "volume": np.random.randint(1_000_000, 10_000_000, size=10),
-    }, index=dates)
+    return pd.DataFrame(
+        {
+            "open": prices * 0.99,
+            "high": prices * 1.01,
+            "low": prices * 0.98,
+            "close": prices,
+            "volume": np.random.randint(1_000_000, 10_000_000, size=10),
+        },
+        index=dates,
+    )
 
 
 @pytest.fixture
@@ -79,11 +82,17 @@ class TestDataManager:
     def test_get_data_with_quality(self, mock_provider, mock_cache, sample_df):
         mock_provider.fetch.return_value = sample_df
         mock_provider.quality_check.return_value = DataQuality(
-            ticker="AAPL", rows=10, date_from="2024-01-01", date_to="2024-01-10",
-            null_pct=0.0, duplicate_dates=0, gap_days_max=1, latency_seconds=0.1,
+            ticker="AAPL",
+            rows=10,
+            date_from="2024-01-01",
+            date_to="2024-01-10",
+            null_pct=0.0,
+            duplicate_dates=0,
+            gap_days_max=1,
+            latency_seconds=0.1,
         )
         dm = DataManager(provider=mock_provider, cache=mock_cache)
-        df, quality = dm.get_data_with_quality("AAPL", "1y", "1d")
+        _df, quality = dm.get_data_with_quality("AAPL", "1y", "1d")
         assert isinstance(quality, DataQuality)
         assert quality.rows == 10
         assert quality.ticker == "AAPL"
@@ -91,7 +100,7 @@ class TestDataManager:
     def test_get_data_with_adjustment_check(self, mock_provider, mock_cache, sample_df):
         mock_provider.fetch.return_value = sample_df
         dm = DataManager(provider=mock_provider, cache=mock_cache)
-        df, report = dm.get_data_with_adjustment_check("AAPL", "1y", "1d")
+        _df, report = dm.get_data_with_adjustment_check("AAPL", "1y", "1d")
         assert report["ticker"] == "AAPL"
         assert "splits_found" in report
 
@@ -160,7 +169,7 @@ class TestFailoverChain:
         fallback.name.return_value = "fallback"
         fallback.fetch.return_value = sample_df
         dm = DataManager(provider=primary, cache=mock_cache, fallback_providers=[fallback])
-        df1 = dm.get_data("AAPL", "1y", "1d")
+        dm.get_data("AAPL", "1y", "1d")
         cached = mock_cache.get("AAPL", "1y", "1d")
         assert cached is not None
         assert len(cached) == 10

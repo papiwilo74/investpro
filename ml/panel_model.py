@@ -22,6 +22,7 @@ logger = logging.getLogger("inversion_helper.ml.panel")
 
 try:
     import lightgbm as lgb
+
     _HAS_LGBM = True
 except ImportError:
     lgb = None
@@ -30,6 +31,7 @@ except ImportError:
 
 try:
     import cupy as cp
+
     _HAS_CUDA = cp.cuda.is_available()
 except Exception:
     _HAS_CUDA = False
@@ -37,6 +39,7 @@ except Exception:
 if not _HAS_CUDA:
     try:
         import torch
+
         _HAS_CUDA = torch.cuda.is_available()
     except Exception:
         pass
@@ -146,14 +149,10 @@ class PanelFeatureGenerator:
         if freq_map is None:
             freq_map = panel["ticker"].value_counts().to_dict()
 
-        panel["ticker_freq_bin"] = panel["ticker"].apply(
-            lambda t: _ticker_frequency_rank(t, freq_map)
-        )
+        panel["ticker_freq_bin"] = panel["ticker"].apply(lambda t: _ticker_frequency_rank(t, freq_map))
 
         panel["sector"] = panel["ticker"].apply(_get_sector)
-        panel["sector_idx"] = panel["sector"].apply(
-            lambda s: SECTOR_TO_IDX.get(s, len(SECTORS))
-        )
+        panel["sector_idx"] = panel["sector"].apply(lambda s: SECTOR_TO_IDX.get(s, len(SECTORS)))
 
         # One-hot sector (top N sectores)
         for sector in SECTORS:
@@ -162,13 +161,9 @@ class PanelFeatureGenerator:
         # Target encoding: win rate histórico por ticker (rolling)
         # Se calcula con shift para evitar leakage
         if "close" in panel.columns:
-            panel["feat_future_ret"] = panel.groupby("ticker")["close"].transform(
-                lambda g: g.shift(-5) / g - 1.0
-            )
+            panel["feat_future_ret"] = panel.groupby("ticker")["close"].transform(lambda g: g.shift(-5) / g - 1.0)
             panel["ticker_win_rate"] = panel.groupby("ticker")["feat_future_ret"].transform(
-                lambda g: g.rolling(60, min_periods=10).apply(
-                    lambda x: (x >= 0.015).mean() if len(x) > 0 else 0.5
-                )
+                lambda g: g.rolling(60, min_periods=10).apply(lambda x: (x >= 0.015).mean() if len(x) > 0 else 0.5)
             )
             panel["ticker_win_rate"] = panel["ticker_win_rate"].shift(1).fillna(0.5)
             panel.drop(columns=["feat_future_ret"], inplace=True)
@@ -279,9 +274,7 @@ class PanelModelTrainer:
         sector_cols = [c for c in X.columns if c.startswith("sector_")]
 
         feature_cols = [
-            c for c in X.columns
-            if c not in (ticker_col, "sector", *sector_cols)
-            and not c.startswith("feat_macro_")
+            c for c in X.columns if c not in (ticker_col, "sector", *sector_cols) and not c.startswith("feat_macro_")
         ]
 
         categorical_cols = ["ticker_freq_bin", "sector_idx"]
@@ -303,18 +296,14 @@ class PanelModelTrainer:
             # Purging: eliminar train samples dentro de purge_days del test set
             if test_dates:
                 test_min = min(test_dates)
-                train_dates = {
-                    d for d in train_dates
-                    if (test_min - d).days > purge_days
-                }
+                train_dates = {d for d in train_dates if (test_min - d).days > purge_days}
 
             # Embargo: eliminar train samples dentro de embargo_days del test set en el otro lado
             if train_dates:
                 train_max = max(train_dates)
-                test_dates = {
-                    d for d in test_dates
-                    if (d - train_max).days > embargo_days
-                } if embargo_days > 0 else test_dates
+                test_dates = (
+                    {d for d in test_dates if (d - train_max).days > embargo_days} if embargo_days > 0 else test_dates
+                )
 
             train_mask = X.index.isin(train_dates)
             test_mask = X.index.isin(test_dates)
@@ -338,25 +327,33 @@ class PanelModelTrainer:
                 model = self._train_xgb(X_train, y_train, X_test, y_test, scale_pos)
 
             y_pred = model.predict(X_test)
-            proba = model.predict_proba(X_test)[:, 1]
-
             acc = accuracy_score(y_test, y_pred)
             prec = precision_score(y_test, y_pred, zero_division=0)
             rec = recall_score(y_test, y_pred, zero_division=0)
             f1 = f1_score(y_test, y_pred, zero_division=0)
 
-            cv_metrics.append({
-                "fold": fold,
-                "accuracy": round(float(acc), 4),
-                "precision": round(float(prec), 4),
-                "recall": round(float(rec), 4),
-                "f1": round(float(f1), 4),
-                "train_size": int(train_mask.sum()),
-                "test_size": int(test_mask.sum()),
-            })
+            cv_metrics.append(
+                {
+                    "fold": fold,
+                    "accuracy": round(float(acc), 4),
+                    "precision": round(float(prec), 4),
+                    "recall": round(float(rec), 4),
+                    "f1": round(float(f1), 4),
+                    "train_size": int(train_mask.sum()),
+                    "test_size": int(test_mask.sum()),
+                }
+            )
             models.append(model)
-            logger.info("Fold %d: acc=%.3f prec=%.3f rec=%.3f f1=%.3f (train=%d test=%d)",
-                         fold, acc, prec, rec, f1, train_mask.sum(), test_mask.sum())
+            logger.info(
+                "Fold %d: acc=%.3f prec=%.3f rec=%.3f f1=%.3f (train=%d test=%d)",
+                fold,
+                acc,
+                prec,
+                rec,
+                f1,
+                train_mask.sum(),
+                test_mask.sum(),
+            )
 
         if not models:
             raise ValueError("PanelModel: no se completó ningún fold de validación")
@@ -374,21 +371,24 @@ class PanelModelTrainer:
             final_model = self._train_xgb(X_all, y_all, None, None, scale_pos)
 
         # 5. Guardar modelo
-        self._save_model(final_model, {
-            "tickers": tickers,
-            "feature_cols": feature_cols,
-            "categorical_cols": categorical_cols,
-            "horizon": horizon,
-            "min_return": min_return,
-            "cv_metrics": cv_metrics,
-            "avg_accuracy": round(float(np.mean([m["accuracy"] for m in cv_metrics])), 4),
-            "avg_precision": round(float(np.mean([m["precision"] for m in cv_metrics])), 4),
-            "n_folds": len(cv_metrics),
-            "trained_at": time.time(),
-            "total_samples": len(X_all),
-            "n_tickers": len(tickers),
-            "model_type": "lightgbm" if self.use_lightgbm else "xgboost",
-        })
+        self._save_model(
+            final_model,
+            {
+                "tickers": tickers,
+                "feature_cols": feature_cols,
+                "categorical_cols": categorical_cols,
+                "horizon": horizon,
+                "min_return": min_return,
+                "cv_metrics": cv_metrics,
+                "avg_accuracy": round(float(np.mean([m["accuracy"] for m in cv_metrics])), 4),
+                "avg_precision": round(float(np.mean([m["precision"] for m in cv_metrics])), 4),
+                "n_folds": len(cv_metrics),
+                "trained_at": time.time(),
+                "total_samples": len(X_all),
+                "n_tickers": len(tickers),
+                "model_type": "lightgbm" if self.use_lightgbm else "xgboost",
+            },
+        )
 
         # 6. Evaluar contra Model Gate
         self._evaluate_gate(cv_metrics)
@@ -445,7 +445,8 @@ class PanelModelTrainer:
         )
         if X_val is not None and y_val is not None:
             model.fit(
-                X_train, y_train,
+                X_train,
+                y_train,
                 eval_set=[(X_val, y_val)],
                 verbose=False,
             )
@@ -486,6 +487,7 @@ class PanelModelTrainer:
             model = lgb.Booster(model_file=str(model_path))
         else:
             from xgboost import XGBClassifier
+
             model = XGBClassifier(device="cuda" if _HAS_CUDA else "cpu")
             model.load_model(str(model_path))
 
@@ -504,6 +506,7 @@ class PanelModelTrainer:
         df_with_tech = TechnicalIndicators.add_all(df)
 
         from ml.features import FeatureGenerator
+
         X_tech, _ = FeatureGenerator.build_features_and_target(df_with_tech, horizon=model_data.get("horizon", 5))
 
         if X_tech.empty:
@@ -525,7 +528,6 @@ class PanelModelTrainer:
         X_tech = PanelFeatureGenerator.add_ticker_embeddings(X_tech, freq_map)
 
         # Alinear columnas con entrenamiento
-        available_cols = [c for c in feature_cols if c in X_tech.columns]
         missing = [c for c in feature_cols if c not in X_tech.columns]
         if missing:
             for c in missing:
@@ -571,8 +573,13 @@ class PanelModelTrainer:
                 "rel_vs_baseline": max(0.0, avg_acc - 0.5),
             }
             approved = model_gate.evaluate_metadata("PANEL", metadata)
-            logger.info("PanelModel gate: %s (acc=%.3f, prec=%.3f, n=%d)",
-                         "APPROVED" if approved else "REJECTED", avg_acc, avg_prec, total_test)
+            logger.info(
+                "PanelModel gate: %s (acc=%.3f, prec=%.3f, n=%d)",
+                "APPROVED" if approved else "REJECTED",
+                avg_acc,
+                avg_prec,
+                total_test,
+            )
         except Exception as exc:
             logger.warning("PanelModel: gate evaluation falló: %s", exc)
 

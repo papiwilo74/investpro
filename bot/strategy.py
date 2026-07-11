@@ -405,7 +405,7 @@ class PositionState:
         take_profit_pct: float | None = None,
     ) -> tuple[bool, str]:
         """Retorna (should_exit, reason).
-        
+
         stop_loss_pct/take_profit_pct: overrides dinámicos (adaptive SL/TP).
         Si no se proveen, usa los valores fijos de StrategyParams.
         """

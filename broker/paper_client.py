@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from loguru import logger
 
@@ -80,8 +80,12 @@ class PaperTradingClient:
         if not self._orders:
             logger.info("PaperTradingClient initialized with ${:,.2f}", self._cash)
         else:
-            logger.info("PaperTradingClient restored — cash=${:,.2f}, {} positions, {} trades",
-                        self._cash, len(self._positions), len(self._trades))
+            logger.info(
+                "PaperTradingClient restored — cash=${:,.2f}, {} positions, {} trades",
+                self._cash,
+                len(self._positions),
+                len(self._trades),
+            )
 
     # ── Persistence (SQLite local / PostgreSQL en Render) ─────────────────
 
@@ -90,18 +94,41 @@ class PaperTradingClient:
             "cash": self._cash,
             "initial_cash": self._initial_cash,
             "order_counter": self._order_counter,
-            "positions": [{"symbol": s, "qty": p.qty, "avg_entry_price": p.avg_entry_price, "side": p.side}
-                          for s, p in self._positions.items()],
-            "orders": [{"id": o.id, "symbol": o.symbol, "qty": o.qty, "side": o.side,
-                        "order_type": o.order_type, "limit_price": o.limit_price, "status": o.status,
-                        "created_at": o.created_at, "filled_at": o.filled_at,
-                        "filled_qty": o.filled_qty, "filled_avg_price": o.filled_avg_price}
-                       for o in self._orders],
-            "trades": [{"symbol": t.symbol, "side": t.side, "qty": t.qty,
-                        "entry_price": t.entry_price, "exit_price": t.exit_price,
-                        "entry_time": t.entry_time, "exit_time": t.exit_time,
-                        "pnl": t.pnl, "pnl_pct": t.pnl_pct, "reason": t.reason}
-                       for t in self._trades],
+            "positions": [
+                {"symbol": s, "qty": p.qty, "avg_entry_price": p.avg_entry_price, "side": p.side}
+                for s, p in self._positions.items()
+            ],
+            "orders": [
+                {
+                    "id": o.id,
+                    "symbol": o.symbol,
+                    "qty": o.qty,
+                    "side": o.side,
+                    "order_type": o.order_type,
+                    "limit_price": o.limit_price,
+                    "status": o.status,
+                    "created_at": o.created_at,
+                    "filled_at": o.filled_at,
+                    "filled_qty": o.filled_qty,
+                    "filled_avg_price": o.filled_avg_price,
+                }
+                for o in self._orders
+            ],
+            "trades": [
+                {
+                    "symbol": t.symbol,
+                    "side": t.side,
+                    "qty": t.qty,
+                    "entry_price": t.entry_price,
+                    "exit_price": t.exit_price,
+                    "entry_time": t.entry_time,
+                    "exit_time": t.exit_time,
+                    "pnl": t.pnl,
+                    "pnl_pct": t.pnl_pct,
+                    "reason": t.reason,
+                }
+                for t in self._trades
+            ],
             "equity_history": self._equity_history,
         }
 
@@ -134,7 +161,8 @@ class PaperTradingClient:
             self._positions = {}
             for p in row.positions:
                 self._positions[p["symbol"]] = PaperPosition(
-                    symbol=p["symbol"], qty=p["qty"], avg_entry_price=p["avg_entry_price"], side=p.get("side", "LONG"))
+                    symbol=p["symbol"], qty=p["qty"], avg_entry_price=p["avg_entry_price"], side=p.get("side", "LONG")
+                )
             self._orders = [PaperOrder(**o) for o in row.orders]
             self._trades = [PaperTrade(**t) for t in row.trades]
             self._equity_history = list(row.equity_history)
@@ -204,12 +232,21 @@ class PaperTradingClient:
             self._remove_position(symbol, qty, fill_price, "LONG")
 
         order_id = self._next_order_id()
-        self._orders.append(PaperOrder(
-            id=order_id, symbol=symbol, qty=qty, side=side,
-            order_type="market", limit_price=None, status="filled",
-            created_at=time.time(), filled_at=time.time(),
-            filled_qty=qty, filled_avg_price=fill_price,
-        ))
+        self._orders.append(
+            PaperOrder(
+                id=order_id,
+                symbol=symbol,
+                qty=qty,
+                side=side,
+                order_type="market",
+                limit_price=None,
+                status="filled",
+                created_at=time.time(),
+                filled_at=time.time(),
+                filled_qty=qty,
+                filled_avg_price=fill_price,
+            )
+        )
 
         logger.info("[PAPER] {} {} {} @ ${:.2f} (id={})", side, qty, symbol, fill_price, order_id)
         self._save()
@@ -248,12 +285,21 @@ class PaperTradingClient:
             self._remove_position(symbol, qty, fill_price, "LONG")
 
         order_id = self._next_order_id()
-        self._orders.append(PaperOrder(
-            id=order_id, symbol=symbol, qty=qty, side=side,
-            order_type="limit", limit_price=limit_price, status="filled",
-            created_at=time.time(), filled_at=time.time(),
-            filled_qty=qty, filled_avg_price=fill_price,
-        ))
+        self._orders.append(
+            PaperOrder(
+                id=order_id,
+                symbol=symbol,
+                qty=qty,
+                side=side,
+                order_type="limit",
+                limit_price=limit_price,
+                status="filled",
+                created_at=time.time(),
+                filled_at=time.time(),
+                filled_qty=qty,
+                filled_avg_price=fill_price,
+            )
+        )
 
         logger.info("[PAPER] LIMIT {} {} {} @ ${:.2f} (id={})", side, qty, symbol, fill_price, order_id)
         self._save()
@@ -290,15 +336,26 @@ class PaperTradingClient:
         if not pos:
             return
         pnl = (price - pos.avg_entry_price) * qty if side == "LONG" else (pos.avg_entry_price - price) * qty
-        pnl_pct = (price - pos.avg_entry_price) / pos.avg_entry_price if side == "LONG" else (pos.avg_entry_price - price) / pos.avg_entry_price
+        pnl_pct = (
+            (price - pos.avg_entry_price) / pos.avg_entry_price
+            if side == "LONG"
+            else (pos.avg_entry_price - price) / pos.avg_entry_price
+        )
 
-        self._trades.append(PaperTrade(
-            symbol=symbol, side="SELL", qty=qty,
-            entry_price=pos.avg_entry_price, exit_price=price,
-            entry_time=0.0, exit_time=time.time(),
-            pnl=round(pnl, 2), pnl_pct=round(pnl_pct, 4),
-            reason="market_order",
-        ))
+        self._trades.append(
+            PaperTrade(
+                symbol=symbol,
+                side="SELL",
+                qty=qty,
+                entry_price=pos.avg_entry_price,
+                exit_price=price,
+                entry_time=0.0,
+                exit_time=time.time(),
+                pnl=round(pnl, 2),
+                pnl_pct=round(pnl_pct, 4),
+                reason="market_order",
+            )
+        )
 
         pos.qty -= qty
         if pos.qty <= 0:
@@ -310,19 +367,36 @@ class PaperTradingClient:
         return self.get_order_history()
 
     def get_order_history(self, limit: int = 50) -> list[dict]:
-        return [{
-            "id": o.id, "symbol": o.symbol, "qty": o.qty,
-            "side": o.side, "type": o.order_type, "status": o.status,
-            "filled_qty": o.filled_qty, "filled_avg_price": o.filled_avg_price,
-            "created_at": o.created_at, "filled_at": o.filled_at,
-        } for o in self._orders[-limit:]]
+        return [
+            {
+                "id": o.id,
+                "symbol": o.symbol,
+                "qty": o.qty,
+                "side": o.side,
+                "type": o.order_type,
+                "status": o.status,
+                "filled_qty": o.filled_qty,
+                "filled_avg_price": o.filled_avg_price,
+                "created_at": o.created_at,
+                "filled_at": o.filled_at,
+            }
+            for o in self._orders[-limit:]
+        ]
 
     def get_trade_history(self, limit: int = 50) -> list[dict]:
-        return [{
-            "symbol": t.symbol, "side": t.side, "qty": t.qty,
-            "entry_price": t.entry_price, "exit_price": t.exit_price,
-            "pnl": t.pnl, "pnl_pct": t.pnl_pct, "reason": t.reason,
-        } for t in self._trades[-limit:]]
+        return [
+            {
+                "symbol": t.symbol,
+                "side": t.side,
+                "qty": t.qty,
+                "entry_price": t.entry_price,
+                "exit_price": t.exit_price,
+                "pnl": t.pnl,
+                "pnl_pct": t.pnl_pct,
+                "reason": t.reason,
+            }
+            for t in self._trades[-limit:]
+        ]
 
     def get_equity_history(self) -> list[dict]:
         return self._equity_history
@@ -347,10 +421,12 @@ class PaperTradingClient:
     def snapshot(self) -> dict:
         """Registra un punto de equity para la curva histórica."""
         eq = self._cash + sum(p.market_value for p in self._positions.values())
-        self._equity_history.append({
-            "date": datetime.now(timezone.utc).isoformat(),
-            "equity": round(eq, 2),
-            "cash": round(self._cash, 2),
-        })
+        self._equity_history.append(
+            {
+                "date": datetime.now(UTC).isoformat(),
+                "equity": round(eq, 2),
+                "cash": round(self._cash, 2),
+            }
+        )
         self._save()
         return self._equity_history[-1]

@@ -32,8 +32,7 @@ class DataProvider(ABC):
     """Interfaz abstracta para descarga de OHLCV."""
 
     @abstractmethod
-    def name(self) -> str:
-        ...
+    def name(self) -> str: ...
 
     @abstractmethod
     def fetch(
@@ -41,8 +40,7 @@ class DataProvider(ABC):
         ticker: str,
         period: str = "1y",
         interval: str = "1d",
-    ) -> pd.DataFrame:
-        ...
+    ) -> pd.DataFrame: ...
 
     def health(self) -> dict[str, Any]:
         """Health check del provider. Default: ok."""
@@ -113,6 +111,7 @@ class YFinanceProvider(DataProvider):
         t0 = time.time()
         try:
             import yfinance as yf
+
             stock = yf.Ticker("SPY")
             df = stock.history(period="5d", interval="1d")
             ok = not df.empty
@@ -137,6 +136,7 @@ class AlpacaDataProvider(DataProvider):
     def _get_client(self):
         if self._client is None:
             from alpaca.data import StockHistoricalDataClient
+
             self._client = StockHistoricalDataClient(self.api_key, self.secret_key)
         return self._client
 
@@ -157,7 +157,13 @@ class AlpacaDataProvider(DataProvider):
         client = self._get_client()
 
         # Map period/interval to Alpaca params
-        tf_map = {"1d": TimeFrame.Day, "1h": TimeFrame.Hour, "15m": TimeFrame.Minute, "5m": TimeFrame.Minute, "1m": TimeFrame.Minute}
+        tf_map = {
+            "1d": TimeFrame.Day,
+            "1h": TimeFrame.Hour,
+            "15m": TimeFrame.Minute,
+            "5m": TimeFrame.Minute,
+            "1m": TimeFrame.Minute,
+        }
         tf = tf_map.get(interval, TimeFrame.Day)
         multiplier = 1
         if interval == "15m":
@@ -190,14 +196,16 @@ class AlpacaDataProvider(DataProvider):
 
         records = []
         for bar in bars.data[ticker]:
-            records.append({
-                "date": bar.timestamp,
-                "open": bar.open,
-                "high": bar.high,
-                "low": bar.low,
-                "close": bar.close,
-                "volume": bar.volume,
-            })
+            records.append(
+                {
+                    "date": bar.timestamp,
+                    "open": bar.open,
+                    "high": bar.high,
+                    "low": bar.low,
+                    "close": bar.close,
+                    "volume": bar.volume,
+                }
+            )
 
         df = pd.DataFrame(records)
         df.set_index("date", inplace=True)
@@ -244,16 +252,13 @@ class PolygonProvider(DataProvider):
         multiplier, timespan = self._parse_interval(interval)
         start, end = self._parse_period(period)
 
-        url = (
-            f"{self._BASE}/v2/aggs/ticker/{ticker.upper()}/range/"
-            f"{multiplier}/{timespan}/{start}/{end}"
-        )
+        url = f"{self._BASE}/v2/aggs/ticker/{ticker.upper()}/range/" f"{multiplier}/{timespan}/{start}/{end}"
         params = {"apiKey": self.api_key, "limit": 50000, "adjusted": "true"}
 
         t0 = time.time()
-        import urllib.request
-        import urllib.parse
         import json
+        import urllib.parse
+        import urllib.request
 
         full_url = f"{url}?{urllib.parse.urlencode(params)}"
         req = urllib.request.Request(full_url, headers={"User-Agent": "InversionHelper/1.0"})
@@ -268,14 +273,16 @@ class PolygonProvider(DataProvider):
 
         records = []
         for bar in data["results"]:
-            records.append({
-                "date": pd.Timestamp(bar["t"], unit="ms"),
-                "open": float(bar["o"]),
-                "high": float(bar["h"]),
-                "low": float(bar["l"]),
-                "close": float(bar["c"]),
-                "volume": float(bar.get("v", 0)) if bar.get("v") else 0,
-            })
+            records.append(
+                {
+                    "date": pd.Timestamp(bar["t"], unit="ms"),
+                    "open": float(bar["o"]),
+                    "high": float(bar["h"]),
+                    "low": float(bar["l"]),
+                    "close": float(bar["c"]),
+                    "volume": float(bar.get("v", 0)) if bar.get("v") else 0,
+                }
+            )
 
         df = pd.DataFrame(records)
         df.set_index("date", inplace=True)
@@ -304,6 +311,7 @@ class PolygonProvider(DataProvider):
     def _parse_period(period: str) -> tuple[str, str]:
         """Convierte '1y' -> ('2025-07-11', '2026-07-11') approx."""
         from datetime import datetime, timedelta
+
         end = datetime.utcnow()
         days_map = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825}
         days = days_map.get(period, 365)

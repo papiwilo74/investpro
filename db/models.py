@@ -1,9 +1,10 @@
 """SQLAlchemy ORM models for all persistent state."""
+
 from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, JSON, String, Text
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, Float, Integer, String, Text
 
 from db import Base
 
