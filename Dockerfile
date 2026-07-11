@@ -5,10 +5,10 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uv
 
 COPY pyproject.toml .
-RUN uv sync --dev --frozen --no-cache
+RUN uv sync --frozen --no-cache
 
 COPY . .
-RUN uv sync --dev --frozen --no-cache
+RUN uv sync --frozen --no-cache
 
 EXPOSE 8000
 
