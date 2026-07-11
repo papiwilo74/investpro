@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
+from typing import Any
 
 import pandas as pd
 
@@ -59,7 +60,8 @@ _init_db()
 class CacheManager:
     """Gestor de caché con SQLite (índice) + Parquet (datos). Thread-safe."""
 
-    def __init__(self, cache_dir: str | Path | None = None, default_ttl_hours: float = _DEFAULT_TTL_HOURS):
+    def __init__(self, cache_dir: str | Path | None = None, default_ttl_hours: float = _DEFAULT_TTL_HOURS) -> None:
+        """Inicializa CacheManager con directorio de caché y TTL por defecto."""
         self.cache_dir = Path(cache_dir) if cache_dir else _CACHE_DIR
         self.default_ttl_hours = default_ttl_hours
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -169,7 +171,7 @@ class CacheManager:
             conn.commit()
         return count
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, Any]:
         """Estadísticas del caché."""
         with _LOCK, sqlite3.connect(str(_DB_PATH)) as conn:
             total = conn.execute("SELECT COUNT(*) FROM cache_index").fetchone()[0]
@@ -187,7 +189,7 @@ class CacheManager:
             "cache_dir": str(self.cache_dir),
         }
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Exporta todo el índice como dict (para API)."""
         with _LOCK, sqlite3.connect(str(_DB_PATH)) as conn:
             rows = conn.execute(
@@ -209,4 +211,4 @@ class CacheManager:
         }
 
 
-cache_manager = CacheManager()
+cache_manager: CacheManager = CacheManager()

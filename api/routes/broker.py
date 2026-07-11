@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from collections import defaultdict
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -29,7 +32,8 @@ smart_router = SmartOrderRouter(client)
 
 
 @router.get("/account")
-async def get_account():
+async def get_account() -> dict[str, Any]:
+    """Obtiene el resumen de la cuenta de trading (equity, cash, buying power, etc.)."""
     try:
         acc = client.get_account_summary()
         if not acc:
@@ -40,7 +44,8 @@ async def get_account():
 
 
 @router.get("/positions")
-async def get_positions():
+async def get_positions() -> dict[str, Any]:
+    """Obtiene todas las posiciones abiertas actualmente."""
     try:
         positions = client.get_positions()
         return sanitize_for_json(positions)
@@ -49,7 +54,8 @@ async def get_positions():
 
 
 @router.get("/orders")
-async def get_recent_orders():
+async def get_recent_orders() -> dict[str, Any]:
+    """Obtiene las órdenes recientes del broker."""
     try:
         orders = client.get_orders()
         return sanitize_for_json(orders)
@@ -58,7 +64,8 @@ async def get_recent_orders():
 
 
 @router.get("/bot/status")
-async def get_bot_status():
+async def get_bot_status() -> dict[str, Any]:
+    """Obtiene el estado actual del bot (activo, conectado, modo estrategia, logs recientes)."""
     try:
         return {
             "active": bot.is_running,
@@ -71,46 +78,49 @@ async def get_bot_status():
 
 
 @router.get("/bot/config")
-async def get_bot_config():
+async def get_bot_config() -> dict[str, Any]:
     """Devuelve la configuración conservadora activa del bot web."""
     try:
         params = bot._strategy_params
         hof_info = getattr(bot, "_hof_info", None)
-        return sanitize_for_json({
-            "strategy_mode": bot.strategy_mode,
-            "buy_score_threshold": params.buy_score_threshold,
-            "sell_score_threshold": params.sell_score_threshold,
-            "stop_loss_pct": params.stop_loss_pct,
-            "take_profit_pct": params.take_profit_pct,
-            "trailing_stop_atr_mult": params.trailing_stop_atr_mult,
-            "max_position_size_pct": params.max_position_size_pct,
-            "min_position_size_pct": params.min_position_size_pct,
-            "require_price_above_sma200": params.require_price_above_sma200,
-            "max_buy_rsi": params.max_buy_rsi,
-            "use_neural_brain": params.use_neural_brain,
-            "use_rl_exits": params.use_rl_exits,
-            "use_short_selling": params.use_short_selling,
-            "use_momentum_scalp": params.use_momentum_scalp,
-            "use_mean_reversion": params.use_mean_reversion,
-            "use_contrarian_dip": params.use_contrarian_dip,
-            "use_intraday_scalp": params.use_intraday_scalp,
-            "leverage_enabled": BROKER_CONFIG.leverage_enabled,
-            "leverage_range": f"x{BROKER_CONFIG.min_leverage:.0f}-x{BROKER_CONFIG.max_leverage:.0f}",
-            "hall_of_fame": hof_info,
-            "risk": {
-                "max_daily_loss_pct": WEB_RISK_CONFIG.max_daily_loss_pct,
-                "max_weekly_drawdown_pct": WEB_RISK_CONFIG.max_weekly_drawdown_pct,
-                "max_position_concentration_pct": WEB_RISK_CONFIG.max_position_concentration_pct,
-                "max_total_exposure_pct": WEB_RISK_CONFIG.max_total_exposure_pct,
-                "correlation_threshold": WEB_RISK_CONFIG.correlation_threshold,
-            },
-        })
+        return sanitize_for_json(
+            {
+                "strategy_mode": bot.strategy_mode,
+                "buy_score_threshold": params.buy_score_threshold,
+                "sell_score_threshold": params.sell_score_threshold,
+                "stop_loss_pct": params.stop_loss_pct,
+                "take_profit_pct": params.take_profit_pct,
+                "trailing_stop_atr_mult": params.trailing_stop_atr_mult,
+                "max_position_size_pct": params.max_position_size_pct,
+                "min_position_size_pct": params.min_position_size_pct,
+                "require_price_above_sma200": params.require_price_above_sma200,
+                "max_buy_rsi": params.max_buy_rsi,
+                "use_neural_brain": params.use_neural_brain,
+                "use_rl_exits": params.use_rl_exits,
+                "use_short_selling": params.use_short_selling,
+                "use_momentum_scalp": params.use_momentum_scalp,
+                "use_mean_reversion": params.use_mean_reversion,
+                "use_contrarian_dip": params.use_contrarian_dip,
+                "use_intraday_scalp": params.use_intraday_scalp,
+                "leverage_enabled": BROKER_CONFIG.leverage_enabled,
+                "leverage_range": f"x{BROKER_CONFIG.min_leverage:.0f}-x{BROKER_CONFIG.max_leverage:.0f}",
+                "hall_of_fame": hof_info,
+                "risk": {
+                    "max_daily_loss_pct": WEB_RISK_CONFIG.max_daily_loss_pct,
+                    "max_weekly_drawdown_pct": WEB_RISK_CONFIG.max_weekly_drawdown_pct,
+                    "max_position_concentration_pct": WEB_RISK_CONFIG.max_position_concentration_pct,
+                    "max_total_exposure_pct": WEB_RISK_CONFIG.max_total_exposure_pct,
+                    "correlation_threshold": WEB_RISK_CONFIG.correlation_threshold,
+                },
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/bot/toggle")
-async def toggle_bot():
+async def toggle_bot() -> dict[str, Any]:
+    """Inicia o detiene el bot de trading en modo paper."""
     try:
         if not BROKER_CONFIG.paper:
             raise HTTPException(status_code=400, detail="Bot bloqueado: ALPACA_PAPER debe ser true.")
@@ -126,7 +136,8 @@ async def toggle_bot():
 
 
 @router.get("/paper/signals")
-async def get_paper_signals(limit: int = 50):
+async def get_paper_signals(limit: int = 50) -> dict[str, Any]:
+    """Obtiene las señales recientes del paper trading journal."""
     try:
         return sanitize_for_json(journal.recent_signals(limit=limit))
     except Exception as e:
@@ -134,7 +145,8 @@ async def get_paper_signals(limit: int = 50):
 
 
 @router.get("/paper/summary")
-async def get_paper_summary():
+async def get_paper_summary() -> dict[str, Any]:
+    """Obtiene el resumen de rendimiento del paper trading."""
     try:
         return sanitize_for_json(journal.summary())
     except Exception as e:
@@ -142,7 +154,8 @@ async def get_paper_summary():
 
 
 @router.post("/paper/update-outcomes")
-async def update_paper_outcomes():
+async def update_paper_outcomes() -> dict[str, Any]:
+    """Actualiza los outcomes de los trades en papel (ganancias/pérdidas realizadas)."""
     try:
         updated = journal.update_outcomes()
         return {"updated": updated, "summary": sanitize_for_json(journal.summary())}
@@ -151,7 +164,8 @@ async def update_paper_outcomes():
 
 
 @router.get("/paper/safety-gate")
-async def get_safety_gate():
+async def get_safety_gate() -> dict[str, Any]:
+    """Obtiene el estado del safety gate (límites de drawdown/pérdida diaria)."""
     try:
         gate = journal.safety_gate()
         return sanitize_for_json(gate.__dict__)
@@ -160,7 +174,8 @@ async def get_safety_gate():
 
 
 @router.get("/kelly")
-async def get_kelly_stats():
+async def get_kelly_stats() -> dict[str, Any]:
+    """Obtiene las estadísticas del Kelly Criterion basado en el historial de trades."""
     try:
         return sanitize_for_json(kelly_tracker.to_dict())
     except Exception as e:
@@ -168,7 +183,8 @@ async def get_kelly_stats():
 
 
 @router.get("/risk")
-async def get_risk_status():
+async def get_risk_status() -> dict[str, Any]:
+    """Obtiene el estado completo del risk manager (circuit breaker, drawdown, exposición)."""
     try:
         bot.risk_manager.set_positions(client.get_positions())
         acc = client.get_account_summary()
@@ -180,7 +196,7 @@ async def get_risk_status():
 
 
 @router.get("/risk/kelly")
-async def get_risk_kelly():
+async def get_risk_kelly() -> dict[str, Any]:
     """Kelly Criterion basado en trades reales registrados por el risk manager."""
     try:
         return sanitize_for_json(bot.risk_manager.kelly_suggestion())
@@ -189,7 +205,7 @@ async def get_risk_kelly():
 
 
 @router.get("/market/regime")
-async def get_market_regime():
+async def get_market_regime() -> dict[str, Any]:
     """Estado del régimen de mercado amplio (SPY/VIX)."""
     try:
         return sanitize_for_json(bot.market_regime.to_dict())
@@ -198,7 +214,7 @@ async def get_market_regime():
 
 
 @router.get("/advisor/status")
-async def get_advisor_status():
+async def get_advisor_status() -> dict[str, Any]:
     """Estado y performance del Online Learning Advisor."""
     try:
         if bot.online_advisor is None:
@@ -209,7 +225,7 @@ async def get_advisor_status():
 
 
 @router.post("/advisor/reset")
-async def reset_advisor():
+async def reset_advisor() -> dict[str, Any]:
     """Resetea el Q-table del advisor (útil tras cambios de estrategia)."""
     try:
         if bot.online_advisor is None:
@@ -227,7 +243,7 @@ async def reset_advisor():
 
 
 @router.get("/mtf/{ticker}")
-async def get_mtf_status(ticker: str):
+async def get_mtf_status(ticker: str) -> dict[str, Any]:
     """Filtro Multi-Timeframe para un ticker específico."""
     try:
         if bot.mtf_filter is None:
@@ -236,6 +252,7 @@ async def get_mtf_status(ticker: str):
         if df.empty:
             raise HTTPException(status_code=404, detail=f"No hay datos para {ticker}")
         from indicators.technical import TechnicalIndicators
+
         df = TechnicalIndicators.add_all(df, intraday=False)
         return sanitize_for_json(bot.mtf_filter.to_dict(ticker, df))
     except HTTPException:
@@ -245,7 +262,7 @@ async def get_mtf_status(ticker: str):
 
 
 @router.get("/market/breadth")
-async def get_market_breadth():
+async def get_market_breadth() -> dict[str, Any]:
     """Amplitud del mercado (RSP/SPY, QQQ/SPY, Force Index)."""
     try:
         if bot.market_breadth is None:
@@ -256,7 +273,7 @@ async def get_market_breadth():
 
 
 @router.get("/telemetry/summary")
-async def get_telemetry_summary():
+async def get_telemetry_summary() -> dict[str, Any]:
     """Resumen de telemetría acumulada (equity curve, métricas, trades)."""
     try:
         if bot.perf_tracker is None:
@@ -267,7 +284,7 @@ async def get_telemetry_summary():
 
 
 @router.get("/telemetry/equity")
-async def get_equity_curve(days: int = 90):
+async def get_equity_curve(days: int = 90) -> dict[str, Any]:
     """Curva de equity de los últimos N días."""
     try:
         if bot.perf_tracker is None:
@@ -278,7 +295,7 @@ async def get_equity_curve(days: int = 90):
 
 
 @router.get("/telemetry/metrics")
-async def get_telemetry_metrics():
+async def get_telemetry_metrics() -> dict[str, Any]:
     """Métricas rolling (Sharpe, win rate, max DD 30d)."""
     try:
         if bot.perf_tracker is None:
@@ -289,45 +306,56 @@ async def get_telemetry_metrics():
 
 
 @router.get("/ml/status")
-async def get_ml_status():
+async def get_ml_status() -> dict[str, Any]:
+    """Estado de los modelos de ML entrenados (solo lectura de metadatos, sin inferencia)."""
     # En modo web no dependemos de ML; se mantiene el endpoint para compatibilidad.
     from config import PROJECT_ROOT
+
     models_dir = PROJECT_ROOT / "ml" / "models"
     status = []
     if models_dir.exists():
         for f in sorted(models_dir.glob("*.meta.json")):
             import json
             import time
+
             with open(f) as fh:
                 meta = json.load(fh)
             age_h = (time.time() - f.stat().st_mtime) / 3600
-            status.append({
-                "ticker": meta.get("ticker", f.stem),
-                "accuracy": round(meta.get("metrics", {}).get("accuracy", 0), 3),
-                "age_hours": round(age_h, 1),
-                "precision": round(meta.get("metrics", {}).get("precision", 0), 3),
-            })
-    return {
-        "models": status,
-        "note": "El bot web no usa ML en sus decisiones para evitar overfitting."
-    }
+            status.append(
+                {
+                    "ticker": meta.get("ticker", f.stem),
+                    "accuracy": round(meta.get("metrics", {}).get("accuracy", 0), 3),
+                    "age_hours": round(age_h, 1),
+                    "precision": round(meta.get("metrics", {}).get("precision", 0), 3),
+                }
+            )
+    return {"models": status, "note": "El bot web no usa ML en sus decisiones para evitar overfitting."}
 
 
 # ── Notificaciones configurables ──────────────────────────────────────
 
 NOTIFICATION_EVENTS = [
-    "circuit_breaker", "account_floor", "panic", "bot_started", "bot_stopped",
-    "new_trade", "daily_summary", "model_drift", "hedge_alert",
+    "circuit_breaker",
+    "account_floor",
+    "panic",
+    "bot_started",
+    "bot_stopped",
+    "new_trade",
+    "daily_summary",
+    "model_drift",
+    "hedge_alert",
 ]
 
 
 @router.get("/notifications/subscriptions")
-async def get_notification_subscriptions():
+async def get_notification_subscriptions() -> dict[str, Any]:
+    """Obtiene las suscripciones actuales a notificaciones y la lista de eventos disponibles."""
     return {"subscribed": notifier.subscribed_events(), "available": NOTIFICATION_EVENTS}
 
 
 @router.post("/notifications/subscribe")
-async def subscribe_notification(event: str = Query(...)):
+async def subscribe_notification(event: str = Query(...)) -> dict[str, Any]:
+    """Suscribe a un evento de notificación específico."""
     if event not in NOTIFICATION_EVENTS:
         raise HTTPException(status_code=400, detail=f"Evento inválido. Opciones: {', '.join(NOTIFICATION_EVENTS)}")
     notifier.subscribe(event)
@@ -335,15 +363,18 @@ async def subscribe_notification(event: str = Query(...)):
 
 
 @router.post("/notifications/unsubscribe")
-async def unsubscribe_notification(event: str = Query(...)):
+async def unsubscribe_notification(event: str = Query(...)) -> dict[str, Any]:
+    """Cancela la suscripción a un evento de notificación."""
     notifier.unsubscribe(event)
     return {"subscribed": notifier.subscribed_events()}
 
 
 # ── Walk-Forward Validation ───────────────────────────────────────────
 
+
 @router.post("/validation/walk-forward")
-async def run_walk_forward(ticker: str = Query("AAPL"), period: str = Query("2y")):
+async def run_walk_forward(ticker: str = Query("AAPL"), period: str = Query("2y")) -> dict[str, Any]:
+    """Ejecuta una validación Walk-Forward para evaluar la robustez de la estrategia en un ticker."""
     try:
         from backtesting.validation import run_validation
         from data.fetcher import DataFetcher
@@ -369,13 +400,14 @@ async def run_walk_forward(ticker: str = Query("AAPL"), period: str = Query("2y"
                 "mc_sharpe_p5": report.monte_carlo.sharpe_p5 if report.monte_carlo else 0,
                 "total_windows": len(report.walk_forward_results) if report.walk_forward_results else 0,
             }
+
         return await _run()
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/dashboard")
-async def get_broker_dashboard():
+async def get_broker_dashboard() -> dict[str, Any]:
     """Endpoint batch: devuelve TODOS los datos del broker en 1 sola petición.
 
     Reemplaza 12 llamadas separadas por 1 sola → 10x más rápido en Render free.
@@ -429,21 +461,25 @@ async def get_broker_dashboard():
 
         # ML status (ligero — solo lee archivos)
         from config import PROJECT_ROOT
+
         models_dir = PROJECT_ROOT / "ml" / "models"
         ml_models = []
         if models_dir.exists():
             import json as _json
             import time as _time
+
             for f in sorted(models_dir.glob("*.meta.json")):
                 try:
                     with open(f) as fh:
                         meta = _json.load(fh)
                     age_h = (_time.time() - f.stat().st_mtime) / 3600
-                    ml_models.append({
-                        "ticker": meta.get("ticker", f.stem),
-                        "accuracy": round(meta.get("metrics", {}).get("accuracy", 0), 3),
-                        "age_hours": round(age_h, 1),
-                    })
+                    ml_models.append(
+                        {
+                            "ticker": meta.get("ticker", f.stem),
+                            "accuracy": round(meta.get("metrics", {}).get("accuracy", 0), 3),
+                            "age_hours": round(age_h, 1),
+                        }
+                    )
                 except Exception:
                     continue
 
@@ -469,27 +505,31 @@ async def get_broker_dashboard():
             except Exception:
                 breadth = {"available": False}
 
-        return sanitize_for_json({
-            "bot_status": bot_status,
-            "account": acc,
-            "positions": positions,
-            "orders": orders,
-            "config": config,
-            "risk": risk,
-            "kelly": kelly,
-            "ml_models": ml_models,
-            "advisor": advisor,
-            "market_regime": regime,
-            "market_breadth": breadth,
-        })
+        return sanitize_for_json(
+            {
+                "bot_status": bot_status,
+                "account": acc,
+                "positions": positions,
+                "orders": orders,
+                "config": config,
+                "risk": risk,
+                "kelly": kelly,
+                "ml_models": ml_models,
+                "advisor": advisor,
+                "market_regime": regime,
+                "market_breadth": breadth,
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 # ── ShadowTrader endpoints ──────────────────────────────────────────
 
+
 @router.get("/shadow/stats")
-async def get_shadow_stats():
+async def get_shadow_stats() -> dict[str, Any]:
+    """Obtiene estadísticas del ShadowTrader (réplica de estrategias para monitoreo)."""
     try:
         return sanitize_for_json(shadow_trader.stats())
     except Exception as e:
@@ -497,7 +537,8 @@ async def get_shadow_stats():
 
 
 @router.get("/shadow/drift")
-async def get_shadow_drift():
+async def get_shadow_drift() -> dict[str, Any]:
+    """Detecta desviaciones (drift) entre la estrategia real y la sombra."""
     try:
         return sanitize_for_json(shadow_trader.check_drift())
     except Exception as e:
@@ -508,7 +549,8 @@ async def get_shadow_drift():
 async def get_shadow_accuracy(
     ticker: str,
     model: str = Query("ensemble_blend", description="Model name to check accuracy for"),
-):
+) -> dict[str, Any]:
+    """Obtiene la precisión en vivo de un modelo del ShadowTrader para un ticker."""
     try:
         ticker = ticker.upper().strip()
         acc = shadow_trader.live_accuracy(ticker, model=model)
@@ -518,6 +560,7 @@ async def get_shadow_accuracy(
 
 
 # ── SmartOrderRouter endpoints ──────────────────────────────────────
+
 
 class SmartRouterExecuteRequest(BaseModel):
     symbol: str
@@ -529,11 +572,16 @@ class SmartRouterExecuteRequest(BaseModel):
 
 
 @router.post("/smart-router/execute")
-async def execute_smart_order(req: SmartRouterExecuteRequest):
+async def execute_smart_order(req: SmartRouterExecuteRequest) -> dict[str, Any]:
+    """Ejecuta una orden a través del SmartOrderRouter con enrutamiento inteligente."""
     try:
         result = smart_router.execute(
-            req.symbol, req.qty, req.side,
-            req.decision_price, strategy=req.strategy, use_limit=req.use_limit,
+            req.symbol,
+            req.qty,
+            req.side,
+            req.decision_price,
+            strategy=req.strategy,
+            use_limit=req.use_limit,
         )
         return sanitize_for_json(result)
     except Exception as e:
@@ -541,7 +589,8 @@ async def execute_smart_order(req: SmartRouterExecuteRequest):
 
 
 @router.get("/smart-router/slippage")
-async def get_slippage_stats(symbol: str | None = Query(None)):
+async def get_slippage_stats(symbol: str | None = Query(None)) -> dict[str, Any]:
+    """Obtiene estadísticas de slippage del SmartOrderRouter, opcionalmente filtradas por símbolo."""
     try:
         return sanitize_for_json(smart_router.slippage_stats(symbol))
     except Exception as e:
@@ -549,7 +598,8 @@ async def get_slippage_stats(symbol: str | None = Query(None)):
 
 
 @router.get("/smart-router/slippage/{symbol}")
-async def get_slippage_per_symbol(symbol: str):
+async def get_slippage_per_symbol(symbol: str) -> dict[str, Any]:
+    """Obtiene estadísticas de slippage para un símbolo específico."""
     try:
         return sanitize_for_json(smart_router.slippage_stats(symbol))
     except Exception as e:
@@ -557,7 +607,7 @@ async def get_slippage_per_symbol(symbol: str):
 
 
 @public_router.get("/health", response_model=HealthCheck)
-async def get_health_dashboard():
+async def get_health_dashboard() -> dict[str, Any]:
     """Dashboard de salud del bot: estado consolidado de un vistazo.
 
     Agrega: cuenta, posiciones, riesgo, leverage, régimen, circuit breaker,
@@ -585,16 +635,18 @@ async def get_health_dashboard():
             side = "SHORT" if qty < 0 else "LONG"
             total_exposure += abs(mv)
             total_unrealized += float(p.get("unrealized_pl", 0))
-            pos_summary.append({
-                "symbol": sym,
-                "side": side,
-                "qty": qty,
-                "market_value": round(mv, 2),
-                "unrealized_pl": round(float(p.get("unrealized_pl", 0)), 2),
-                "unrealized_plpc": round(plpc, 4),
-                "entry_price": round(float(p.get("avg_entry_price", 0)), 2),
-                "current_price": round(float(p.get("current_price", 0)), 2),
-            })
+            pos_summary.append(
+                {
+                    "symbol": sym,
+                    "side": side,
+                    "qty": qty,
+                    "market_value": round(mv, 2),
+                    "unrealized_pl": round(float(p.get("unrealized_pl", 0)), 2),
+                    "unrealized_plpc": round(plpc, 4),
+                    "entry_price": round(float(p.get("avg_entry_price", 0)), 2),
+                    "current_price": round(float(p.get("current_price", 0)), 2),
+                }
+            )
 
         equity = acc.get("equity", 0) if acc else 0
         pnl_pct_today = (acc.get("pnl_pct_today", 0) / 100.0) if acc else 0
@@ -608,6 +660,7 @@ async def get_health_dashboard():
 
         # Leverage config
         from config import BROKER_CONFIG
+
         leverage_cfg = {
             "enabled": BROKER_CONFIG.leverage_enabled,
             "min": BROKER_CONFIG.min_leverage,
@@ -617,20 +670,39 @@ async def get_health_dashboard():
         # Estado de alertas críticas
         alerts = []
         if risk.get("circuit_breaker_active"):
-            alerts.append({"type": "circuit_breaker", "level": "critical",
-                           "msg": f"Circuit breaker activo ({risk.get('circuit_breaker_remaining_min', 0)} min)"})
+            alerts.append(
+                {
+                    "type": "circuit_breaker",
+                    "level": "critical",
+                    "msg": f"Circuit breaker activo ({risk.get('circuit_breaker_remaining_min', 0)} min)",
+                }
+            )
         if risk.get("account_liquidated"):
-            alerts.append({"type": "account_floor", "level": "critical",
-                           "msg": "Cuenta liquidada — piso alcanzado"})
+            alerts.append({"type": "account_floor", "level": "critical", "msg": "Cuenta liquidada — piso alcanzado"})
         if pnl_pct_today <= -0.02:
-            alerts.append({"type": "daily_loss", "level": "critical",
-                           "msg": f"Pérdida del día {pnl_pct_today:.2%} — leverage x1.0"})
+            alerts.append(
+                {
+                    "type": "daily_loss",
+                    "level": "critical",
+                    "msg": f"Pérdida del día {pnl_pct_today:.2%} — leverage x1.0",
+                }
+            )
         elif pnl_pct_today <= -0.01:
-            alerts.append({"type": "daily_loss_warn", "level": "warning",
-                           "msg": f"Pérdida del día {pnl_pct_today:.2%} — leverage reducido"})
+            alerts.append(
+                {
+                    "type": "daily_loss_warn",
+                    "level": "warning",
+                    "msg": f"Pérdida del día {pnl_pct_today:.2%} — leverage reducido",
+                }
+            )
         if risk.get("consecutive_losses", 0) >= risk.get("consecutive_loss_limit", 3) - 1:
-            alerts.append({"type": "consecutive_losses", "level": "warning",
-                           "msg": f"Pérdidas consecutivas: {risk.get('consecutive_losses', 0)}"})
+            alerts.append(
+                {
+                    "type": "consecutive_losses",
+                    "level": "warning",
+                    "msg": f"Pérdidas consecutivas: {risk.get('consecutive_losses', 0)}",
+                }
+            )
 
         # Estado general
         if alerts:
@@ -643,45 +715,47 @@ async def get_health_dashboard():
         # HOF info
         hof_info = getattr(bot, "_hof_info", None)
 
-        return sanitize_for_json({
-            "status": overall_status,
-            "alerts": alerts,
-            "bot": {
-                "active": bot.is_running,
-                "connected": client.is_connected(),
-                "strategy_mode": bot.strategy_mode,
-            },
-            "account": {
-                "equity": round(equity, 2),
-                "cash": round(acc.get("cash", 0), 2) if acc else 0,
-                "buying_power": round(buying_power, 2),
-                "pnl_today": round(acc.get("pnl_today", 0), 2) if acc else 0,
-                "pnl_pct_today": round(pnl_pct_today, 4),
-            },
-            "positions": {
-                "count": len(positions),
-                "total_exposure": round(total_exposure, 2),
-                "exposure_pct": round(total_exposure / equity, 4) if equity > 0 else 0,
-                "total_unrealized_pl": round(total_unrealized, 2),
-                "details": pos_summary,
-            },
-            "risk": {
-                "circuit_breaker_active": risk.get("circuit_breaker_active", False),
-                "circuit_breaker_remaining_min": risk.get("circuit_breaker_remaining_min", 0),
-                "consecutive_losses": risk.get("consecutive_losses", 0),
-                "consecutive_loss_limit": risk.get("consecutive_loss_limit", 3),
-                "account_liquidated": risk.get("account_liquidated", False),
-                "initial_portfolio_value": risk.get("initial_portfolio_value", 0),
-                "account_floor_pct": risk.get("account_floor_pct", 0.85),
-                "total_trades": risk.get("total_trades_risk_logged", 0),
-                "win_rate": risk.get("performance", {}).get("win_rate", 0),
-                "profit_factor": risk.get("performance", {}).get("profit_factor", 0),
-            },
-            "leverage": leverage_cfg,
-            "market_regime": regime.get("regime", "UNKNOWN"),
-            "market_regime_reason": regime.get("reason", ""),
-            "hall_of_fame": hof_info,
-            "timestamp": datetime.now().isoformat(),
-        })
+        return sanitize_for_json(
+            {
+                "status": overall_status,
+                "alerts": alerts,
+                "bot": {
+                    "active": bot.is_running,
+                    "connected": client.is_connected(),
+                    "strategy_mode": bot.strategy_mode,
+                },
+                "account": {
+                    "equity": round(equity, 2),
+                    "cash": round(acc.get("cash", 0), 2) if acc else 0,
+                    "buying_power": round(buying_power, 2),
+                    "pnl_today": round(acc.get("pnl_today", 0), 2) if acc else 0,
+                    "pnl_pct_today": round(pnl_pct_today, 4),
+                },
+                "positions": {
+                    "count": len(positions),
+                    "total_exposure": round(total_exposure, 2),
+                    "exposure_pct": round(total_exposure / equity, 4) if equity > 0 else 0,
+                    "total_unrealized_pl": round(total_unrealized, 2),
+                    "details": pos_summary,
+                },
+                "risk": {
+                    "circuit_breaker_active": risk.get("circuit_breaker_active", False),
+                    "circuit_breaker_remaining_min": risk.get("circuit_breaker_remaining_min", 0),
+                    "consecutive_losses": risk.get("consecutive_losses", 0),
+                    "consecutive_loss_limit": risk.get("consecutive_loss_limit", 3),
+                    "account_liquidated": risk.get("account_liquidated", False),
+                    "initial_portfolio_value": risk.get("initial_portfolio_value", 0),
+                    "account_floor_pct": risk.get("account_floor_pct", 0.85),
+                    "total_trades": risk.get("total_trades_risk_logged", 0),
+                    "win_rate": risk.get("performance", {}).get("win_rate", 0),
+                    "profit_factor": risk.get("performance", {}).get("profit_factor", 0),
+                },
+                "leverage": leverage_cfg,
+                "market_regime": regime.get("regime", "UNKNOWN"),
+                "market_regime_reason": regime.get("reason", ""),
+                "hall_of_fame": hof_info,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

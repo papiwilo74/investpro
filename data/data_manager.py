@@ -29,7 +29,8 @@ class DataManager:
         cache: CacheManager | None = None,
         default_ttl_hours: float = 4.0,
         fallback_providers: list[DataProvider] | None = None,
-    ):
+    ) -> None:
+        """Inicializa DataManager con provider primario, caché y lista de fallback."""
         self.provider = provider or YFinanceProvider()
         self.cache = cache or cache_manager
         self.default_ttl_hours = default_ttl_hours
@@ -106,6 +107,7 @@ class DataManager:
         period: str = "1y",
         interval: str = "1d",
     ) -> tuple[pd.DataFrame, dict[str, Any]]:
+        """Obtiene datos y chequea ajustes por splits corporativos."""
         df = self.get_data(ticker, period, interval)
         report = SplitAdjuster.check_adjustment(ticker, df)
         return df, SplitAdjuster.to_dict(report)
@@ -145,7 +147,7 @@ class DataManager:
         self.provider = create_provider(source, **kwargs)
 
 
-data_manager = DataManager(
+data_manager: DataManager = DataManager(
     fallback_providers=[
         AlpacaDataProvider(),
         PolygonProvider(),

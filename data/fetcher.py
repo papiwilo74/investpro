@@ -24,6 +24,7 @@ class DataFetcher:
     """
 
     def __init__(self, cache_config: CacheConfig | None = None, provider: DataProvider | None = None) -> None:
+        """Inicializa DataFetcher con configuración de caché y provider opcional."""
         self.config = cache_config or CACHE_CONFIG
         self._dm = DataManager(
             provider=provider,
@@ -50,6 +51,7 @@ class DataFetcher:
         interval: str = "1d",
         force_refresh: bool = False,
     ) -> pd.DataFrame:
+        """Obtiene datos OHLCV, usando caché si está fresco."""
         return self._dm.get_data(ticker, period, interval, force_refresh=force_refresh)
 
     def fetch_batch(
@@ -59,6 +61,7 @@ class DataFetcher:
         interval: str = "1d",
         max_workers: int = 14,
     ) -> dict[str, pd.DataFrame]:
+        """Descarga datos para múltiples tickers en paralelo."""
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         results: dict[str, pd.DataFrame] = {}
@@ -83,6 +86,7 @@ class DataFetcher:
         return results
 
     def clear_cache(self, ticker: str | None = None) -> int:
+        """Invalida entradas de caché para un ticker o todo."""
         from data.cache_manager import cache_manager
 
         if ticker:
@@ -92,4 +96,5 @@ class DataFetcher:
 
     @property
     def data_manager(self) -> DataManager:
+        """Acceso al DataManager interno."""
         return self._dm

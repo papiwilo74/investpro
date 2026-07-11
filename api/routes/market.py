@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 
@@ -10,14 +14,16 @@ router = APIRouter()
 fetcher = DataFetcher()
 scanner = MarketScanner(fetcher=fetcher)
 
+
 @router.get("/scanner/opportunities")
 async def scan_opportunities(
     universe: str = Query("nasdaq100", description="Universo: watchlist, nasdaq100, sp500, all"),
     period: str = Query("1y", description="Periodo de datos"),
     interval: str = Query("1d", description="Intervalo de datos"),
     limit: int = Query(15, ge=1, le=50, description="Cantidad maxima de oportunidades"),
-    include_rejected: bool = Query(True, description="Incluir tickers rechazados con razones")
-):
+    include_rejected: bool = Query(True, description="Incluir tickers rechazados con razones"),
+) -> dict[str, Any]:
+    """Escanea el mercado en busca de oportunidades de trading basadas en indicadores técnicos."""
     try:
         result = scanner.scan(
             universe=universe,
@@ -30,12 +36,14 @@ async def scan_opportunities(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/{ticker}")
 async def get_market_data(
     ticker: str,
     period: str = Query("1y", description="Periodo de datos"),
-    interval: str = Query("1d", description="Intervalo de datos")
-):
+    interval: str = Query("1d", description="Intervalo de datos"),
+) -> dict[str, Any]:
+    """Obtiene velas históricas, indicadores técnicos y datos recientes para un ticker."""
     try:
         ticker = ticker.upper().strip()
         df = fetcher.get_data(ticker, period=period, interval=interval)
@@ -54,14 +62,16 @@ async def get_market_data(
             time_str = idx.strftime("%Y-%m-%d")
 
             # Vela
-            candles.append({
-                "time": time_str,
-                "open": row["open"],
-                "high": row["high"],
-                "low": row["low"],
-                "close": row["close"],
-                "volume": row["volume"]
-            })
+            candles.append(
+                {
+                    "time": time_str,
+                    "open": row["open"],
+                    "high": row["high"],
+                    "low": row["low"],
+                    "close": row["close"],
+                    "volume": row["volume"],
+                }
+            )
 
             # SMA
             if "sma_20" in row and pd.notna(row["sma_20"]):
@@ -77,45 +87,33 @@ async def get_market_data(
 
             # MACD
             if "macd" in row and "macd_signal" in row and "macd_histogram" in row:
-                macd.append({
-                    "time": time_str,
-                    "macd": row["macd"],
-                    "signal": row["macd_signal"],
-                    "histogram": row["macd_histogram"]
-                })
+                macd.append(
+                    {
+                        "time": time_str,
+                        "macd": row["macd"],
+                        "signal": row["macd_signal"],
+                        "histogram": row["macd_histogram"],
+                    }
+                )
 
             # Bollinger Bands
             if "bb_upper" in row and "bb_middle" in row and "bb_lower" in row:
-                bb.append({
-                    "time": time_str,
-                    "upper": row["bb_upper"],
-                    "middle": row["bb_middle"],
-                    "lower": row["bb_lower"]
-                })
+                bb.append(
+                    {"time": time_str, "upper": row["bb_upper"], "middle": row["bb_middle"], "lower": row["bb_lower"]}
+                )
 
         # Datos recientes para el header
         last_close = float(df["close"].iloc[-1])
         prev_close = float(df["close"].iloc[-2]) if len(df) > 1 else last_close
         change_pct = float(((last_close / prev_close) - 1) * 100)
 
-        latest = {
-            "close": last_close,
-            "change_pct": change_pct,
-            "volume": int(df["volume"].iloc[-1])
-        }
+        latest = {"close": last_close, "change_pct": change_pct, "volume": int(df["volume"].iloc[-1])}
 
         response_data = {
             "ticker": ticker,
             "candles": candles,
-            "indicators": {
-                "sma_20": sma_20,
-                "sma_50": sma_50,
-                "sma_200": sma_200,
-                "rsi": rsi,
-                "macd": macd,
-                "bb": bb
-            },
-            "latest": latest
+            "indicators": {"sma_20": sma_20, "sma_50": sma_50, "sma_200": sma_200, "rsi": rsi, "macd": macd, "bb": bb},
+            "latest": latest,
         }
 
         return sanitize_for_json(response_data)
@@ -123,11 +121,12 @@ async def get_market_data(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/{ticker}/news")
 async def get_market_news(
-    ticker: str,
-    limit: int = Query(10, description="Número de noticias a recuperar")
-):
+    ticker: str, limit: int = Query(10, description="Número de noticias a recuperar")
+) -> dict[str, Any]:
+    """Obtiene noticias recientes de un ticker con análisis de sentimiento."""
     try:
         from data.news import NewsFetcher
         from ml.sentiment import SentimentAnalyzer

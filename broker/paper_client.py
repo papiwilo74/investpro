@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from loguru import logger
+from sqlalchemy.orm import Session
 
 from db import SessionLocal, init_db
 from db.models import PaperState
@@ -64,7 +67,7 @@ class PaperTrade:
 class PaperTradingClient:
     """Broker simulado con fills realistas, slippage y tracking de P&L."""
 
-    def __init__(self, initial_cash: float = 100_000.0, session=None):
+    def __init__(self, initial_cash: float = 100_000.0, session: Callable[[], Session] | None = None):
         self._session_provider = session or SessionLocal
         self._cash = initial_cash
         self._initial_cash = initial_cash
@@ -174,7 +177,7 @@ class PaperTradingClient:
     def is_connected(self) -> bool:
         return True
 
-    def get_account_summary(self) -> dict:
+    def get_account_summary(self) -> dict[str, Any]:
         equity = self._cash + sum(p.market_value for p in self._positions.values())
         return {
             "equity": round(equity, 2),
@@ -188,7 +191,7 @@ class PaperTradingClient:
 
     # ── Positions ──────────────────────────────────────────────────────
 
-    def get_positions(self) -> list[dict]:
+    def get_positions(self) -> list[dict[str, Any]]:
         return [p.to_dict() for p in self._positions.values()]
 
     def _get_price(self, symbol: str) -> float:
@@ -212,7 +215,7 @@ class PaperTradingClient:
             return round(base + slippage, 2)
         return round(base - slippage, 2)
 
-    def place_market_order(self, symbol: str, qty: float, side: str) -> dict:
+    def place_market_order(self, symbol: str, qty: float, side: str) -> dict[str, Any]:
         if qty <= 0:
             return {"status": "error", "msg": "Invalid quantity"}
 

@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
 
 from api.utils import sanitize_for_json
@@ -10,12 +14,14 @@ router = APIRouter()
 fetcher = DataFetcher()
 trainer = ModelTrainer()
 
+
 @router.get("/{ticker}")
 async def get_advisor_briefing(
     ticker: str,
     period: str = Query("1y", description="Periodo de datos"),
-    interval: str = Query("1d", description="Intervalo de datos")
-):
+    interval: str = Query("1d", description="Intervalo de datos"),
+) -> dict[str, Any]:
+    """Genera un briefing ejecutivo con análisis técnico y recomendaciones para un ticker."""
     try:
         ticker = ticker.upper().strip()
         df = fetcher.get_data(ticker, period=period, interval=interval)
@@ -26,13 +32,15 @@ async def get_advisor_briefing(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/{ticker}/question/{question_id}")
 async def ask_advisor_question(
     ticker: str,
     question_id: int,
     period: str = Query("1y", description="Periodo de datos"),
-    interval: str = Query("1d", description="Intervalo de datos")
-):
+    interval: str = Query("1d", description="Intervalo de datos"),
+) -> dict[str, Any]:
+    """Responde preguntas predefinidas sobre soporte/resistencia, riesgos, tendencia y asignación de capital."""
     try:
         ticker = ticker.upper().strip()
         df = fetcher.get_data(ticker, period=period, interval=interval)
@@ -83,9 +91,6 @@ async def ask_advisor_question(
         else:
             raise HTTPException(status_code=400, detail="ID de pregunta no válido (1-4).")
 
-        return sanitize_for_json({
-            "question": question,
-            "answer": answer
-        })
+        return sanitize_for_json({"question": question, "answer": answer})
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
