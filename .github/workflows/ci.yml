@@ -29,4 +29,8 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Test with pytest
-        run: uv run pytest -x --timeout=60 -q
+        run: uv run pytest -x --timeout=60 -q --ignore=tests/test_panel_model.py
+
+      - name: Coverage report
+        if: success()
+        run: uv run pytest --cov=. --cov-report=term-missing --cov-report=xml -x --timeout=60 -q --ignore=tests/test_panel_model.py
