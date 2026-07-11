@@ -84,3 +84,8 @@ data/inversion_helper.db-wal
 bandit_report.json
 .prometheus_*
 alert_queue.json
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
