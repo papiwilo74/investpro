@@ -89,18 +89,35 @@ class YFinanceProvider(DataProvider):
     ) -> pd.DataFrame:
         import yfinance as yf
 
-        elapsed = time.time() - YFinanceProvider._last_request
-        if elapsed < YFinanceProvider._min_interval:
-            time.sleep(YFinanceProvider._min_interval - elapsed)
-        YFinanceProvider._last_request = time.time()
+        last_err: Exception | None = None
+        for attempt in range(3):
+            elapsed = time.time() - YFinanceProvider._last_request
+            if elapsed < YFinanceProvider._min_interval:
+                time.sleep(YFinanceProvider._min_interval - elapsed)
+            YFinanceProvider._last_request = time.time()
 
-        t0 = time.time()
-        stock = yf.Ticker(ticker)
-        df = stock.history(period=period, interval=interval)
-        latency = time.time() - t0
+            t0 = time.time()
+            stock = yf.Ticker(ticker)
+            try:
+                df = stock.history(period=period, interval=interval)
+            except Exception as e:
+                last_err = e
+                err_str = str(e)
+                if attempt < 2 and ("Too Many Requests" in err_str or "rate" in err_str.lower()):
+                    time.sleep(5 * (attempt + 1))
+                    continue
+                raise
 
-        if df.empty:
-            raise ValueError(f"YFinance: no data for {ticker} ({period}/{interval})")
+            latency = time.time() - t0
+            if not df.empty:
+                break
+            if attempt < 2:
+                time.sleep(2)
+        else:
+            msg = f"YFinance: no data for {ticker} ({period}/{interval})"
+            if last_err:
+                raise ValueError(msg) from last_err
+            raise ValueError(msg)
 
         df.columns = [c.lower().replace(" ", "_") for c in df.columns]
         df.index.name = "date"
