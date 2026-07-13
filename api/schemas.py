@@ -224,6 +224,26 @@ class SignalsResponse(BaseModel):
     signals: list[SignalItem] = []
 
 
+# ── News ──────────────────────────────────────────────────────────────
+
+
+class NewsItem(BaseModel):
+    title: str = ""
+    publisher: str = ""
+    link: str = ""
+    time: str = ""
+    sentiment_label: str = "NEUTRAL"
+    sentiment_score: float | None = None
+    summary: str | None = None
+
+
+class NewsResponse(BaseModel):
+    ticker: str | None = None
+    news: list[NewsItem] = []
+    global_label: str = "NEUTRAL"
+    average_sentiment: float = 0.0
+
+
 # ── Advisor endpoint ──────────────────────────────────────────────────
 
 
