@@ -1,7 +1,13 @@
 import asyncio
+import mimetypes
 import os
 import sys
 from pathlib import Path
+
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("image/svg+xml", ".svg")
+mimetypes.add_type("application/json", ".json")
 
 # Asegurar que la raíz del proyecto esté en el path
 _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
@@ -14,7 +20,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
-from fastapi.staticfiles import StaticFiles
 
 from api.auth import register_auth_routes
 from api.metrics import metrics_endpoint
@@ -187,10 +192,41 @@ async def serve_performance():
     return {"message": "Performance page not found"}
 
 
-# Montar /assets (build de Vite con nombres hashed) y /static (otros recursos)
-if (_STATIC_BUILD / "index.html").exists():
-    app.mount("/assets", StaticFiles(directory=str(_STATIC_BUILD / "assets")), name="assets")
-app.mount("/static", StaticFiles(directory=str(_FRONTEND_SRC)), name="static")
+# ── MIME types explícitos para Vite assets (evita application/octet-stream) ──
+_EXT_MEDIA: dict[str, str] = {
+    ".js": "application/javascript",
+    ".css": "text/css",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".ico": "image/x-icon",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".json": "application/json",
+}
+
+
+@app.api_route("/assets/{file_path:path}", methods=["GET", "HEAD"])
+async def serve_assets(file_path: str):
+    """Sirve archivos del build de Vite con MIME type explícito."""
+    assets_dir = _STATIC_BUILD / "assets"
+    file = assets_dir / file_path
+    if not file.exists() or not file.is_file():
+        return Response(status_code=404, content=b"Not Found", media_type="text/plain")
+    media_type = _EXT_MEDIA.get(file.suffix.lower()) or mimetypes.guess_type(str(file))[0] or "application/octet-stream"
+    return FileResponse(file, media_type=media_type)
+
+
+@app.api_route("/static/{file_path:path}", methods=["GET", "HEAD"])
+async def serve_static(file_path: str):
+    """Sirve archivos del source frontend con MIME type explícito."""
+    file = _FRONTEND_SRC / file_path
+    if not file.exists() or not file.is_file():
+        return Response(status_code=404, content=b"Not Found", media_type="text/plain")
+    media_type = _EXT_MEDIA.get(file.suffix.lower()) or mimetypes.guess_type(str(file))[0] or "application/octet-stream"
+    return FileResponse(file, media_type=media_type)
 
 
 # Middleware para evitar cache del navegador en archivos JS/CSS (desarrollo)
