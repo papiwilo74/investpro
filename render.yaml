@@ -1,6 +1,7 @@
 services:
   - type: web
     name: investpro
+    runtime: docker
     envVars:
       - key: ALPACA_API_KEY
         sync: false
