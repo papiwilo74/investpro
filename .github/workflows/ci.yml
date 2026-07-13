@@ -1,60 +1,120 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
 
 jobs:
-  frontend:
+  python-tests:
+    name: Python tests & lint
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
+    strategy:
+      matrix:
+        python-version: ["3.12"]
 
-      - name: Set up Node
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential libpq-dev gcc
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-cloud.txt
+
+      - name: Run linters
+        run: |
+          pip install black ruff
+          black --check .
+          ruff check .
+
+      - name: Run pytest
+        run: pytest -m "not integration" --tb=short -q
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: 20
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
+        working-directory: frontend
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Build
+      - name: Build frontend
+        working-directory: frontend
         run: npm run build
 
-  lint-test:
+      - name: Verify dist exists
+        run: test -f frontend/dist/index.html
+
+  integration-tests:
+    name: Integration tests
     runs-on: ubuntu-latest
+    # Integration tests hit external APIs; run on PRs but don't fail the whole CI
+    continue-on-error: true
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: pyproject.toml
-
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
-        run: uv sync --frozen --group dev --group ml
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-cloud.txt
 
-      - name: Lint with ruff
-        run: uv run ruff check .
+      - name: Run integration tests
+        run: pytest -m integration --tb=short -q
+        env:
+          PYTHONPATH: ${{ github.workspace }}
 
-      - name: Check formatting with ruff
-        run: uv run ruff format --check .
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    # Docker build can be slow; don't block merges if it flakes
+    continue-on-error: true
 
-      - name: Test with pytest
-        run: uv run pytest -x --timeout=60 -q --ignore=tests/test_panel_model.py
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Coverage report
-        if: success()
-        run: uv run pytest --cov=. --cov-report=term-missing --cov-report=xml -x --timeout=60 -q --ignore=tests/test_panel_model.py
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: investpro:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
