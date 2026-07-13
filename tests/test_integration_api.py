@@ -51,6 +51,70 @@ class TestAnalysis:
         response = await client.get("/api/analysis/AAPL/signals?period=1mo&interval=1d")
         assert response.status_code in (200, 400, 502)
 
+    async def test_signals_schema(self, client):
+        response = await client.get("/api/analysis/AAPL/signals?period=1mo&interval=1d")
+        if response.status_code != 200:
+            pytest.skip("External data fetch failed")
+        data = response.json()
+        assert "ticker" in data
+        assert "composite_score" in data
+        assert "signals" in data
+        for signal in data["signals"]:
+            assert "action" in signal
+            assert "strength" in signal
+            assert "reason" in signal
+
+
+@pytest.mark.integration
+class TestAdvisor:
+    async def test_advisor_schema(self, client):
+        response = await client.get("/api/advisor/AAPL?period=1mo&interval=1d")
+        if response.status_code != 200:
+            pytest.skip("External data fetch failed")
+        data = response.json()
+        assert "verdict" in data
+        assert "advice" in data
+        assert "rsi" in data
+        assert "macd_status" in data
+
+
+@pytest.mark.integration
+class TestBotStatus:
+    async def test_bot_status_schema(self, client):
+        response = await client.get("/api/broker/bot/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert "active" in data
+        assert "mode" in data
+        assert "last_scan" in data
+
+    async def test_bot_config_schema(self, client):
+        response = await client.get("/api/broker/bot/config")
+        assert response.status_code == 200
+        data = response.json()
+        assert "strategy_mode" in data
+        assert "params" in data
+        assert "risk" in data
+
+    async def test_advisor_status_schema(self, client):
+        response = await client.get("/api/broker/advisor/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert "active" in data
+        assert "accuracy" in data
+        assert "last_decision" in data
+
+
+@pytest.mark.integration
+class TestKelly:
+    async def test_kelly_schema(self, client):
+        response = await client.get("/api/broker/risk/kelly")
+        assert response.status_code == 200
+        data = response.json()
+        assert "kelly_pct" in data
+        assert "half_kelly_pct" in data
+        assert "quarter_kelly_pct" in data
+
 
 @pytest.mark.integration
 class TestStaticFiles:

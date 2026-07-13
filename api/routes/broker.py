@@ -7,7 +7,17 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from api.schemas import HealthCheck
+from api.schemas import (
+    AdvisorStatusResponse,
+    BotConfig,
+    BotStatus,
+    DashboardResponse,
+    HealthCheck,
+    KellyResponse,
+    MarketBreadthInfo,
+    MarketRegimeInfo,
+    MLStatusResponse,
+)
 from api.utils import sanitize_for_json
 from bot.engine import TradingBot
 from bot.notifications import notifier
@@ -63,7 +73,7 @@ async def get_recent_orders() -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/bot/status")
+@router.get("/bot/status", response_model=BotStatus)
 async def get_bot_status() -> dict[str, Any]:
     """Obtiene el estado actual del bot (activo, conectado, modo estrategia, logs recientes)."""
     try:
@@ -79,7 +89,7 @@ async def get_bot_status() -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/bot/config")
+@router.get("/bot/config", response_model=BotConfig)
 async def get_bot_config() -> dict[str, Any]:
     """Devuelve la configuración conservadora activa del bot web."""
     try:
@@ -201,7 +211,7 @@ async def get_risk_status() -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/risk/kelly")
+@router.get("/risk/kelly", response_model=KellyResponse)
 async def get_risk_kelly() -> dict[str, Any]:
     """Kelly Criterion basado en trades reales registrados por el risk manager."""
     try:
@@ -210,7 +220,7 @@ async def get_risk_kelly() -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/market/regime")
+@router.get("/market/regime", response_model=MarketRegimeInfo)
 async def get_market_regime() -> dict[str, Any]:
     """Estado del régimen de mercado amplio (SPY/VIX)."""
     try:
@@ -219,7 +229,7 @@ async def get_market_regime() -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/advisor/status")
+@router.get("/advisor/status", response_model=AdvisorStatusResponse)
 async def get_advisor_status() -> dict[str, Any]:
     """Estado y performance del Online Learning Advisor."""
     try:
@@ -267,7 +277,7 @@ async def get_mtf_status(ticker: str) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/market/breadth")
+@router.get("/market/breadth", response_model=MarketBreadthInfo)
 async def get_market_breadth() -> dict[str, Any]:
     """Amplitud del mercado (RSP/SPY, QQQ/SPY, Force Index)."""
     try:
@@ -311,7 +321,7 @@ async def get_telemetry_metrics() -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/ml/status")
+@router.get("/ml/status", response_model=MLStatusResponse)
 async def get_ml_status() -> dict[str, Any]:
     """Estado de los modelos de ML entrenados (solo lectura de metadatos, sin inferencia)."""
     # En modo web no dependemos de ML; se mantiene el endpoint para compatibilidad.
@@ -412,7 +422,7 @@ async def run_walk_forward(ticker: str = Query("AAPL"), period: str = Query("2y"
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=DashboardResponse)
 async def get_broker_dashboard() -> dict[str, Any]:
     """Endpoint batch: devuelve TODOS los datos del broker en 1 sola petición.
 

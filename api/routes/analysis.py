@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from api.schemas import SignalsResponse
 from api.utils import sanitize_for_json
 from data.fetcher import DataFetcher
 from indicators.signals import SignalGenerator
@@ -13,7 +14,7 @@ router = APIRouter()
 fetcher = DataFetcher()
 
 
-@router.get("/{ticker}/signals")
+@router.get("/{ticker}/signals", response_model=SignalsResponse)
 async def get_signals(
     ticker: str,
     period: str = Query("1y", description="Periodo de datos"),

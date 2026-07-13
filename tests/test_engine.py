@@ -306,7 +306,7 @@ class TestInit:
 
 class TestSanitizeWebParams:
     def test_disables_aggressive_flags(self):
-        from bot.engine import TradingBot
+        from bot.engine_helpers import sanitize_web_params
 
         params = StrategyParams(
             use_neural_brain=True,
@@ -316,7 +316,7 @@ class TestSanitizeWebParams:
             use_contrarian_dip=True,
             use_intraday_scalp=True,
         )
-        sanitized = TradingBot._sanitize_web_params(params)
+        sanitized = sanitize_web_params(params)
         assert sanitized.use_neural_brain is False
         assert sanitized.use_rl_exits is False
         assert sanitized.use_momentum_scalp is False
@@ -325,15 +325,15 @@ class TestSanitizeWebParams:
         assert sanitized.use_intraday_scalp is False
         assert sanitized.use_session_filter is False
         assert sanitized.use_vwap_filter is False
-        assert sanitized.use_partial_take_profit is False
+        # use_partial_take_profit se mantiene según el input (ahora True por defecto en web)
         assert sanitized.use_donchian_breakout is False
         assert sanitized.use_ml_filter is False
 
     def test_preserves_safe_params(self):
-        from bot.engine import TradingBot
+        from bot.engine_helpers import sanitize_web_params
 
         params = StrategyParams(buy_score_threshold=0.5, stop_loss_pct=-0.05)
-        sanitized = TradingBot._sanitize_web_params(params)
+        sanitized = sanitize_web_params(params)
         assert sanitized.buy_score_threshold == 0.5
         assert sanitized.stop_loss_pct == -0.05
 
@@ -441,20 +441,20 @@ class TestLog:
 
 class TestFmtValue:
     def test_returns_na_for_none(self):
-        from bot.engine import TradingBot
+        from bot.engine_helpers import fmt_value
 
-        assert TradingBot._fmt_value(None) == "N/A"
+        assert fmt_value(None) == "N/A"
 
     def test_formats_number(self):
-        from bot.engine import TradingBot
+        from bot.engine_helpers import fmt_value
 
-        assert TradingBot._fmt_value(5.1234, digits=2) == "5.12"
-        assert TradingBot._fmt_value(5.1234, suffix="%", digits=1) == "5.1%"
+        assert fmt_value(5.1234, digits=2) == "5.12"
+        assert fmt_value(5.1234, suffix="%", digits=1) == "5.1%"
 
     def test_handles_string_input(self):
-        from bot.engine import TradingBot
+        from bot.engine_helpers import fmt_value
 
-        assert TradingBot._fmt_value("not_a_number") == "N/A"
+        assert fmt_value("not_a_number") == "N/A"
 
 
 # ===========================================================================

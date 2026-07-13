@@ -25,6 +25,11 @@ from api.auth import register_auth_routes
 from api.metrics import metrics_endpoint
 from api.middleware import add_error_handlers, add_rate_limiting_middleware, add_security_headers_middleware
 from api.routes import advisor, analysis, backtest, broker, market, ml, portfolio
+from api.schemas import (
+    ConfigFlagsResponse,
+    PerformanceLiveResponse,
+    WatchlistResponse,
+)
 from config import WATCHLIST, feature_flags, settings
 from ml.ensemble import ensemble
 
@@ -117,14 +122,14 @@ app.include_router(broker.public_router, prefix="/api/broker", tags=["Broker Pub
 
 
 # Endpoint de Watchlist
-@app.get("/api/watchlist", summary="Lista de tickers en watchlist")
+@app.get("/api/watchlist", summary="Lista de tickers en watchlist", response_model=WatchlistResponse)
 async def get_watchlist():
     """Retorna los tickers monitoreados por el bot."""
-    return WATCHLIST
+    return {"watchlist": WATCHLIST}
 
 
 # Feature flags
-@app.get("/api/config/flags", summary="Feature flags activos")
+@app.get("/api/config/flags", summary="Feature flags activos", response_model=ConfigFlagsResponse)
 async def get_feature_flags():
     """Retorna los feature flags según el ambiente actual."""
     return {"env": settings.ENV, "flags": feature_flags.to_dict()}
@@ -235,7 +240,7 @@ async def no_cache_static(request: Request, call_next):
 
 
 # ── Live Monitoring ────────────────────────────────────────────────────
-@app.get("/api/performance/live")
+@app.get("/api/performance/live", response_model=PerformanceLiveResponse)
 async def live_performance():
     """Payload combinado para el dashboard de monitoreo en vivo."""
     result: dict[str, object] = {

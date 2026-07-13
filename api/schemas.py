@@ -77,6 +77,8 @@ class BotStatus(BaseModel):
     active: bool = False
     connected: bool = False
     strategy_mode: str = "legacy"
+    mode: str = "legacy"
+    last_scan: str | None = None
     logs: list[str] = []
 
 
@@ -117,13 +119,14 @@ class AdvisorInfo(BaseModel):
 
 class DashboardResponse(BaseModel):
     bot_status: BotStatus
-    account: Any = None  # Raw account dict from broker
+    account: dict[str, Any] | None = None
     positions: list[dict[str, Any]] = []
+    orders: list[dict[str, Any]] = []
     config: BotConfig | None = None
     risk: dict[str, Any] | None = None
     kelly: dict[str, Any] | None = None
     ml_models: list[MLModelInfo] = []
-    advisor: AdvisorInfo | None = None
+    advisor: AdvisorStatusResponse | None = None
     market_regime: MarketRegimeInfo | None = None
     market_breadth: dict[str, Any] | None = None
 
@@ -172,3 +175,114 @@ class LoginResponse(BaseModel):
 class AuthVerifyResponse(BaseModel):
     status: str = "ok"
     username: str
+
+
+# ── Watchlist ─────────────────────────────────────────────────────────
+
+
+class WatchlistResponse(BaseModel):
+    watchlist: list[str]
+
+
+# ── Config flags ──────────────────────────────────────────────────────
+
+
+class ConfigFlagsResponse(BaseModel):
+    env: str = "production"
+    flags: dict[str, Any] = {}
+
+
+# ── Market breadth ────────────────────────────────────────────────────
+
+
+class MarketBreadthInfo(BaseModel):
+    level: str = "UNKNOWN"
+    can_trade: bool = False
+    reason: str = ""
+    pct_above_sma50: float | None = None
+    rsp_vs_spy_ratio: float | None = None
+    rsp_vs_spy_trend: str | None = None
+    qqq_vs_spy_ratio: float | None = None
+    qqq_vs_spy_trend: str | None = None
+    force_index_10d: float | None = None
+    force_index_trend: str | None = None
+    details: str | None = None
+
+
+# ── Signals ───────────────────────────────────────────────────────────
+
+
+class SignalItem(BaseModel):
+    action: str = "HOLD"
+    strength: float = 0.0
+    reason: str = ""
+
+
+class SignalsResponse(BaseModel):
+    ticker: str
+    composite_score: float = 0.0
+    signals: list[SignalItem] = []
+
+
+# ── Advisor endpoint ──────────────────────────────────────────────────
+
+
+class AdvisorEndpointResponse(BaseModel):
+    verdict: str = "NEUTRAL"
+    color: str = "amber"
+    advice: str = ""
+    rsi: float = 50.0
+    rsi_status: str = "NEUTRAL"
+    macd_status: str = "NEUTRAL"
+    ml_direction: str = "N/A"
+    ml_prob: float = 0.0
+
+
+# ── Performance live ──────────────────────────────────────────────────
+
+
+class PerformanceLiveResponse(BaseModel):
+    bot_status: str = "unknown"
+    metrics: dict[str, Any] = {}
+    equity_curve: list[dict[str, Any]] = []
+    active_positions: list[dict[str, Any]] = []
+    recent_trades: list[dict[str, Any]] = []
+    available: bool = True
+
+
+# ── ML status ─────────────────────────────────────────────────────────
+
+
+class MLStatusResponse(BaseModel):
+    models: list[MLModelInfo] = []
+    note: str = ""
+
+
+# ── Kelly ─────────────────────────────────────────────────────────────
+
+
+class KellyResponse(BaseModel):
+    win_rate: float = 0.0
+    avg_win_pct: float = 0.0
+    avg_loss_pct: float = 0.0
+    odds_ratio: float = 0.0
+    kelly_pct: float = 0.0
+    half_kelly_pct: float = 0.0
+    quarter_kelly_pct: float = 0.0
+    total_trades: int = 0
+
+
+# ── Advisor status ────────────────────────────────────────────────────
+
+
+class AdvisorStatusResponse(BaseModel):
+    status: str | None = None
+    active: bool = False
+    accuracy: float = 0.0
+    last_decision: str = "N/A"
+    trades_seen: int = 0
+    states_learned: int = 0
+    epsilon: float = 0.0
+    value_added_pct: float | None = None
+    performance: dict[str, Any] | None = None
+    recent_trades: list[dict[str, Any]] = []

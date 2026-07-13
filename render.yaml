@@ -1,9 +1,13 @@
+# NOTA: Si Render sigue usando la config cacheada (runtime: python),
+# ve al Dashboard -> Blueprint -> "Sync Blueprint" para forzar la re-lectura.
+# Esto activa el Dockerfile multi-stage con build del frontend incluido.
+
 services:
   - type: web
     name: investpro
-    runtime: python
-    buildCommand: pip install -r requirements-cloud.txt
-    startCommand: python main.py --web --port $PORT
+    runtime: docker
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: ALPACA_API_KEY
         sync: false

@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from api.schemas import AdvisorEndpointResponse
 from api.utils import sanitize_for_json
 from app.components.advisor import generate_advisor_briefing
 from data.fetcher import DataFetcher
@@ -15,7 +16,7 @@ fetcher = DataFetcher()
 trainer = ModelTrainer()
 
 
-@router.get("/{ticker}")
+@router.get("/{ticker}", response_model=AdvisorEndpointResponse)
 async def get_advisor_briefing(
     ticker: str,
     period: str = Query("1y", description="Periodo de datos"),

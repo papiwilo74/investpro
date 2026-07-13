@@ -10,6 +10,7 @@ import pandas as pd
 from loguru import logger
 
 import logging_config  # noqa: F401 — configura loguru al importar
+from bot.engine_helpers import fmt_value, sanitize_web_params
 from bot.hedging import HedgeMonitor
 from bot.macro_calendar import MacroTracker
 from bot.market_breadth import MarketBreadth
@@ -24,7 +25,8 @@ from bot.risk_controller import RiskController
 from bot.safety import SignalJournal
 from bot.scanner import MarketScanner
 from bot.state_manager import BotStateManager
-from bot.strategy import Decision, StrategyParams, TradingBrain, create_web_bot_strategy_params
+from bot.strategy import Decision, TradingBrain, create_web_bot_strategy_params
+from bot.strategy_params import StrategyParams
 from broker import create_broker_client
 from config import BROKER_CONFIG, WATCHLIST, WEB_RISK_CONFIG
 from data.fetcher import DataFetcher
@@ -95,7 +97,7 @@ class TradingBot:
         elif strategy_mode == "web":
             params = create_web_bot_strategy_params()
             # El modo web ignora explícitamente los flags agresivos aunque vengan por otro lado
-            params = self._sanitize_web_params(params)
+            params = sanitize_web_params(params)
             # Aplicar Hall of Fame del optimizador genético si existe
             params, hof_info = self._load_hof_params(params)
             if hof_info:
@@ -216,25 +218,6 @@ class TradingBot:
             logger.warning("Error guardando estado de posiciones: %s", exc)
 
     @staticmethod
-    def _sanitize_web_params(params: StrategyParams) -> StrategyParams:
-        """Garantiza que el modo web no ejecute estrategias de alto riesgo."""
-        return StrategyParams(
-            **{
-                **params.__dict__,
-                "use_neural_brain": False,
-                "use_rl_exits": False,
-                "use_momentum_scalp": False,
-                "use_mean_reversion": False,
-                "use_contrarian_dip": False,
-                "use_intraday_scalp": False,
-                "use_session_filter": False,
-                "use_vwap_filter": False,
-                "use_donchian_breakout": False,
-                "use_ml_filter": False,
-            }
-        )
-
-    @staticmethod
     def _load_hof_params(base_params: StrategyParams) -> tuple[StrategyParams, dict | None]:
         """Carga los mejores parámetros del Hall of Fame del optimizador genético.
 
@@ -301,7 +284,7 @@ class TradingBot:
                     applied[key] = val
 
             # Aplicar sanitización web por seguridad
-            new_params = TradingBot._sanitize_web_params(StrategyParams(**merged))
+            new_params = sanitize_web_params(StrategyParams(**merged))
 
             hof_info = {
                 "source": "genetic_hall_of_fame",
@@ -332,15 +315,6 @@ class TradingBot:
         if len(self.logs) > 200:
             self.logs.pop(0)
 
-    @staticmethod
-    def _fmt_value(value, suffix: str = "", digits: int = 2) -> str:
-        try:
-            if value is None:
-                return "N/A"
-            return f"{float(value):.{digits}f}{suffix}"
-        except (TypeError, ValueError):
-            return "N/A"
-
     def _decision_context(
         self, ticker, df, score, decision, has_position, pnl_pct, ml_direction, ml_probability, sentiment_label
     ) -> str:
@@ -364,8 +338,8 @@ class TradingBot:
             f"DECISION {ticker}: {decision.action} | razon={decision.reason} | "
             f"score={score:.2f} | conf={decision.confidence:.2f} | "
             f"precio=${close:.2f} | posicion={position_text} | pnl={pnl_pct:.2%} | "
-            f"rsi={self._fmt_value(rsi)} | adx={self._fmt_value(adx)} | "
-            f"atr={self._fmt_value(atr)} | tendencia={trend_text} | "
+            f"rsi={fmt_value(rsi)} | adx={fmt_value(adx)} | "
+            f"atr={fmt_value(atr)} | tendencia={trend_text} | "
             f"ml={ml_text} | sentimiento={sentiment_text} | "
             f"tamano={decision.position_size_pct:.1%}"
         )
