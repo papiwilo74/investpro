@@ -723,6 +723,7 @@ async def get_health_dashboard() -> dict[str, Any]:
                     "active": bot.is_running,
                     "connected": client.is_connected(),
                     "strategy_mode": bot.strategy_mode,
+                    "mode": bot.strategy_mode,
                 },
                 "account": {
                     "equity": round(equity, 2),

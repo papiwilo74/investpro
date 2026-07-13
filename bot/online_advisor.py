@@ -377,8 +377,13 @@ class OnlineAdvisor:
     def to_dict(self) -> dict[str, Any]:
         perf = self.performance()
         last_log = self.trade_log[-5:] if self.trade_log else []
+        all_stats = perf.get("all")
+        last_action = last_log[-1]["action"] if last_log else "N/A"
         return {
             "status": perf.get("status"),
+            "active": perf.get("status") == "active",
+            "accuracy": all_stats["win_rate"] if all_stats else 0.0,
+            "last_decision": last_action,
             "trades_seen": perf.get("trades_seen"),
             "states_learned": perf.get("states_learned"),
             "epsilon": perf.get("epsilon"),
