@@ -434,6 +434,8 @@ async def get_broker_dashboard() -> dict[str, Any]:
             "active": bot.is_running,
             "connected": client.is_connected(),
             "strategy_mode": bot.strategy_mode,
+            "mode": bot.strategy_mode,
+            "last_scan": bot.last_scan or datetime.utcnow().isoformat(),
             "logs": bot.logs[-30:],
         }
         acc = client.get_account_summary()
