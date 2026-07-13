@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from api.auth import register_auth_routes
 from api.metrics import metrics_endpoint
@@ -358,10 +358,29 @@ async def spa_fallback(path: str):
     """Catch-all para SPA: rutas no-API devuelven index.html (client-side routing)."""
     if path.startswith(("api/", "assets/", "static/", "docs", "redoc", "health", "metrics", "favicon")):
         return Response(status_code=404, content=b"Not Found", media_type="text/plain")
+
+    # Si el build no existe, mostrar un mensaje claro (no servir source TSX)
+    index_file = _STATIC_DIR / "index.html"
+    if not index_file.exists():
+        return HTMLResponse(
+            "<html><body style='font-family:sans-serif;padding:2rem;background:#0f172a;color:#e2e8f0;'>"
+            "<h1>Frontend build no encontrado</h1>"
+            "<p>Ejecuta en el servidor:</p>"
+            "<pre style='background:#1e293b;padding:1rem;border-radius:8px;'>"
+            "cd frontend && npm install && npm run build"
+            "</pre></body></html>",
+            status_code=200,
+        )
+
+    # Servir archivos estáticos con MIME type explícito
     candidate = _STATIC_DIR / path
     if candidate.is_file():
-        return FileResponse(candidate)
-    index_file = _STATIC_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
-    return Response(status_code=404, content=b"Not Found", media_type="text/plain")
+        media_type = (
+            _EXT_MEDIA.get(candidate.suffix.lower())
+            or mimetypes.guess_type(str(candidate))[0]
+            or "application/octet-stream"
+        )
+        return FileResponse(candidate, media_type=media_type)
+
+    # Client-side routing: todo lo demás → index.html
+    return FileResponse(index_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
