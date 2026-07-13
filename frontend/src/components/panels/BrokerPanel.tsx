@@ -150,7 +150,7 @@ export function BrokerPanel() {
                 </tr>
               </thead>
               <tbody>
-                {dashboard.positions.map((p: any) => (
+                {(Array.isArray(dashboard.positions) ? dashboard.positions : []).map((p: any) => (
                   <tr key={p.symbol} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/40">
                     <td className="py-2.5 pr-4 font-medium text-slate-700 dark:text-slate-300">{p.symbol}</td>
                     <td className="py-2.5 pr-4 text-slate-700 dark:text-slate-300">{p.qty}</td>
@@ -192,7 +192,7 @@ export function BrokerPanel() {
                 </tr>
               </thead>
               <tbody>
-                {dashboard.orders.map((o: any) => (
+                {(Array.isArray(dashboard.orders) ? dashboard.orders : []).map((o: any) => (
                   <tr key={o.id} className="border-b border-slate-100 dark:border-slate-800/50">
                     <td className="py-2.5 pr-4 font-mono text-xs text-slate-600 dark:text-slate-400">{o.id.slice(0, 12)}...</td>
                     <td className="py-2.5 pr-4 font-bold">{o.symbol}</td>
@@ -284,7 +284,7 @@ export function BrokerPanel() {
           <div className="glass-card">
             <h3 className="text-base font-bold mb-4">Exposición por Sector</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {Object.entries(dashboard.risk.sector_exposures).map(([sector, val]) => (
+              {Object.entries(dashboard.risk?.sector_exposures || {}).map(([sector, val]) => (
                 <div key={sector} className="glass rounded-xl p-3 text-center">
                   <div className="text-sm font-bold text-slate-900 dark:text-white">{((val as number) * 100).toFixed(1)}%</div>
                   <div className="text-[10px] text-slate-400 capitalize">{sector.replace('_', ' ')}</div>
@@ -321,7 +321,7 @@ export function BrokerPanel() {
               </tr>
             </thead>
             <tbody>
-              {dashboard.ml_models.map((m: any) => (
+              {(Array.isArray(dashboard.ml_models) ? dashboard.ml_models : []).map((m: any) => (
                 <tr key={m.ticker} className="border-b border-slate-100 dark:border-slate-800/50">
                   <td className="py-2.5 pr-4 font-bold">{m.ticker}</td>
                   <td className="py-2.5 pr-4">{(m.accuracy * 100).toFixed(1)}%</td>

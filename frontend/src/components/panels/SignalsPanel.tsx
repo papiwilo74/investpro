@@ -16,7 +16,7 @@ export function SignalsPanel() {
       setLoading(true);
       try {
         const res = await api.getSignals(ticker, period, interval);
-        setSignals(res.signals);
+        setSignals(Array.isArray(res.signals) ? res.signals : []);
       } catch (e) {
         console.error(e);
       } finally {

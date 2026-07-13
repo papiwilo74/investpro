@@ -166,7 +166,7 @@ export function ValidationPanel() {
                 </div>
               </div>
 
-              {(valResults.overfit_flags || []).length > 0 && (
+              {Array.isArray(valResults.overfit_flags) && valResults.overfit_flags.length > 0 && (
                 <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl p-4 mb-4">
                   <h4 className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-2">⚠ Banderas de Overfitting</h4>
                   <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">

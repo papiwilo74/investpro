@@ -5,6 +5,7 @@ from typing import Any
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 
+from api.schemas import NewsResponse
 from api.utils import sanitize_for_json
 from bot.scanner import MarketScanner
 from data.fetcher import DataFetcher
@@ -122,7 +123,7 @@ async def get_market_data(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{ticker}/news")
+@router.get("/{ticker}/news", response_model=NewsResponse)
 async def get_market_news(
     ticker: str, limit: int = Query(10, description="Número de noticias a recuperar")
 ) -> dict[str, Any]:
@@ -136,6 +137,7 @@ async def get_market_news(
 
         analyzer = SentimentAnalyzer()
         result = analyzer.analyze_news_batch(news_list)
+        result["ticker"] = ticker
 
         return sanitize_for_json(result)
 

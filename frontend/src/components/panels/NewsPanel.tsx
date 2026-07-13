@@ -28,7 +28,8 @@ export function NewsPanel() {
 
   if (loading) return <>{Components.skeleton('chart')}</>;
 
-  if (!news?.news?.length) {
+  const newsList = Array.isArray(news?.news) ? news.news : [];
+  if (!newsList.length) {
     return (
       <section id="panel-news" className="panel flex flex-col gap-6 animate-fade-in-up w-full">
         <div className="glass-card">
@@ -54,7 +55,7 @@ export function NewsPanel() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {news.news.map((n: any, i: number) => <div key={n.link || i}>{Components.newsCard(n.title, n.publisher, n.link, n.time, n.sentiment_label)}</div>)}
+        {newsList.map((n: any, i: number) => <div key={n.link || i}>{Components.newsCard(n.title, n.publisher, n.link, n.time, n.sentiment_label)}</div>)}
       </div>
     </section>
   );

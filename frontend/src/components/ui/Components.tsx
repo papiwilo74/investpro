@@ -162,7 +162,7 @@ export const Components = {
             </tr>
           </thead>
           <tbody>
-            {trades.slice().reverse().map((t, i) => (
+            {(Array.isArray(trades) ? trades : []).slice().reverse().map((t, i) => (
               <tr key={i} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                 <td className="py-2.5 pr-4 font-medium text-slate-700 dark:text-slate-300">{t.entry_date}</td>
                 <td className="py-2.5 pr-4 text-slate-600 dark:text-slate-400">{t.exit_date}</td>
@@ -323,7 +323,7 @@ export const Components = {
             </div>
           </div>
 
-          {(report.overfit_flags || []).length > 0 && (
+          {Array.isArray(report.overfit_flags) && report.overfit_flags.length > 0 && (
             <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl p-4">
               <h4 className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-2">⚠ Banderas de Overfitting</h4>
               <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
