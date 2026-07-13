@@ -159,14 +159,7 @@ _FRONTEND_SRC = Path(_PROJECT_ROOT) / "frontend"
 _STATIC_BUILD = _FRONTEND_SRC / "dist"
 
 
-def _resolve_static_dir() -> Path:
-    """Devuelve el directorio con el build de React si existe, si no, el source."""
-    if (_STATIC_BUILD / "index.html").exists():
-        return _STATIC_BUILD
-    return _FRONTEND_SRC
-
-
-_STATIC_DIR = _resolve_static_dir()
+_STATIC_DIR = _STATIC_BUILD  # siempre apunta al build; la app verifica existencia antes de servir
 
 
 # Servir index.html en la raíz (sin cache para que los cambios se apliquen)
