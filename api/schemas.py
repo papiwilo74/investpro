@@ -177,13 +177,6 @@ class AuthVerifyResponse(BaseModel):
     username: str
 
 
-# ── Watchlist ─────────────────────────────────────────────────────────
-
-
-class WatchlistResponse(BaseModel):
-    watchlist: list[str]
-
-
 # ── Config flags ──────────────────────────────────────────────────────
 
 

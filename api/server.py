@@ -28,7 +28,6 @@ from api.routes import advisor, analysis, backtest, broker, market, ml, portfoli
 from api.schemas import (
     ConfigFlagsResponse,
     PerformanceLiveResponse,
-    WatchlistResponse,
 )
 from config import WATCHLIST, feature_flags, settings
 from ml.ensemble import ensemble
@@ -122,10 +121,10 @@ app.include_router(broker.public_router, prefix="/api/broker", tags=["Broker Pub
 
 
 # Endpoint de Watchlist
-@app.get("/api/watchlist", summary="Lista de tickers en watchlist", response_model=WatchlistResponse)
+@app.get("/api/watchlist", summary="Lista de tickers en watchlist", response_model=list[str])
 async def get_watchlist():
     """Retorna los tickers monitoreados por el bot."""
-    return {"watchlist": WATCHLIST}
+    return WATCHLIST
 
 
 # Feature flags
