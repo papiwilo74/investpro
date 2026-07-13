@@ -2,11 +2,7 @@ services:
   - type: web
     name: investpro
     runtime: python
-    buildCommand: |
-      curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&
-      apt-get install -y nodejs &&
-      pip install -r requirements-cloud.txt &&
-      cd frontend && npm install && npm run build
+    buildCommand: pip install -r requirements-cloud.txt
     startCommand: python main.py --web --port $PORT
     envVars:
       - key: ALPACA_API_KEY

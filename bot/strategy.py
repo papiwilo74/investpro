@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
 
+from config.strategy_defaults import WEB_STRATEGY_DEFAULTS
 from db.repositories import KellyRepository
 from ml.ensemble import ModelSignal, ensemble
 from ml.rl import RLExitAgent
@@ -1402,19 +1403,19 @@ def create_web_bot_strategy_params() -> StrategyParams:
     - Shorts más tight: TP +5%, SL -3%.
     """
     return StrategyParams(
-        buy_score_threshold=0.30,
-        sell_score_threshold=-0.30,
-        stop_loss_pct=-0.06,
-        take_profit_pct=0.12,
-        trailing_stop_atr_mult=2.0,
+        buy_score_threshold=WEB_STRATEGY_DEFAULTS["buy_score_threshold"],  # type: ignore[arg-type]
+        sell_score_threshold=WEB_STRATEGY_DEFAULTS["sell_score_threshold"],  # type: ignore[arg-type]
+        stop_loss_pct=WEB_STRATEGY_DEFAULTS["stop_loss_pct"],  # type: ignore[arg-type]
+        take_profit_pct=WEB_STRATEGY_DEFAULTS["take_profit_pct"],  # type: ignore[arg-type]
+        trailing_stop_atr_mult=WEB_STRATEGY_DEFAULTS["trailing_stop_atr_mult"],  # type: ignore[arg-type]
         use_trailing_stop=True,
-        max_position_size_pct=0.08,
-        min_position_size_pct=0.05,
+        max_position_size_pct=WEB_STRATEGY_DEFAULTS["max_position_size_pct"],  # type: ignore[arg-type]
+        min_position_size_pct=WEB_STRATEGY_DEFAULTS["min_position_size_pct"],  # type: ignore[arg-type]
         atr_position_sizing=True,
         atr_risk_pct=0.015,
         min_ml_buy_probability=0.60,
-        require_price_above_sma200=True,
-        max_buy_rsi=60.0,
+        require_price_above_sma200=WEB_STRATEGY_DEFAULTS["require_price_above_sma200"],  # type: ignore[arg-type]
+        max_buy_rsi=WEB_STRATEGY_DEFAULTS["max_buy_rsi"],  # type: ignore[arg-type]
         use_ml_filter=False,
         use_donchian_breakout=False,
         use_momentum_scalp=False,

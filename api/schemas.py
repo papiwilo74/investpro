@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from config.strategy_defaults import WEB_STRATEGY_DEFAULTS
+
 # ── Account ──────────────────────────────────────────────────────────
 
 
@@ -87,13 +89,13 @@ class RiskConfigParams(BaseModel):
 
 
 class BotConfig(BaseModel):
-    strategy_mode: str = "legacy"
-    buy_score_threshold: float = 0.10
-    sell_score_threshold: float = -0.50
-    stop_loss_pct: float = -0.05
-    take_profit_pct: float = 0.15
-    max_position_size_pct: float = 0.25
-    use_short_selling: bool = False
+    strategy_mode: str = "web"
+    buy_score_threshold: float = WEB_STRATEGY_DEFAULTS["buy_score_threshold"]  # type: ignore[arg-type]
+    sell_score_threshold: float = WEB_STRATEGY_DEFAULTS["sell_score_threshold"]  # type: ignore[arg-type]
+    stop_loss_pct: float = WEB_STRATEGY_DEFAULTS["stop_loss_pct"]  # type: ignore[arg-type]
+    take_profit_pct: float = WEB_STRATEGY_DEFAULTS["take_profit_pct"]  # type: ignore[arg-type]
+    max_position_size_pct: float = WEB_STRATEGY_DEFAULTS["max_position_size_pct"]  # type: ignore[arg-type]
+    use_short_selling: bool = WEB_STRATEGY_DEFAULTS["use_short_selling"]  # type: ignore[arg-type]
     risk: RiskConfigParams | None = None
 
 
