@@ -228,7 +228,6 @@ class TradingBot:
                 "use_intraday_scalp": False,
                 "use_session_filter": False,
                 "use_vwap_filter": False,
-                "use_partial_take_profit": False,
                 "use_donchian_breakout": False,
                 "use_ml_filter": False,
             }

@@ -1396,23 +1396,23 @@ def create_web_bot_strategy_params() -> StrategyParams:
     - Estrategia LONG con trend-following + SHORT en mercados bajistas.
     - Desactiva NN, RL, scalping, mean-reversion y dip-buying.
     - Filtros de régimen, tendencia semanal y confirmación activos.
-    - Tamaño de posición reducido (max 10% LONG, 7% SHORT).
+    - Tamaño de posición reducido (max 8% LONG, 7% SHORT).
     - Shorts más tight: TP +5%, SL -3%.
     """
     return StrategyParams(
-        buy_score_threshold=0.15,
-        sell_score_threshold=-0.40,
+        buy_score_threshold=0.30,
+        sell_score_threshold=-0.30,
         stop_loss_pct=-0.06,
-        take_profit_pct=0.18,
-        trailing_stop_atr_mult=2.5,
+        take_profit_pct=0.12,
+        trailing_stop_atr_mult=2.0,
         use_trailing_stop=True,
-        max_position_size_pct=0.10,
+        max_position_size_pct=0.08,
         min_position_size_pct=0.05,
         atr_position_sizing=True,
         atr_risk_pct=0.015,
         min_ml_buy_probability=0.60,
         require_price_above_sma200=True,
-        max_buy_rsi=70.0,
+        max_buy_rsi=60.0,
         use_ml_filter=False,
         use_donchian_breakout=False,
         use_momentum_scalp=False,
@@ -1427,7 +1427,7 @@ def create_web_bot_strategy_params() -> StrategyParams:
         short_position_size_pct=0.07,  # 7% max per short
         short_momentum_threshold=-0.30,
         short_min_adx=22.0,  # Solo shorts si hay momentum bajista real
-        use_partial_take_profit=False,
+        use_partial_take_profit=True,
         use_dynamic_trailing=True,
         use_confirmation_filter=True,
         confirmation_bars=10,
