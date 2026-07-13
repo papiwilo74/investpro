@@ -155,9 +155,8 @@ async def get_ensemble_status():
 # ── Frontend estático (build de React/Vite) ────────────────────────────
 # Vite compila frontend/ -> api/static/ (ver frontend/vite.config.ts).
 # En desarrollo se usa el dev server de Vite (puerto 3000) con proxy a /api.
-_STATIC_BUILD = Path(_PROJECT_ROOT) / "api" / "static"
 _FRONTEND_SRC = Path(_PROJECT_ROOT) / "frontend"
-_STATIC_BUILD.mkdir(parents=True, exist_ok=True)
+_STATIC_BUILD = _FRONTEND_SRC / "dist"
 
 
 def _resolve_static_dir() -> Path:
@@ -205,6 +204,9 @@ _EXT_MEDIA: dict[str, str] = {
     ".woff": "font/woff",
     ".woff2": "font/woff2",
     ".json": "application/json",
+    ".ts": "application/javascript",
+    ".tsx": "application/javascript",
+    ".mjs": "application/javascript",
 }
 
 
