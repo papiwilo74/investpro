@@ -16,9 +16,11 @@ RUN uv sync --frozen --no-cache --no-dev
 COPY . .
 RUN uv sync --frozen --no-cache --no-dev
 
-# Build del frontend -> api/static/
+# Build del frontend
 WORKDIR /app/frontend
-RUN npm install && npm run build
+RUN npm install
+RUN npm run build
+RUN ls -la dist/ && cat dist/index.html | head -5
 WORKDIR /app
 
 EXPOSE 8000
