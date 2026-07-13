@@ -18,7 +18,6 @@ from sqlalchemy.orm import Session
 
 from db.repositories import KellyRepository
 from ml.ensemble import ModelSignal, ensemble
-from ml.lstm_model import LSTMPredictor
 from ml.rl import RLExitAgent
 
 # Instancias globales para compatibilidad con código existente.
@@ -545,7 +544,7 @@ class TradingBrain:
 
     # Lazy-loaded Neural Brain compartido
     _neural_brain: object | None = None
-    _lstm_predictor: LSTMPredictor | None = None
+    _lstm_predictor: object | None = None
 
     def __init__(
         self,
@@ -1087,6 +1086,8 @@ class TradingBrain:
             lstm_signal = None
             if self._lstm_predictor is None:
                 try:
+                    from ml.lstm_model import LSTMPredictor
+
                     predictor = LSTMPredictor()
                     lstm_path = Path(__file__).resolve().parent.parent / "ml" / "models" / "lstm_price.pth"
                     if lstm_path.exists():
