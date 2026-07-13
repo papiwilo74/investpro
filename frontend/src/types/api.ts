@@ -1,7 +1,7 @@
 // Tipos para las respuestas de la API
 
 export interface Candle {
-  time: number;
+  time: number | string;
   open: number;
   high: number;
   low: number;
@@ -10,19 +10,19 @@ export interface Candle {
 }
 
 export interface IndicatorPoint {
-  time: number;
+  time: number | string;
   value: number;
 }
 
 export interface BBPoint {
-  time: number;
+  time: number | string;
   upper: number;
   middle: number;
   lower: number;
 }
 
 export interface MACDPoint {
-  time: number;
+  time: number | string;
   macd: number;
   signal: number;
   histogram: number;
@@ -39,18 +39,18 @@ export interface Indicators {
 
 export interface LatestData {
   close: number;
-  change: number;
+  change?: number;
   change_pct: number;
-  high: number;
-  low: number;
-  open: number;
+  high?: number;
+  low?: number;
+  open?: number;
   volume: number;
 }
 
 export interface MarketDataResponse {
   ticker: string;
-  period: string;
-  interval: string;
+  period?: string;
+  interval?: string;
   candles: Candle[];
   indicators: Indicators;
   latest: LatestData;
@@ -64,16 +64,16 @@ export interface Signal {
 
 export interface SignalsResponse {
   ticker: string;
-  period: string;
-  interval: string;
+  period?: string;
+  interval?: string;
   signals: Signal[];
   composite_score: number;
 }
 
 export interface AdvisorResponse {
-  ticker: string;
-  period: string;
-  interval: string;
+  ticker?: string;
+  period?: string;
+  interval?: string;
   verdict: string;
   color: string;
   advice: string;
@@ -97,7 +97,7 @@ export interface BacktestMetrics {
   total_trades: number;
   win_rate: number;
   profit_factor: number;
-  expectancy_pct: number;
+  expectancy_pct?: number;
 }
 
 export interface BacktestTrade {
@@ -109,20 +109,21 @@ export interface BacktestTrade {
   shares: number;
   pnl: number;
   pnl_pct: number;
+  commission: number;
   reason: string;
 }
 
 export interface BacktestResponse {
   ticker: string;
-  period: string;
-  interval: string;
+  period?: string;
+  interval?: string;
   params: {
     initial_capital: number;
     commission_pct: number;
     slippage_pct: number;
   };
   metrics: BacktestMetrics;
-  equity_curve: Array<{ time: number; value: number }>;
+  equity_curve: Array<{ time: number | string; value: number }>;
   trades: BacktestTrade[];
 }
 
@@ -164,6 +165,9 @@ export interface MLPrediction {
   direction: 'ALCISTA' | 'BAJISTA' | 'N/A';
   probability: number;
   prediction_date: string;
+  calibrated_prob?: number;
+  raw_prob?: number;
+  best_threshold?: number;
 }
 
 export interface MLStatusResponse {
@@ -177,17 +181,23 @@ export interface MLStatusResponse {
 }
 
 export interface MLTrainResponse {
-  message: string;
+  message?: string;
   metrics: MLMetrics;
   best_params: MLBestParams;
   optimized: boolean;
 }
 
 export interface MLSimulateResponse {
-  ticker: string;
-  buy_threshold: number;
-  sell_threshold: number;
-  metrics: BacktestMetrics;
+  metrics: {
+    ml: BacktestMetrics;
+    ta: BacktestMetrics;
+    bh: BacktestMetrics;
+  };
+  equity_curves: {
+    ml: Array<{ time: number | string; value: number }>;
+    ta: Array<{ time: number | string; value: number }>;
+    bh: Array<{ time: number | string; value: number }>;
+  };
 }
 
 export interface NewsItem {
@@ -196,10 +206,12 @@ export interface NewsItem {
   link: string;
   time: string;
   sentiment_label: string;
+  sentiment_score?: number;
+  summary?: string;
 }
 
 export interface NewsResponse {
-  ticker: string;
+  ticker?: string;
   news: NewsItem[];
   global_label: string;
   average_sentiment: number;
@@ -287,7 +299,9 @@ export interface BrokerDashboardResponse {
   bot_status: {
     active: boolean;
     connected: boolean;
+    strategy_mode?: string;
     mode: string;
+    logs?: string[];
   };
   account: {
     equity: number;
@@ -386,13 +400,18 @@ export interface BrokerOrder {
 
 export interface BotStatusResponse {
   active: boolean;
+  connected?: boolean;
+  strategy_mode?: string;
   mode: string;
-  last_scan: string;
+  last_scan?: string;
+  logs?: string[];
 }
 
 export interface BotConfigResponse {
   strategy_mode: string;
   params: Record<string, unknown>;
+  risk?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface MarketRegimeResponse {
@@ -409,11 +428,16 @@ export interface AdvisorStatusResponse {
 
 export interface MarketBreadthResponse {
   level: string;
-  advancers: number;
-  decliners: number;
-  adv_vol: number;
-  dec_vol: number;
-  ad_line: number;
+  can_trade: boolean;
+  reason: string;
+  pct_above_sma50?: number;
+  rsp_vs_spy_ratio?: number;
+  rsp_vs_spy_trend?: string;
+  qqq_vs_spy_ratio?: number;
+  qqq_vs_spy_trend?: string;
+  force_index_10d?: number;
+  force_index_trend?: string;
+  details?: string;
 }
 
 export interface KellyStatsResponse {
@@ -428,11 +452,13 @@ export interface KellyStatsResponse {
 }
 
 export interface MLModelsStatusResponse {
-  models: Record<string, {
-    has_model: boolean;
+  models: Array<{
+    ticker: string;
     accuracy: number;
-    optimized: boolean;
+    age_hours: number;
+    precision?: number;
   }>;
+  note?: string;
 }
 
 export interface RiskStatusResponse {

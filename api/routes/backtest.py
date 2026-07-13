@@ -47,12 +47,15 @@ async def run_backtest(
                     "pnl": t.pnl,
                     "pnl_pct": t.pnl_pct,
                     "commission": t.commission,
+                    "reason": t.reason or "exit",
                 }
             )
 
         return sanitize_for_json(
             {
                 "ticker": ticker,
+                "period": period,
+                "interval": interval,
                 "metrics": result.metrics,
                 "equity_curve": equity_curve,
                 "trades": trades_list,

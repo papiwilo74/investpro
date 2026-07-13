@@ -257,7 +257,9 @@ class AlpacaClient(BaseBrokerClient):
                     "qty": float(o.qty) if o.qty else 0.0,
                     "filled_qty": float(o.filled_qty),
                     "side": o.side.name,
+                    "type": o.type.name if o.type else "market",
                     "status": o.status.name,
+                    "filled_avg_price": float(o.filled_avg_price) if o.filled_avg_price else 0.0,
                     "created_at": str(o.created_at),
                 }
                 for o in orders

@@ -159,6 +159,8 @@ class KellyCalculator:
             "avg_loss_pct": round(self.avg_loss, 4),
             "odds_ratio": round(self.odds_ratio, 2),
             "kelly_pct": round(self.kelly_pct, 4),
+            "half_kelly_pct": round(self.kelly_pct / 2, 4),
+            "quarter_kelly_pct": round(self.kelly_pct / 4, 4),
             "total_trades": len(self.trades),
         }
 

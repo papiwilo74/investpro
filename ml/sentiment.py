@@ -378,6 +378,10 @@ class SentimentAnalyzer:
             sentiment = self.analyze(text_to_analyze)
 
             processed_item = item.copy()
+            processed_item["title"] = headline
+            processed_item["publisher"] = item.get("source") or item.get("publisher") or ""
+            processed_item["link"] = item.get("url") or item.get("link") or ""
+            processed_item["time"] = item.get("created_at") or item.get("time") or ""
             processed_item["sentiment_score"] = sentiment["compound"]
             processed_item["sentiment_label"] = sentiment["label"]
             processed_news.append(processed_item)

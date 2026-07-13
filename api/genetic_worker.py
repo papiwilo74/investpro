@@ -46,6 +46,8 @@ def run_genetic_process(
         )
 
         def _progress_cb(gen, total, best_fit, metrics_dict):
+            enriched_metrics = dict(metrics_dict) if metrics_dict else {}
+            enriched_metrics["best_fitness"] = best_fit
             queue.put(
                 {
                     "type": "progress",
@@ -53,7 +55,7 @@ def run_genetic_process(
                     "total_gens": total,
                     "pct": round(gen / total * 100, 1) if total > 0 else 0,
                     "best_fitness": best_fit,
-                    "gen_metrics": metrics_dict,
+                    "gen_metrics": enriched_metrics,
                 }
             )
 

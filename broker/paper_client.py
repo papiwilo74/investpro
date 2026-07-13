@@ -25,12 +25,19 @@ class PaperPosition:
     def market_value(self) -> float:
         return self.qty * self.avg_entry_price
 
-    def to_dict(self) -> dict:
+    def to_dict(self, current_price: float | None = None) -> dict:
+        price = current_price or self.avg_entry_price
+        market_value = self.qty * price
+        unrealized_pl = market_value - (self.qty * self.avg_entry_price)
+        unrealized_plpc = (price / self.avg_entry_price - 1) if self.avg_entry_price else 0.0
         return {
             "symbol": self.symbol,
             "qty": self.qty,
             "avg_entry_price": self.avg_entry_price,
-            "market_value": self.market_value,
+            "current_price": round(price, 2),
+            "market_value": round(market_value, 2),
+            "unrealized_pl": round(unrealized_pl, 2),
+            "unrealized_plpc": round(unrealized_plpc, 4),
             "side": self.side,
         }
 
@@ -192,7 +199,7 @@ class PaperTradingClient:
     # ── Positions ──────────────────────────────────────────────────────
 
     def get_positions(self) -> list[dict[str, Any]]:
-        return [p.to_dict() for p in self._positions.values()]
+        return [p.to_dict(current_price=self._get_price(p.symbol)) for p in self._positions.values()]
 
     def _get_price(self, symbol: str) -> float:
         """Simula precio actual basado en entry price + ruido."""

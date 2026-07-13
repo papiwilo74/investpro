@@ -71,6 +71,8 @@ async def get_bot_status() -> dict[str, Any]:
             "active": bot.is_running,
             "connected": client.is_connected(),
             "strategy_mode": bot.strategy_mode,
+            "mode": bot.strategy_mode,
+            "last_scan": bot.last_scan or datetime.utcnow().isoformat(),
             "logs": bot.logs[-50:],
         }
     except Exception as e:
@@ -83,25 +85,29 @@ async def get_bot_config() -> dict[str, Any]:
     try:
         params = bot._strategy_params
         hof_info = getattr(bot, "_hof_info", None)
+        strategy_params = {
+            "buy_score_threshold": params.buy_score_threshold,
+            "sell_score_threshold": params.sell_score_threshold,
+            "stop_loss_pct": params.stop_loss_pct,
+            "take_profit_pct": params.take_profit_pct,
+            "trailing_stop_atr_mult": params.trailing_stop_atr_mult,
+            "max_position_size_pct": params.max_position_size_pct,
+            "min_position_size_pct": params.min_position_size_pct,
+            "require_price_above_sma200": params.require_price_above_sma200,
+            "max_buy_rsi": params.max_buy_rsi,
+            "use_neural_brain": params.use_neural_brain,
+            "use_rl_exits": params.use_rl_exits,
+            "use_short_selling": params.use_short_selling,
+            "use_momentum_scalp": params.use_momentum_scalp,
+            "use_mean_reversion": params.use_mean_reversion,
+            "use_contrarian_dip": params.use_contrarian_dip,
+            "use_intraday_scalp": params.use_intraday_scalp,
+        }
         return sanitize_for_json(
             {
                 "strategy_mode": bot.strategy_mode,
-                "buy_score_threshold": params.buy_score_threshold,
-                "sell_score_threshold": params.sell_score_threshold,
-                "stop_loss_pct": params.stop_loss_pct,
-                "take_profit_pct": params.take_profit_pct,
-                "trailing_stop_atr_mult": params.trailing_stop_atr_mult,
-                "max_position_size_pct": params.max_position_size_pct,
-                "min_position_size_pct": params.min_position_size_pct,
-                "require_price_above_sma200": params.require_price_above_sma200,
-                "max_buy_rsi": params.max_buy_rsi,
-                "use_neural_brain": params.use_neural_brain,
-                "use_rl_exits": params.use_rl_exits,
-                "use_short_selling": params.use_short_selling,
-                "use_momentum_scalp": params.use_momentum_scalp,
-                "use_mean_reversion": params.use_mean_reversion,
-                "use_contrarian_dip": params.use_contrarian_dip,
-                "use_intraday_scalp": params.use_intraday_scalp,
+                "params": strategy_params,
+                **strategy_params,
                 "leverage_enabled": BROKER_CONFIG.leverage_enabled,
                 "leverage_range": f"x{BROKER_CONFIG.min_leverage:.0f}-x{BROKER_CONFIG.max_leverage:.0f}",
                 "hall_of_fame": hof_info,

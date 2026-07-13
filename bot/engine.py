@@ -79,6 +79,7 @@ class TradingBot:
         )
         self.risk_manager.set_alert_callback(lambda level, event, msg: notifier.send(event, msg, level))
         self.state = BotStateManager()
+        self.last_scan: str | None = None
         # ── Componentes extraídos (composición sobre herencia) ────────
         # Inicializados sin smart_router; se setea tras crearlo abajo
         self.order_manager = OrderManager(self.client, self.state)
@@ -590,6 +591,7 @@ class TradingBot:
         self._last_critical_alerts: dict[str, float] = {}  # event → timestamp del último alert
         while self.is_running:
             try:
+                self.last_scan = datetime.utcnow().isoformat()
                 today = datetime.now().day
                 if today != retrain_day:
                     retrain_day = today
