@@ -1,7 +1,13 @@
 services:
   - type: web
     name: investpro
-    runtime: docker
+    runtime: python
+    buildCommand: |
+      curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&
+      apt-get install -y nodejs &&
+      pip install -r requirements-cloud.txt &&
+      cd frontend && npm install && npm run build
+    startCommand: python main.py --web --port $PORT
     envVars:
       - key: ALPACA_API_KEY
         sync: false
@@ -15,7 +21,5 @@ services:
         sync: false
       - key: TELEGRAM_CHAT_ID
         sync: false
-      - key: PORT
-        value: "8000"
     healthCheckPath: /health
     autoDeploy: true
