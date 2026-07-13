@@ -1,178 +1,198 @@
-"""LSTM Time Series Forecaster — predicción de dirección de precio a 5 días."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
 
-try:
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    from torch.utils.data import DataLoader, TensorDataset
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-
-SEQ_LEN = 30
-HIDDEN = 64
-N_LAYERS = 2
+SEQUENCE_LEN = 20
+BATCH_SIZE = 64
 EPOCHS = 50
-BATCH_SIZE = 32
-LR = 0.001
+HIDDEN_SIZE = 64
+NUM_LAYERS = 2
+LEARNING_RATE = 1e-3
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-MODEL_DIR = Path(__file__).resolve().parent.parent / "ml" / "models"
-MODEL_PATH = MODEL_DIR / "lstm_price.pth"
 
-
-class PriceLSTM(nn.Module if TORCH_AVAILABLE else object):
-    def __init__(self, input_size=1, hidden_size=HIDDEN, num_layers=N_LAYERS, output_size=1):
-        if not TORCH_AVAILABLE:
-            self.hidden_size = hidden_size
-            self.num_layers = num_layers
-            return
+class _LSTMNet(nn.Module):
+    def __init__(self, input_dim: int, hidden_size: int = HIDDEN_SIZE, num_layers: int = NUM_LAYERS):
         super().__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, dropout=0.2)
-        self.fc = nn.Linear(hidden_size, output_size)
+        self.lstm = nn.LSTM(
+            input_size=input_dim,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=0.3 if num_layers > 1 else 0,
+        )
+        self.fc = nn.Linear(hidden_size, 1)
 
     def forward(self, x):
-        if not TORCH_AVAILABLE:
-            return None
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
-        out, _ = self.lstm(x, (h0, c0))
-        out = self.fc(out[:, -1, :])
-        return out
+        out, _ = self.lstm(x)
+        last_out = out[:, -1, :]
+        return torch.sigmoid(self.fc(last_out)).squeeze(-1)
 
 
-def _create_sequences(prices: np.ndarray, seq_len: int = SEQ_LEN):
-    X, y = [], []
-    for i in range(seq_len, len(prices)):
-        X.append(prices[i - seq_len : i])
-        y.append(prices[i])
-    return np.array(X, dtype=np.float32), np.array(y, dtype=np.float32)
+class LSTMClassifier:
+    """Sklearn-compatible LSTM binary classifier using PyTorch."""
 
+    def __init__(
+        self,
+        sequence_len: int = SEQUENCE_LEN,
+        hidden_size: int = HIDDEN_SIZE,
+        num_layers: int = NUM_LAYERS,
+        batch_size: int = BATCH_SIZE,
+        epochs: int = EPOCHS,
+        lr: float = LEARNING_RATE,
+    ):
+        self.sequence_len = sequence_len
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.batch_size = batch_size
+        self.epochs = epochs
+        self.lr = lr
+        self.model: _LSTMNet | None = None
+        self.input_dim_: int | None = None
 
-def train_lstm(ticker: str = "SPY", period: str = "5y") -> bool:
-    """Entrena el modelo LSTM con datos históricos y guarda los pesos."""
-    if not TORCH_AVAILABLE:
-        return False
-    import yfinance as yf
-    df = yf.download(ticker, period=period, interval="1d", progress=False)
-    if df.empty:
-        return False
-    close_col = df["Close"] if "Close" in df.columns else df["close"]
-    if isinstance(close_col, pd.DataFrame):
-        close_col = close_col.iloc[:, 0]
-    prices = close_col.values.astype(np.float32)
-    if len(prices) < SEQ_LEN + 10:
-        return False
+    def _build_sequences(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        n, nf = X.shape
+        seqs = np.lib.stride_tricks.sliding_window_view(X, window_shape=(self.sequence_len, nf))
+        seqs = seqs.reshape(-1, self.sequence_len, nf)
+        return seqs, np.arange(self.sequence_len - 1, n)
 
-    X, y = _create_sequences(prices)
-    # Normalizar por ventana
-    X_norm = np.zeros_like(X)
-    for i in range(len(X)):
-        mn, mx = X[i].min(), X[i].max()
-        if mx > mn:
-            X_norm[i] = (X[i] - mn) / (mx - mn)
-        y[i] = (y[i] - mn) / (mx - mn) if mx > mn else 0.0
+    def fit(self, X, y, sample_weight=None):
+        X_arr = np.asarray(X, dtype=np.float32)
+        y_arr = np.asarray(y, dtype=np.float32)
+        self.input_dim_ = X_arr.shape[1]
+        seqs, valid_idx = self._build_sequences(X_arr)
+        targets = y_arr[valid_idx]
+        dataset = TensorDataset(
+            torch.tensor(seqs, dtype=torch.float32),
+            torch.tensor(targets, dtype=torch.float32),
+        )
+        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
-    dataset = TensorDataset(torch.FloatTensor(X_norm).unsqueeze(-1), torch.FloatTensor(y).unsqueeze(-1))
-    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+        self.model = _LSTMNet(self.input_dim_, self.hidden_size, self.num_layers).to(DEVICE)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+        criterion = nn.BCELoss()
 
-    model = PriceLSTM()
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=LR)
+        self.model.train()
+        for _ in range(self.epochs):
+            for batch_x, batch_y in loader:
+                batch_x, batch_y = batch_x.to(DEVICE), batch_y.to(DEVICE)
+                optimizer.zero_grad()
+                pred = self.model(batch_x)
+                loss = criterion(pred, batch_y)
+                loss.backward()
+                optimizer.step()
+        return self
 
-    model.train()
-    for epoch in range(EPOCHS):
-        total_loss = 0.0
-        for batch_X, batch_y in loader:
-            optimizer.zero_grad()
-            out = model(batch_X)
-            loss = criterion(out, batch_y)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-        if epoch % 10 == 0 and epoch > 0:
-            pass  # could log
+    def predict_proba(self, X) -> np.ndarray:
+        X_arr = np.asarray(X, dtype=np.float32)
+        if len(X_arr) < self.sequence_len:
+            probs = np.full(len(X_arr), 0.5, dtype=np.float32)
+            return np.column_stack((1 - probs, probs))
+        seqs, _ = self._build_sequences(X_arr)
+        self.model.eval()
+        with torch.no_grad():
+            tensor_x = torch.tensor(seqs, dtype=torch.float32).to(DEVICE)
+            preds = self.model(tensor_x).cpu().numpy()
+        pad = self.sequence_len - 1
+        full = np.full(len(X_arr), 0.5, dtype=np.float32)
+        full[pad:] = preds
+        return np.column_stack((1 - full, full))
 
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    torch.save({"model_state": model.state_dict(), "ticker": ticker, "epochs": EPOCHS}, MODEL_PATH)
-    return True
+    def predict(self, X) -> np.ndarray:
+        proba = self.predict_proba(X)
+        return (proba[:, 1] >= 0.5).astype(int)
 
+    def save(self, path: str | Path):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(
+            {
+                "model_state_dict": self.model.state_dict() if self.model else {},
+                "input_dim": self.input_dim_,
+                "sequence_len": self.sequence_len,
+                "hidden_size": self.hidden_size,
+                "num_layers": self.num_layers,
+            },
+            path,
+        )
 
-def _load_or_create_model():
-    if not TORCH_AVAILABLE:
-        return None
-    model = PriceLSTM()
-    model.eval()
-    if MODEL_PATH.exists():
+    def load(self, path: str | Path):
+        path = Path(path)
+        data = torch.load(path, map_location=DEVICE, weights_only=True)
+        # Compatibilidad con dos formatos de checkpoint:
+        #   - Nuevo: {"model_state_dict": ..., "input_dim": ..., "sequence_len": ...}
+        #   - Viejo: {"model_state": ...} (sin metadata, hay que inferir del state)
+        state = data.get("model_state_dict") or data.get("model_state") or {}
+        self.sequence_len = data.get("sequence_len", SEQUENCE_LEN)
+        self.hidden_size = data.get("hidden_size", HIDDEN_SIZE)
+        self.num_layers = data.get("num_layers", NUM_LAYERS)
+        self.input_dim_ = data.get("input_dim")
+        # Si no hay input_dim en metadata, inferirlo del shape del state dict
+        if self.input_dim_ is None and state:
+            weight_key = "lstm.weight_ih_l0"
+            if weight_key in state:
+                # shape es [4*hidden_size, input_dim]
+                self.input_dim_ = int(state[weight_key].shape[1])
+        if self.input_dim_:
+            self.model = _LSTMNet(self.input_dim_, self.hidden_size, self.num_layers).to(DEVICE)
+            if state:
+                self.model.load_state_dict(state)
+        return self
+
+    def predict_trend(self, df) -> dict:
+        """Predice tendencia para la última barra del DataFrame.
+
+        Soporta modelos univariate (input_dim=1, usa close price) y multivariate
+        (input_dim>1, usa FeatureGenerator).
+
+        Returns:
+            {"status": "OK", "prediction": "BULLISH"|"BEARISH", "confidence": float}
+            {"status": "MODEL_NOT_TRAINED"} si no hay modelo cargado
+            {"status": "INSUFFICIENT_DATA"} si no hay suficientes filas
+        """
+        if self.model is None or self.input_dim_ is None:
+            return {"status": "MODEL_NOT_TRAINED"}
+
         try:
-            ckpt = torch.load(MODEL_PATH, map_location="cpu", weights_only=True)
-            model.load_state_dict(ckpt["model_state"])
-        except Exception:
-            pass
-    return model
+            if self.input_dim_ == 1:
+                # Modelo univariate: usa close price normalizado
+                if "close" not in df.columns:
+                    return {"status": "INSUFFICIENT_DATA"}
+                close = df["close"].dropna()
+                if len(close) < self.sequence_len:
+                    return {"status": "INSUFFICIENT_DATA"}
+                # Normalizar como retornos logarítmicos (estable para LSTM)
+                returns = np.log(close / close.shift(1)).fillna(0.0).values.astype(np.float32)
+                seq = returns[-self.sequence_len :].reshape(1, self.sequence_len, 1)
+            else:
+                # Modelo multivariate: usar FeatureGenerator
+                from ml.features import FeatureGenerator
 
+                X, _ = FeatureGenerator.build_features_and_target(df, horizon=3, min_return=0.01)
+                if len(X) < self.sequence_len:
+                    return {"status": "INSUFFICIENT_DATA"}
+                X_arr = X.fillna(0.0).values.astype(np.float32)
+                if X_arr.shape[1] != self.input_dim_:
+                    return {"status": "MODEL_NOT_TRAINED"}
+                seq = X_arr[-self.sequence_len :].reshape(1, self.sequence_len, -1)
 
-class LSTMPredictor:
-    """Predice dirección de precio a 5 días usando LSTM.
-
-    Si el modelo no está entrenado, entrena automáticamente con SPY.
-    """
-
-    def __init__(self, sequence_length: int = SEQ_LEN):
-        self.sequence_length = sequence_length
-        self.model = _load_or_create_model() if TORCH_AVAILABLE else None
-
-    def predict_trend(self, df: pd.DataFrame) -> dict:
-        result = {"prediction": "NEUTRAL", "confidence": 0.0, "status": "OK"}
-        if not TORCH_AVAILABLE:
-            result["status"] = "PYTORCH_MISSING"
-            return result
-        if self.model is None:
-            result["status"] = "MODEL_NOT_TRAINED"
-            return result
-        if len(df) < self.sequence_length + 5:
-            result["status"] = "INSUFFICIENT_DATA"
-            return result
-
-        try:
-            close_col = df["Close"] if "Close" in df.columns else df["close"]
-            closes = close_col.values[-self.sequence_length:].astype(np.float32).ravel()
-            mn, mx = closes.min(), closes.max()
-            if mx == mn:
-                return result
-            norm = (closes - mn) / (mx - mn)
-            x_tensor = torch.FloatTensor(norm).view(1, self.sequence_length, 1)
-
+            self.model.eval()
             with torch.no_grad():
-                pred_norm = self.model(x_tensor).item()
+                tensor_x = torch.tensor(seq, dtype=torch.float32).to(DEVICE)
+                prob = float(self.model(tensor_x).cpu().item())
 
-            pred_denorm = float(pred_norm) * (float(mx) - float(mn)) + float(mn)
-            last_close = float(closes[-1])
-            change_pct = (pred_denorm - last_close) / last_close
-
-            result["prediction"] = "BULLISH" if change_pct > 0.01 else ("BEARISH" if change_pct < -0.01 else "NEUTRAL")
-            result["confidence"] = min(1.0, abs(change_pct) * 5)
-            result["change_pct"] = round(float(change_pct * 100), 2)
-            result["status"] = "OK"
-            return result
-        except Exception as e:
-            result["status"] = f"ERROR: {e}"
-            return result
+            direction = "BULLISH" if prob >= 0.5 else "BEARISH"
+            confidence = prob if direction == "BULLISH" else (1.0 - prob)
+            return {"status": "OK", "prediction": direction, "confidence": round(confidence, 4)}
+        except Exception:
+            return {"status": "MODEL_NOT_TRAINED"}
 
 
-if __name__ == "__main__":
-    import yfinance as yf
-    print("Entrenando LSTM con SPY (5 años)...")
-    ok = train_lstm("SPY", "5y")
-    print(f"Entrenamiento: {'OK' if ok else 'FALLÓ'}")
-    df = yf.download("AAPL", period="3mo", interval="1d", progress=False)
-    predictor = LSTMPredictor()
-    res = predictor.predict_trend(df)
-    print(f"Predicción AAPL: {res}")
+# Alias para compatibilidad con código existente
+LSTMPredictor = LSTMClassifier

@@ -5,6 +5,7 @@ datos históricos.
 Usa señales del ``sig_composite`` column desplazadas 1 periodo para
 evitar look-ahead bias.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ from config import BACKTEST_PARAMS, BacktestParams
 @dataclass
 class BacktestResult:
     """Resultado de una simulación de backtest."""
+
     equity_curve: pd.Series
     trades: list[Trade]
     metrics: dict
@@ -54,8 +56,7 @@ class BacktestEngine:
         """
         if signal_col not in df.columns:
             raise ValueError(
-                f"El DataFrame necesita la columna '{signal_col}'. "
-                "Asegúrate de que la columna de señales exista."
+                f"El DataFrame necesita la columna '{signal_col}'. Asegúrate de que la columna de señales exista."
             )
 
         capital = self.params.initial_capital
@@ -78,7 +79,7 @@ class BacktestEngine:
             # ── COMPRA ────────────────────────────────────────────────
             if position_shares == 0 and signal > 0:
                 exec_price = self._apply_slippage(price, is_buy=True)
-                shares = int(capital / exec_price)          # acciones enteras
+                shares = int(capital / exec_price)  # acciones enteras
                 if shares > 0:
                     cost = exec_price * shares
                     comm = self._commission(exec_price, shares)
@@ -95,17 +96,19 @@ class BacktestEngine:
                 pnl = revenue - (entry_price * position_shares) - comm
                 pnl_pct = pnl / (entry_price * position_shares)
 
-                trades.append(Trade(
-                    entry_date=entry_date,
-                    exit_date=date,
-                    side="LONG",
-                    entry_price=entry_price,
-                    exit_price=exec_price,
-                    shares=position_shares,
-                    pnl=pnl,
-                    pnl_pct=pnl_pct,
-                    commission=comm,
-                ))
+                trades.append(
+                    Trade(
+                        entry_date=entry_date,
+                        exit_date=date,
+                        side="LONG",
+                        entry_price=entry_price,
+                        exit_price=exec_price,
+                        shares=position_shares,
+                        pnl=pnl,
+                        pnl_pct=pnl_pct,
+                        commission=comm,
+                    )
+                )
 
                 capital += revenue - comm
                 position_shares = 0

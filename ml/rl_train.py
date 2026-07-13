@@ -25,9 +25,9 @@ class RLTrainer:
         features = FeatureGenerator._add_features(df)
 
         # Alinear features y precios eliminando NaNs originados por lags/medias móviles largas
-        dataset = pd.concat([features, df[['close']]], axis=1).dropna()
-        X = dataset.drop(columns=['close'])
-        prices = dataset[['close']]
+        dataset = pd.concat([features, df[["close"]]], axis=1).dropna()
+        X = dataset.drop(columns=["close"])
+        prices = dataset[["close"]]
 
         if len(X) < 200:
             raise ValueError(f"Datos insuficientes para {ticker}. Intenta con un periodo mayor a {period}.")

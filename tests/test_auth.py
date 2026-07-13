@@ -1,4 +1,5 @@
 """Tests for JWT authentication module."""
+
 import hashlib
 import os
 from datetime import datetime, timedelta
@@ -32,6 +33,7 @@ class TestPasswordVerification:
         os.environ["ADMIN_PASSWORD_HASH"] = custom_hash
         reload(api.auth)
         from api.auth import verify_password as vp
+
         assert vp("custom_pass") is True
         assert vp("wrong") is False
         del os.environ["ADMIN_PASSWORD_HASH"]
@@ -82,6 +84,7 @@ class TestJWTToken:
 class TestLoginEndpoint:
     def test_login_schema(self):
         from api.schemas import LoginRequest, LoginResponse
+
         req = LoginRequest(username="admin", password="test")
         assert req.username == "admin"
         assert req.password == "test"
@@ -91,6 +94,7 @@ class TestLoginEndpoint:
 
     def test_auth_verify_response(self):
         from api.schemas import AuthVerifyResponse
+
         resp = AuthVerifyResponse(status="ok", username="admin")
         assert resp.status == "ok"
         assert resp.username == "admin"

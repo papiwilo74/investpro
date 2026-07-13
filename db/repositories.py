@@ -3,6 +3,7 @@
 Cada repositorio acepta una sesión SQLAlchemy opcional (para inyección
 de dependencias y testing) o crea una propia.
 """
+
 from __future__ import annotations
 
 import json
@@ -100,7 +101,13 @@ class RiskRepository:
 
     def get_trade_records(self) -> list[dict[str, Any]]:
         return [
-            {"ticker": r.ticker, "side": r.side, "pnl_pct": r.pnl_pct, "pnl_usd": r.pnl_usd, "timestamp": r.timestamp.isoformat()}
+            {
+                "ticker": r.ticker,
+                "side": r.side,
+                "pnl_pct": r.pnl_pct,
+                "pnl_usd": r.pnl_usd,
+                "timestamp": r.timestamp.isoformat(),
+            }
             for r in self._session.query(RiskTradeRecord).order_by(RiskTradeRecord.id).all()
         ]
 
@@ -200,12 +207,7 @@ class AdvisorRepository:
         self._session.commit()
 
     def get_trade_log(self, limit: int = 500) -> list[dict[str, Any]]:
-        rows = (
-            self._session.query(AdvisorTradeLog)
-            .order_by(AdvisorTradeLog.id.desc())
-            .limit(limit)
-            .all()
-        )
+        rows = self._session.query(AdvisorTradeLog).order_by(AdvisorTradeLog.id.desc()).limit(limit).all()
         return [
             {
                 "state_key": r.state_key,

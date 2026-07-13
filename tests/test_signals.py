@@ -5,12 +5,14 @@ from indicators.signals import Action, SignalGenerator
 
 
 class TestSignalGenerator:
-
     def test_add_signal_columns_rsi(self):
-        df = pd.DataFrame({
-            "close": [100.0] * 20,
-            "rsi": [75.0] * 10 + [25.0] * 10,
-        }, index=pd.date_range("2023-01-01", periods=20, freq="D"))
+        df = pd.DataFrame(
+            {
+                "close": [100.0] * 20,
+                "rsi": [75.0] * 10 + [25.0] * 10,
+            },
+            index=pd.date_range("2023-01-01", periods=20, freq="D"),
+        )
 
         df = SignalGenerator.add_signal_columns(df)
         assert "sig_rsi" in df.columns
@@ -21,11 +23,14 @@ class TestSignalGenerator:
 
     def test_add_signal_columns_macd_crossover(self):
         dates = pd.date_range("2023-01-01", periods=10, freq="D")
-        df = pd.DataFrame({
-            "close": [100.0] * 10,
-            "macd": [1.0, 1.0, 1.0, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0],
-            "macd_signal": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "close": [100.0] * 10,
+                "macd": [1.0, 1.0, 1.0, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0],
+                "macd_signal": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            },
+            index=dates,
+        )
 
         df = SignalGenerator.add_signal_columns(df)
         assert "sig_macd" in df.columns
@@ -39,11 +44,14 @@ class TestSignalGenerator:
         assert df["sig_macd_cross"].iloc[3] == -1
 
     def test_add_signal_columns_bollinger(self):
-        df = pd.DataFrame({
-            "close": [90.0, 110.0, 100.0],
-            "bb_upper": [105.0, 105.0, 105.0],
-            "bb_lower": [95.0, 95.0, 95.0],
-        }, index=pd.date_range("2023-01-01", periods=3, freq="D"))
+        df = pd.DataFrame(
+            {
+                "close": [90.0, 110.0, 100.0],
+                "bb_upper": [105.0, 105.0, 105.0],
+                "bb_lower": [95.0, 95.0, 95.0],
+            },
+            index=pd.date_range("2023-01-01", periods=3, freq="D"),
+        )
 
         df = SignalGenerator.add_signal_columns(df)
         # close <= bb_lower debe ser señal positiva (compra)
@@ -54,10 +62,13 @@ class TestSignalGenerator:
         assert abs(df["sig_bb"].iloc[2]) < 0.5
 
     def test_add_signal_columns_sma_cross(self):
-        df = pd.DataFrame({
-            "sma_50": [100.0, 100.0, 100.0, 110.0, 110.0],
-            "sma_200": [100.0, 100.0, 100.0, 100.0, 100.0],
-        }, index=pd.date_range("2023-01-01", periods=5, freq="D"))
+        df = pd.DataFrame(
+            {
+                "sma_50": [100.0, 100.0, 100.0, 110.0, 110.0],
+                "sma_200": [100.0, 100.0, 100.0, 100.0, 100.0],
+            },
+            index=pd.date_range("2023-01-01", periods=5, freq="D"),
+        )
 
         df = SignalGenerator.add_signal_columns(df)
         # SMA50 > SMA200 = señal positiva

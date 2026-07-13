@@ -3,6 +3,7 @@
 Permite trackear la evolución real del bot a lo largo de semanas/meses
 para generar un track record auditable.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -26,7 +27,8 @@ class PerformanceTracker:
 
     def _init_db(self) -> None:
         with self._lock, sqlite3.connect(str(self._db_path)) as conn:
-            conn.executescript("""
+            conn.executescript(
+                """
                 CREATE TABLE IF NOT EXISTS equity_snapshots (
                     date       TEXT PRIMARY KEY,
                     equity     REAL NOT NULL,
@@ -60,7 +62,8 @@ class PerformanceTracker:
                     rolling_kelly REAL,
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
-            """)
+            """
+            )
 
     def snapshot(
         self,
@@ -77,7 +80,15 @@ class PerformanceTracker:
                 """INSERT OR REPLACE INTO equity_snapshots
                    (date, equity, cash, exposure, num_positions, daily_pnl_pct, total_trades)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (today, round(equity, 2), round(cash, 2), round(exposure, 4), num_positions, round(daily_pnl_pct, 6), total_trades),
+                (
+                    today,
+                    round(equity, 2),
+                    round(cash, 2),
+                    round(exposure, 4),
+                    num_positions,
+                    round(daily_pnl_pct, 6),
+                    total_trades,
+                ),
             )
 
     def log_trade(
@@ -148,9 +159,16 @@ class PerformanceTracker:
                    (date, sharpe_30d, win_rate_30d, avg_win_30d, avg_loss_30d,
                     max_dd_30d, profit_factor_30d, rolling_kelly)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (today, round(sharpe, 4), round(win_rate, 4), round(avg_win, 6),
-                 round(avg_loss, 6), round(max_dd, 4), round(profit_factor, 2),
-                 round(kelly, 4)),
+                (
+                    today,
+                    round(sharpe, 4),
+                    round(win_rate, 4),
+                    round(avg_win, 6),
+                    round(avg_loss, 6),
+                    round(max_dd, 4),
+                    round(profit_factor, 2),
+                    round(kelly, 4),
+                ),
             )
 
     def get_equity_curve(self, days: int = 90) -> list[dict]:
@@ -167,9 +185,7 @@ class PerformanceTracker:
 
     def get_latest_metrics(self) -> dict:
         with self._lock, sqlite3.connect(str(self._db_path)) as conn:
-            row = conn.execute(
-                "SELECT * FROM rolling_metrics ORDER BY date DESC LIMIT 1"
-            ).fetchone()
+            row = conn.execute("SELECT * FROM rolling_metrics ORDER BY date DESC LIMIT 1").fetchone()
             if not row:
                 return {"status": "no_data"}
             return {

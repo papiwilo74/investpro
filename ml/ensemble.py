@@ -20,45 +20,49 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-MODEL_NAMES = ["xgboost", "neural_brain", "rl_agent", "online_advisor", "ta_classic", "lstm", "panel"]
+MODEL_NAMES = ["xgboost", "neural_brain", "rl_agent", "online_advisor", "ta_classic", "lstm", "panel", "ppo"]
 REGIMES = ["BULL", "BEAR", "LATERAL", "HIGH_VOL"]
 
 DEFAULT_WEIGHTS: dict[str, dict[str, float]] = {
     "BULL": {
-        "xgboost": 0.22,
-        "neural_brain": 0.18,
-        "rl_agent": 0.09,
-        "online_advisor": 0.13,
-        "ta_classic": 0.18,
-        "lstm": 0.09,
-        "panel": 0.11,
+        "xgboost": 0.20,
+        "neural_brain": 0.16,
+        "rl_agent": 0.08,
+        "online_advisor": 0.12,
+        "ta_classic": 0.16,
+        "lstm": 0.08,
+        "panel": 0.10,
+        "ppo": 0.10,
     },
     "BEAR": {
-        "xgboost": 0.13,
-        "neural_brain": 0.22,
-        "rl_agent": 0.18,
-        "online_advisor": 0.18,
-        "ta_classic": 0.09,
-        "lstm": 0.09,
-        "panel": 0.11,
+        "xgboost": 0.12,
+        "neural_brain": 0.20,
+        "rl_agent": 0.16,
+        "online_advisor": 0.16,
+        "ta_classic": 0.08,
+        "lstm": 0.08,
+        "panel": 0.10,
+        "ppo": 0.10,
     },
     "LATERAL": {
-        "xgboost": 0.13,
-        "neural_brain": 0.13,
-        "rl_agent": 0.13,
-        "online_advisor": 0.18,
-        "ta_classic": 0.22,
-        "lstm": 0.09,
-        "panel": 0.12,
+        "xgboost": 0.12,
+        "neural_brain": 0.12,
+        "rl_agent": 0.12,
+        "online_advisor": 0.16,
+        "ta_classic": 0.20,
+        "lstm": 0.08,
+        "panel": 0.10,
+        "ppo": 0.10,
     },
     "HIGH_VOL": {
-        "xgboost": 0.18,
-        "neural_brain": 0.22,
-        "rl_agent": 0.13,
-        "online_advisor": 0.13,
-        "ta_classic": 0.09,
-        "lstm": 0.13,
-        "panel": 0.12,
+        "xgboost": 0.16,
+        "neural_brain": 0.20,
+        "rl_agent": 0.12,
+        "online_advisor": 0.12,
+        "ta_classic": 0.08,
+        "lstm": 0.12,
+        "panel": 0.10,
+        "ppo": 0.10,
     },
 }
 
@@ -183,15 +187,15 @@ class AccuracyTracker:
         return model_acc - baseline_acc
 
     def to_dict(self) -> dict:
-        result = {}
+        result: dict[str, dict[str, float | dict[str, float]]] = {}
         for m in MODEL_NAMES:
-            entry = {
+            entry: dict[str, float | dict[str, float]] = {
                 "global_accuracy": round(self.accuracy(m), 3),
                 "samples": len(self._history.get(m, [])),
                 "rel_vs_baseline": round(self.relative_performance(m), 3),
-            }
-            entry["per_regime"] = {
-                r: round(self.accuracy(m, r), 3) for r in REGIMES if self.samples_count(m, r) >= self.min_samples
+                "per_regime": {
+                    r: round(self.accuracy(m, r), 3) for r in REGIMES if self.samples_count(m, r) >= self.min_samples
+                },
             }
             result[m] = entry
         return result
@@ -295,6 +299,7 @@ class AdaptiveEnsemble:
         ta_score: float = 0.0,
         lstm_signal: ModelSignal | None = None,
         panel_signal: ModelSignal | None = None,
+        ppo_signal: ModelSignal | None = None,
     ) -> EnsembleResult:
         if regime not in self._weights:
             regime = "BULL"
@@ -315,6 +320,8 @@ class AdaptiveEnsemble:
             signals["lstm"] = lstm_signal
         if panel_signal:
             signals["panel"] = panel_signal
+        if ppo_signal:
+            signals["ppo"] = ppo_signal
 
         if not signals:
             return EnsembleResult(regime=regime)

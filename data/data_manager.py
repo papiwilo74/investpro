@@ -82,7 +82,7 @@ class DataManager:
                 logger.warning("DataManager failover: %s", msg)
 
         raise RuntimeError(
-            f"DataManager: all providers failed for {ticker} ({period}/{interval}). " f"Errors: {'; '.join(errors)}"
+            f"DataManager: all providers failed for {ticker} ({period}/{interval}). Errors: {'; '.join(errors)}"
         )
 
     def get_data_with_quality(

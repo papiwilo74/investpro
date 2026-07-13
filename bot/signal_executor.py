@@ -193,6 +193,13 @@ class SignalExecutor:
         if self._notifier:
             self._notifier.new_buy(ticker, qty, fill_price, invested)
 
+        try:
+            from api.metrics import record_trade as _rt
+
+            _rt("BUY", "filled")
+        except Exception:
+            pass
+
         if first_tranche < 1.0 and leverage > 1:
             remaining = invest_amount * (1.0 - first_tranche)
             if remaining > 0:
@@ -260,6 +267,14 @@ class SignalExecutor:
         self._brain.save_position_state(self._state, ticker, qty)
         if self._notifier:
             self._notifier.send("new_trade", f"SHORT {ticker}: {qty} @ ${fill_price:.2f}", "warning")
+
+        try:
+            from api.metrics import record_trade as _rt
+
+            _rt("SHORT", "filled")
+        except Exception:
+            pass
+
         return invested
 
     # ── Execute Sell / Cover ───────────────────────────────────────────
@@ -289,6 +304,13 @@ class SignalExecutor:
         self._orders.clear_pending_tranche(ticker)
         pnl_usd = pnl_pct * equity * getattr(decision, "position_size_pct", 0.10)
         self._risk.record_trade(ticker, side, pnl_pct, pnl_usd)
+
+        try:
+            from api.metrics import record_trade as _rt
+
+            _rt("SELL", "closed")
+        except Exception:
+            pass
 
         advisor_ctx = self._pending_advisor_decisions.pop(ticker, None)
         if advisor_ctx and self._advisor:

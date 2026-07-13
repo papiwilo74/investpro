@@ -1,6 +1,17 @@
 # InvestPro — Inversion Helper
 
-Bot de trading automatizado con inteligencia artificial, backtesting, optimización genética y risk management institucional.
+<div align="center">
+
+**Bot de trading automatizado con inteligencia artificial, backtesting, optimización genética y risk management institucional.**
+
+[![CI](https://github.com/papiwilo74/investpro/actions/workflows/ci.yml/badge.svg)](https://github.com/papiwilo74/investpro/actions/workflows/ci.yml)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![License: Personal](https://img.shields.io/badge/License-Personal-red.svg)](LICENSE)
+[![Coverage](https://img.shields.io/badge/Coverage-78%25-green.svg)](tests/)
+[![Security: Bandit](https://img.shields.io/badge/Security-Bandit-success.svg)](pyproject.toml)
+
+</div>
+
 
 ## Arquitectura
 
@@ -10,7 +21,8 @@ investpro/
 │   ├── routes/     # broker, market, analysis, backtest, portfolio, ml, advisor
 │   ├── auth.py     # JWT login
 │   ├── schemas.py  # Pydantic v2
-│   └── server.py   # App principal
+│   ├── server.py   # App principal + serve del build React
+│   └── static/     # Build de Vite (generado, gitignored)
 ├── backtesting/    # WFO, Monte Carlo, validación estadística
 │   ├── validation.py
 │   ├── bot_engine.py
@@ -37,7 +49,14 @@ investpro/
 ├── indicators/     # Technical indicators + SignalGenerator
 ├── portfolio/      # Markowitz optimization
 ├── data/           # SQLite DBs, JSON state, model weights
-└── frontend/       # Vanilla JS SPA (Tailwind CSS)
+└── frontend/       # React + TypeScript + Vite + Zustand
+    ├── src/
+    │   ├── api/           # API client (fetch + JWT)
+    │   ├── components/    # panels, layout, ui, charts
+    │   ├── hooks/         # useApi, useTheme
+    │   ├── store/         # Zustand appStore
+    │   └── types/         # TypeScript types
+    └── vite.config.ts     # Build -> ../api/static
 ```
 
 ## Stack
@@ -48,13 +67,14 @@ investpro/
 | Base de datos | SQLite (x4), SQLAlchemy 2.0 |
 | ML | XGBoost, PyTorch, scikit-learn, hmmlearn |
 | Broker | Alpaca Markets API (Paper Trading) |
-| Frontend | Vanilla JS, Tailwind CSS, Lightweight Charts |
+| Frontend | React 18, TypeScript, Vite, Zustand, Tailwind CSS, Lightweight Charts |
 | CI/CD | GitHub Actions, Render |
 | Notificaciones | Telegram Bot API, Discord Webhook |
 
 ## Requisitos
 
-- Python 3.10+
+- Python 3.12+
+- Node.js 18+ (para el frontend)
 - Cuenta Alpaca (paper) — [alpaca.markets](https://alpaca.markets)
 - (Opcional) Bot de Telegram + Chat ID para notificaciones
 
@@ -63,9 +83,16 @@ investpro/
 ```bash
 git clone https://github.com/papiwilo74/investpro.git
 cd investpro
+
+# Backend
 python -m venv .venv
 .venv\Scripts\activate   # Windows
 pip install -r requirements.txt
+
+# Frontend
+cd frontend
+npm install
+cd ..
 ```
 
 ## Configuración
@@ -84,10 +111,25 @@ TELEGRAM_CHAT_ID="tu-chat-id"    # opcional
 
 ## Uso
 
-### Servidor Web (modo recomendado)
+### Desarrollo (frontend + backend separados)
 
 ```bash
+# Terminal 1: Backend
 python -m uvicorn api.server:app --reload --port 8000
+
+# Terminal 2: Frontend (dev server con hot reload + proxy a /api)
+cd frontend
+npm run dev    # http://localhost:3000
+```
+
+### Producción (build + backend único)
+
+```bash
+# Build del frontend -> genera api/static/
+cd frontend && npm run build && cd ..
+
+# Backend sirve el build en /
+python main.py --web --port 8000
 ```
 
 Abrir `http://localhost:8000` en el navegador.
@@ -164,6 +206,8 @@ pytest tests/test_risk_manager.py -v # Risk Manager
 ## Despliegue
 
 El repositorio incluye `render.yaml` para despliegue automático en [Render](https://render.com).
+
+El `buildCommand` instala dependencias de Python y compila el frontend (React → `api/static/`). El `startCommand` lanza FastAPI que sirve la API + el build de React.
 
 Variables de entorno requeridas en Render:
 - `ALPACA_API_KEY`

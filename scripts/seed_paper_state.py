@@ -8,6 +8,7 @@ Usage:
 
 If no args given, prints the current DB state for inspection.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,9 +57,11 @@ def show() -> None:
         if row is None:
             print("No PaperState found in DB.")
             return
-        print(f"cash={row.cash}, initial_cash={row.initial_cash}, "
-              f"positions={len(row.positions)}, orders={len(row.orders)}, "
-              f"trades={len(row.trades)}, equity_samples={len(row.equity_history)}")
+        print(
+            f"cash={row.cash}, initial_cash={row.initial_cash}, "
+            f"positions={len(row.positions)}, orders={len(row.orders)}, "
+            f"trades={len(row.trades)}, equity_samples={len(row.equity_history)}"
+        )
 
 
 def fetch_from_api(base_url: str) -> None:

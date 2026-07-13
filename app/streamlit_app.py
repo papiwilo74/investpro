@@ -6,6 +6,7 @@ Ejecutar con:
 o:
     python main.py --app
 """
+
 from __future__ import annotations
 
 import sys
@@ -90,13 +91,13 @@ with st.sidebar:
 
     st.markdown("---")
 
-    period = st.selectbox("Periodo", PERIODS, index=3)     # default: 1y
+    period = st.selectbox("Periodo", PERIODS, index=3)  # default: 1y
     interval = st.selectbox("Intervalo", INTERVALS, index=0)  # default: 1d
 
     st.markdown("---")
     st.markdown("**Overlays**")
     show_sma = st.checkbox("SMA (20, 50, 200)", value=True)
-    show_bb  = st.checkbox("Bollinger Bands", value=True)
+    show_bb = st.checkbox("Bollinger Bands", value=True)
 
     st.markdown("---")
     st.caption("Inversion Helper v1.0")
@@ -277,6 +278,7 @@ st.markdown(css, unsafe_allow_html=True)
 #  Pipeline de datos
 # ══════════════════════════════════════════════════════════════════════
 
+
 @st.cache_data(ttl=3600, show_spinner="Descargando datos...")
 def load_and_process(ticker_name: str, period_val: str, interval_val: str):
     """Descarga, calcula indicadores y genera señales."""
@@ -328,9 +330,16 @@ with col_gauge:
 #  Tabs principales
 # ══════════════════════════════════════════════════════════════════════
 
-tab_advisor, tab_chart, tab_signals, tab_backtest, tab_portfolio, tab_ml = st.tabs([
-    "Asesor de Inversión", "Gráfico", "Señales", "Backtest", "Portafolio", "Predicción ML",
-])
+tab_advisor, tab_chart, tab_signals, tab_backtest, tab_portfolio, tab_ml = st.tabs(
+    [
+        "Asesor de Inversión",
+        "Gráfico",
+        "Señales",
+        "Backtest",
+        "Portafolio",
+        "Predicción ML",
+    ]
+)
 
 
 # ── Tab 0: Asesor de Inversión ───────────────────────────────────────
@@ -406,15 +415,17 @@ with tab_backtest:
         st.markdown("### Historial de Trades")
         trades_data = []
         for t in result.trades:
-            trades_data.append({
-                "Entrada":        str(t.entry_date)[:10],
-                "Salida":         str(t.exit_date)[:10],
-                "Precio Entrada": f"${t.entry_price:.2f}",
-                "Precio Salida":  f"${t.exit_price:.2f}",
-                "Acciones":       int(t.shares),
-                "P&L":            f"${t.pnl:+,.2f}",
-                "P&L %":          f"{t.pnl_pct:+.2%}",
-            })
+            trades_data.append(
+                {
+                    "Entrada": str(t.entry_date)[:10],
+                    "Salida": str(t.exit_date)[:10],
+                    "Precio Entrada": f"${t.entry_price:.2f}",
+                    "Precio Salida": f"${t.exit_price:.2f}",
+                    "Acciones": int(t.shares),
+                    "P&L": f"${t.pnl:+,.2f}",
+                    "P&L %": f"{t.pnl_pct:+.2%}",
+                }
+            )
         st.dataframe(trades_data, use_container_width=True, hide_index=True)
     else:
         st.info("No se generaron trades en el periodo seleccionado.")
@@ -440,7 +451,7 @@ with tab_portfolio:
         "Activos a incluir en el portafolio",
         options=extended_options,
         default=initial_assets,
-        help="Selecciona al menos 2 tickers para realizar la optimización."
+        help="Selecciona al menos 2 tickers para realizar la optimización.",
     )
 
     col_rf, col_opt_per = st.columns(2)
@@ -451,14 +462,14 @@ with tab_portfolio:
             max_value=0.10,
             value=BACKTEST_PARAMS.risk_free_rate,
             step=0.005,
-            format="%.3f"
+            format="%.3f",
         )
     with col_opt_per:
         opt_period = st.selectbox(
             "Historial de datos para optimización",
             PERIODS,
             index=3,  # default: 1y
-            key="opt_period"
+            key="opt_period",
         )
 
     if len(selected_assets) < 2:
@@ -484,16 +495,20 @@ with tab_portfolio:
                     # 5. Calcular Equiponderado
                     num_assets = len(selected_assets)
                     eq_weights = np.ones(num_assets) / num_assets
-                    eq_ret, eq_vol, eq_sharpe = optimizer.portfolio_performance(eq_weights, mean_returns, cov_matrix, rf_rate)
+                    eq_ret, eq_vol, eq_sharpe = optimizer.portfolio_performance(
+                        eq_weights, mean_returns, cov_matrix, rf_rate
+                    )
                     eq_res = {
                         "weights": dict(zip(selected_assets, eq_weights)),
                         "return": eq_ret,
                         "volatility": eq_vol,
-                        "sharpe_ratio": eq_sharpe
+                        "sharpe_ratio": eq_sharpe,
                     }
 
                     # 6. Generar portafolios simulados
-                    random_ports_df = optimizer.generate_random_portfolios(mean_returns, cov_matrix, rf_rate, num_portfolios=2000)
+                    random_ports_df = optimizer.generate_random_portfolios(
+                        mean_returns, cov_matrix, rf_rate, num_portfolios=2000
+                    )
 
                 # Mostrar métricas comparativas
                 st.markdown("---")
@@ -506,11 +521,11 @@ with tab_portfolio:
                         f"""
                         <div style="background: #f6f8fa; border: 1px solid #2ea043; border-radius: 12px; padding: 16px; text-align: center;">
                             <h4 style="color: #2ea043; margin: 0 0 10px 0; font-size: 16px; font-weight: 700;">Max Sharpe Ratio</h4>
-                            <p style="font-size: 28px; font-weight: 700; margin: 0; color: #1f2328;">{max_sharpe_res['sharpe_ratio']:.2f}</p>
-                            <p style="color: #57606a; font-size: 12px; margin: 5px 0 0 0;">Retorno: {max_sharpe_res['return']:.2%} | Riesgo: {max_sharpe_res['volatility']:.2%}</p>
+                            <p style="font-size: 28px; font-weight: 700; margin: 0; color: #1f2328;">{max_sharpe_res["sharpe_ratio"]:.2f}</p>
+                            <p style="color: #57606a; font-size: 12px; margin: 5px 0 0 0;">Retorno: {max_sharpe_res["return"]:.2%} | Riesgo: {max_sharpe_res["volatility"]:.2%}</p>
                         </div>
                         """,
-                        unsafe_allow_html=True
+                        unsafe_allow_html=True,
                     )
 
                 with c2:
@@ -518,11 +533,11 @@ with tab_portfolio:
                         f"""
                         <div style="background: #f6f8fa; border: 1px solid #0969da; border-radius: 12px; padding: 16px; text-align: center;">
                             <h4 style="color: #0969da; margin: 0 0 10px 0; font-size: 16px; font-weight: 700;">Volatilidad Mínima</h4>
-                            <p style="font-size: 28px; font-weight: 700; margin: 0; color: #1f2328;">{min_vol_res['sharpe_ratio']:.2f}</p>
-                            <p style="color: #57606a; font-size: 12px; margin: 5px 0 0 0;">Retorno: {min_vol_res['return']:.2%} | Riesgo: {min_vol_res['volatility']:.2%}</p>
+                            <p style="font-size: 28px; font-weight: 700; margin: 0; color: #1f2328;">{min_vol_res["sharpe_ratio"]:.2f}</p>
+                            <p style="color: #57606a; font-size: 12px; margin: 5px 0 0 0;">Retorno: {min_vol_res["return"]:.2%} | Riesgo: {min_vol_res["volatility"]:.2%}</p>
                         </div>
                         """,
-                        unsafe_allow_html=True
+                        unsafe_allow_html=True,
                     )
 
                 with c3:
@@ -530,11 +545,11 @@ with tab_portfolio:
                         f"""
                         <div style="background: #f6f8fa; border: 1px solid #bc4c00; border-radius: 12px; padding: 16px; text-align: center;">
                             <h4 style="color: #bc4c00; margin: 0 0 10px 0; font-size: 16px; font-weight: 700;">Equiponderado (1/N)</h4>
-                            <p style="font-size: 28px; font-weight: 700; margin: 0; color: #1f2328;">{eq_res['sharpe_ratio']:.2f}</p>
-                            <p style="color: #57606a; font-size: 12px; margin: 5px 0 0 0;">Retorno: {eq_res['return']:.2%} | Riesgo: {eq_res['volatility']:.2%}</p>
+                            <p style="font-size: 28px; font-weight: 700; margin: 0; color: #1f2328;">{eq_res["sharpe_ratio"]:.2f}</p>
+                            <p style="color: #57606a; font-size: 12px; margin: 5px 0 0 0;">Retorno: {eq_res["return"]:.2%} | Riesgo: {eq_res["volatility"]:.2%}</p>
                         </div>
                         """,
-                        unsafe_allow_html=True
+                        unsafe_allow_html=True,
                     )
 
                 st.markdown("---")
@@ -544,9 +559,7 @@ with tab_portfolio:
 
                 with col_chart_left:
                     port_to_show = st.radio(
-                        "Ver distribución de pesos para:",
-                        ["Sharpe Máximo", "Volatilidad Mínima"],
-                        horizontal=True
+                        "Ver distribución de pesos para:", ["Sharpe Máximo", "Volatilidad Mínima"], horizontal=True
                     )
 
                     if port_to_show == "Sharpe Máximo":
@@ -562,27 +575,26 @@ with tab_portfolio:
 
                 with col_chart_right:
                     st.plotly_chart(
-                        efficient_frontier_chart(random_ports_df, max_sharpe_res, min_vol_res),
-                        use_container_width=True
+                        efficient_frontier_chart(random_ports_df, max_sharpe_res, min_vol_res), use_container_width=True
                     )
 
                 # Tabla detallada de pesos
                 st.markdown("### Tabla Detallada de Pesos")
-                comparison_df = pd.DataFrame({
-                    "Activo": selected_assets,
-                    "Max Sharpe (%)": [max_sharpe_res["weights"].get(t, 0.0) * 100 for t in selected_assets],
-                    "Min Vol (%)": [min_vol_res["weights"].get(t, 0.0) * 100 for t in selected_assets],
-                    "Equiponderado (%)": [eq_res["weights"].get(t, 0.0) * 100 for t in selected_assets]
-                })
+                comparison_df = pd.DataFrame(
+                    {
+                        "Activo": selected_assets,
+                        "Max Sharpe (%)": [max_sharpe_res["weights"].get(t, 0.0) * 100 for t in selected_assets],
+                        "Min Vol (%)": [min_vol_res["weights"].get(t, 0.0) * 100 for t in selected_assets],
+                        "Equiponderado (%)": [eq_res["weights"].get(t, 0.0) * 100 for t in selected_assets],
+                    }
+                )
 
                 st.dataframe(
-                    comparison_df.style.format({
-                        "Max Sharpe (%)": "{:.2f}%",
-                        "Min Vol (%)": "{:.2f}%",
-                        "Equiponderado (%)": "{:.2f}%"
-                    }),
+                    comparison_df.style.format(
+                        {"Max Sharpe (%)": "{:.2f}%", "Min Vol (%)": "{:.2f}%", "Equiponderado (%)": "{:.2f}%"}
+                    ),
                     use_container_width=True,
-                    hide_index=True
+                    hide_index=True,
                 )
 
             except Exception as e:
@@ -619,13 +631,25 @@ with tab_ml:
 
         st.markdown(f"#### Rendimiento Histórico del Modelo (Fuera de Muestra) · *{opt_text}*")
         if best_params:
-            st.caption(f"Hiperparámetros activos: `max_depth={best_params.get('max_depth')}`, `min_samples_leaf={best_params.get('min_samples_leaf')}`, `n_estimators={best_params.get('n_estimators')}`")
+            st.caption(
+                f"Hiperparámetros activos: `max_depth={best_params.get('max_depth')}`, `min_samples_leaf={best_params.get('min_samples_leaf')}`, `n_estimators={best_params.get('n_estimators')}`"
+            )
 
         # Mostrar métricas en columnas
         met_col1, met_col2, met_col3, met_col4 = st.columns(4)
-        met_col1.metric("Exactitud (Accuracy)", f"{metrics['accuracy']:.1%}", help="Porcentaje total de predicciones correctas.")
-        met_col2.metric("Precisión Alcista", f"{metrics['precision']:.1%}", help="De las predicciones 'Subirá', cuántas efectivamente subieron.")
-        met_col3.metric("Recall (Sensibilidad)", f"{metrics['recall']:.1%}", help="Qué porcentaje de las subidas reales fueron detectadas.")
+        met_col1.metric(
+            "Exactitud (Accuracy)", f"{metrics['accuracy']:.1%}", help="Porcentaje total de predicciones correctas."
+        )
+        met_col2.metric(
+            "Precisión Alcista",
+            f"{metrics['precision']:.1%}",
+            help="De las predicciones 'Subirá', cuántas efectivamente subieron.",
+        )
+        met_col3.metric(
+            "Recall (Sensibilidad)",
+            f"{metrics['recall']:.1%}",
+            help="Qué porcentaje de las subidas reales fueron detectadas.",
+        )
         met_col4.metric("F1-Score", f"{metrics['f1']:.2f}", help="Balance armónico entre Precisión y Recall.")
 
         # Realizar la predicción en base a los datos actuales
@@ -656,10 +680,10 @@ with tab_ml:
                         <h5 style="margin: 0 0 10px 0; color: #8b949e;">Dirección Prevista</h5>
                         <p style="font-size: 32px; font-weight: 700; color: {direction_color}; margin: 0;">{direction_emoji}</p>
                         <p style="font-size: 20px; font-weight: 600; margin: 10px 0 0 0;">Probabilidad: {probability:.1%}</p>
-                        <p style="color: #8b949e; font-size: 11px; margin: 5px 0 0 0;">Fecha predicción: {prediction_res['prediction_date']}</p>
+                        <p style="color: #8b949e; font-size: 11px; margin: 5px 0 0 0;">Fecha predicción: {prediction_res["prediction_date"]}</p>
                     </div>
                     """,
-                    unsafe_allow_html=True
+                    unsafe_allow_html=True,
                 )
 
             with p_col2:
@@ -699,13 +723,17 @@ with tab_ml:
             # --- NUEVA SECCIÓN: Simulador de Estrategia ML ---
             st.markdown("---")
             st.markdown("#### Simulador de Estrategia ML (Backtesting Fuera de Muestra)")
-            st.markdown("Evalúa cómo le habría ido a una estrategia basada en las predicciones de este modelo en el **set de prueba (Test Data)**.")
+            st.markdown(
+                "Evalúa cómo le habría ido a una estrategia basada en las predicciones de este modelo en el **set de prueba (Test Data)**."
+            )
 
             sim_col1, sim_col2 = st.columns(2)
             with sim_col1:
                 buy_threshold = st.slider("Umbral de Compra (probabilidad mínima para comprar)", 0.50, 0.80, 0.55, 0.01)
             with sim_col2:
-                sell_threshold = st.slider("Umbral de Venta (probabilidad por debajo para vender)", 0.30, 0.60, 0.45, 0.01)
+                sell_threshold = st.slider(
+                    "Umbral de Venta (probabilidad por debajo para vender)", 0.30, 0.60, 0.45, 0.01
+                )
 
             if st.button("Ejecutar Simulación ML", use_container_width=True):
                 with st.spinner("Ejecutando simulaciones en el set de prueba..."):
@@ -740,10 +768,35 @@ with tab_ml:
                         eq_bh = res_bh.equity_curve
 
                         import plotly.graph_objects as go
+
                         fig_sim = go.Figure()
-                        fig_sim.add_trace(go.Scatter(x=eq_ml.index, y=eq_ml.values, mode='lines', name='Estrategia ML', line=dict(color='#3fb950', width=2)))
-                        fig_sim.add_trace(go.Scatter(x=eq_ta.index, y=eq_ta.values, mode='lines', name='Técnica Clásica', line=dict(color='#58a6ff', width=2)))
-                        fig_sim.add_trace(go.Scatter(x=eq_bh.index, y=eq_bh.values, mode='lines', name='Buy & Hold', line=dict(color='#f0883e', width=2, dash='dot')))
+                        fig_sim.add_trace(
+                            go.Scatter(
+                                x=eq_ml.index,
+                                y=eq_ml.values,
+                                mode="lines",
+                                name="Estrategia ML",
+                                line=dict(color="#3fb950", width=2),
+                            )
+                        )
+                        fig_sim.add_trace(
+                            go.Scatter(
+                                x=eq_ta.index,
+                                y=eq_ta.values,
+                                mode="lines",
+                                name="Técnica Clásica",
+                                line=dict(color="#58a6ff", width=2),
+                            )
+                        )
+                        fig_sim.add_trace(
+                            go.Scatter(
+                                x=eq_bh.index,
+                                y=eq_bh.values,
+                                mode="lines",
+                                name="Buy & Hold",
+                                line=dict(color="#f0883e", width=2, dash="dot"),
+                            )
+                        )
 
                         fig_sim.update_layout(
                             title="Comparativa de Equity Curves (Test Set)",
@@ -753,7 +806,7 @@ with tab_ml:
                             plot_bgcolor="rgba(0,0,0,0)",
                             paper_bgcolor="rgba(0,0,0,0)",
                             margin=dict(l=20, r=20, t=40, b=20),
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                         )
                         st.plotly_chart(fig_sim, use_container_width=True)
 
@@ -761,26 +814,46 @@ with tab_ml:
                         st.markdown("**Métricas Fuera de Muestra (Test Set)**")
                         comp_data = {
                             "Estrategia": ["Machine Learning", "Técnica Clásica", "Buy & Hold"],
-                            "Retorno Total (%)": [res_ml.metrics['retorno_total'] * 100, res_ta.metrics['retorno_total'] * 100, res_bh.metrics['retorno_total'] * 100],
-                            "Sharpe Ratio": [res_ml.metrics['sharpe_ratio'], res_ta.metrics['sharpe_ratio'], res_bh.metrics['sharpe_ratio']],
-                            "Max Drawdown (%)": [res_ml.metrics['max_drawdown'] * 100, res_ta.metrics['max_drawdown'] * 100, res_bh.metrics['max_drawdown'] * 100],
-                            "Trades": [res_ml.metrics['total_trades'], res_ta.metrics['total_trades'], res_bh.metrics['total_trades']],
-                            "Win Rate (%)": [res_ml.metrics['win_rate'] * 100 if res_ml.metrics['total_trades'] > 0 else 0,
-                                             res_ta.metrics['win_rate'] * 100 if res_ta.metrics['total_trades'] > 0 else 0,
-                                             res_bh.metrics['win_rate'] * 100 if res_bh.metrics['total_trades'] > 0 else 0]
+                            "Retorno Total (%)": [
+                                res_ml.metrics["retorno_total"] * 100,
+                                res_ta.metrics["retorno_total"] * 100,
+                                res_bh.metrics["retorno_total"] * 100,
+                            ],
+                            "Sharpe Ratio": [
+                                res_ml.metrics["sharpe_ratio"],
+                                res_ta.metrics["sharpe_ratio"],
+                                res_bh.metrics["sharpe_ratio"],
+                            ],
+                            "Max Drawdown (%)": [
+                                res_ml.metrics["max_drawdown"] * 100,
+                                res_ta.metrics["max_drawdown"] * 100,
+                                res_bh.metrics["max_drawdown"] * 100,
+                            ],
+                            "Trades": [
+                                res_ml.metrics["total_trades"],
+                                res_ta.metrics["total_trades"],
+                                res_bh.metrics["total_trades"],
+                            ],
+                            "Win Rate (%)": [
+                                res_ml.metrics["win_rate"] * 100 if res_ml.metrics["total_trades"] > 0 else 0,
+                                res_ta.metrics["win_rate"] * 100 if res_ta.metrics["total_trades"] > 0 else 0,
+                                res_bh.metrics["win_rate"] * 100 if res_bh.metrics["total_trades"] > 0 else 0,
+                            ],
                         }
 
                         df_comp = pd.DataFrame(comp_data)
                         st.dataframe(
-                            df_comp.style.format({
-                                "Retorno Total (%)": "{:.2f}%",
-                                "Sharpe Ratio": "{:.2f}",
-                                "Max Drawdown (%)": "{:.2f}%",
-                                "Trades": "{:.0f}",
-                                "Win Rate (%)": "{:.1f}%"
-                            }),
+                            df_comp.style.format(
+                                {
+                                    "Retorno Total (%)": "{:.2f}%",
+                                    "Sharpe Ratio": "{:.2f}",
+                                    "Max Drawdown (%)": "{:.2f}%",
+                                    "Trades": "{:.0f}",
+                                    "Win Rate (%)": "{:.1f}%",
+                                }
+                            ),
                             use_container_width=True,
-                            hide_index=True
+                            hide_index=True,
                         )
 
                     except Exception as e:
@@ -795,7 +868,11 @@ with tab_ml:
 
     col_btn, col_chk, col_info = st.columns([1, 1, 2])
     with col_chk:
-        optimize_hp = st.checkbox("Optimizar Hiperparámetros (Grid Search)", value=False, help="Realiza una validación cruzada TimeSeriesSplit para buscar los mejores parámetros. Puede tardar unos segundos extra.")
+        optimize_hp = st.checkbox(
+            "Optimizar Hiperparámetros (Grid Search)",
+            value=False,
+            help="Realiza una validación cruzada TimeSeriesSplit para buscar los mejores parámetros. Puede tardar unos segundos extra.",
+        )
     with col_btn:
         if st.button("Entrenar / Reentrenar Modelo", use_container_width=True):
             try:
@@ -812,4 +889,3 @@ with tab_ml:
             "y evalúa la precisión (Accuracy) sobre el 20% final de datos reales para asegurar que "
             "el modelo funcione en condiciones reales fuera de muestra."
         )
-

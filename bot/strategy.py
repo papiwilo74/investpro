@@ -5,6 +5,7 @@ Estrategias implementadas:
 - DIP:   Compra cuando hay una caída fuerte + RSI sobrevendido (Buy the Dip).
 - SHORT: Vende en corto cuando señales son fuertemente bajistas.
 """
+
 from __future__ import annotations
 
 import json
@@ -42,8 +43,7 @@ class KellyCalculator:
     - JSON file (legacy): usa data/kelly_trades.json
     """
 
-    def __init__(self, fractional: float = 0.25, file_path: str = "",
-                 session: Session | None = None):
+    def __init__(self, fractional: float = 0.25, file_path: str = "", session: Session | None = None):
         self.fractional = fractional
         self.trades: list[float] = []
         self._file_path = file_path or str(Path(__file__).resolve().parent.parent / "data" / "kelly_trades.json")
@@ -62,6 +62,7 @@ class KellyCalculator:
             self.trades = self._repo.get_all_trades()
         except Exception as e:
             import logging
+
             logging.getLogger("inversion_helper.kelly").warning("Error cargando Kelly trades desde DB: %s", e)
             self.trades = []
 
@@ -74,6 +75,7 @@ class KellyCalculator:
                 self.fractional = data.get("fractional", self.fractional)
         except Exception as e:
             import logging
+
             logging.getLogger("inversion_helper.kelly").warning("Error cargando Kelly trades desde JSON: %s", e)
             self.trades = []
 
@@ -92,6 +94,7 @@ class KellyCalculator:
             Path(self._file_path).write_text(json.dumps(data, indent=2), encoding="utf-8")
         except Exception as e:
             import logging
+
             logging.getLogger("inversion_helper.kelly").warning("Error guardando Kelly trades: %s", e)
 
     def record(self, pnl_pct: float) -> None:
@@ -101,6 +104,7 @@ class KellyCalculator:
                 self._repo.add_trade(pnl_pct, self.fractional)
             except Exception as e:
                 import logging
+
                 logging.getLogger("inversion_helper.kelly").warning("Error guardando Kelly trade en DB: %s", e)
         else:
             self.save()
@@ -112,6 +116,7 @@ class KellyCalculator:
                 self._repo.clear()
             except Exception as e:
                 import logging
+
                 logging.getLogger("inversion_helper.kelly").warning("Error limpiando Kelly trades en DB: %s", e)
 
     @property
@@ -161,6 +166,8 @@ class KellyCalculator:
 
 # Global Kelly tracker
 kelly_tracker = KellyCalculator()
+
+
 @dataclass(frozen=True)
 class StrategyParams:
     # ── LONG (compra en tendencia alcista) ─────────────────────────
@@ -239,7 +246,7 @@ class StrategyParams:
     # Filtro de confirmación: requiere que N/M velas recientes sean alcistas
     use_confirmation_filter: bool = True
     confirmation_bars: int = 10
-    confirmation_min_ratio: float = 0.6   # 60% de velas alcistas
+    confirmation_min_ratio: float = 0.6  # 60% de velas alcistas
 
     # Suavizado de señal con EMA para reducir ruido
     signal_smoothing_periods: int = 3
@@ -277,14 +284,14 @@ class StrategyParams:
 
     # ── ADAPTIVE STOP-LOSS / TAKE-PROFIT (basado en ATR + volatilidad + régimen) ─
     use_adaptive_sltp: bool = True
-    adaptive_sltp_atr_mult_stop: float = 2.0    # stop-loss = ATR * mult (si no hay régimen bear)
+    adaptive_sltp_atr_mult_stop: float = 2.0  # stop-loss = ATR * mult (si no hay régimen bear)
     adaptive_sltp_atr_mult_stop_bear: float = 1.5  # stop ajustado en mercado bajista
-    adaptive_sltp_atr_mult_tp: float = 3.0      # take-profit = ATR * mult
-    adaptive_sltp_vol_lookback: int = 20         # velas para calcular volatilidad relativa
-    adaptive_sltp_min_stop_pct: float = -0.02   # stop mínimo absoluto
-    adaptive_sltp_max_stop_pct: float = -0.12   # stop máximo absoluto
-    adaptive_sltp_min_tp_pct: float = 0.03      # tp mínimo absoluto
-    adaptive_sltp_max_tp_pct: float = 0.30      # tp máximo absoluto
+    adaptive_sltp_atr_mult_tp: float = 3.0  # take-profit = ATR * mult
+    adaptive_sltp_vol_lookback: int = 20  # velas para calcular volatilidad relativa
+    adaptive_sltp_min_stop_pct: float = -0.02  # stop mínimo absoluto
+    adaptive_sltp_max_stop_pct: float = -0.12  # stop máximo absoluto
+    adaptive_sltp_min_tp_pct: float = 0.03  # tp mínimo absoluto
+    adaptive_sltp_max_tp_pct: float = 0.30  # tp máximo absoluto
 
     # ── MEJORAS DE SALIDA PARA WIN RATE ──────────────────────────────
     # Time-based exit: cerrar si no pasa nada en N días
@@ -308,18 +315,20 @@ class StrategyParams:
 
 @dataclass(frozen=True)
 class Decision:
-    action: str                              # BUY / SELL / HOLD / SHORT / COVER
+    action: str  # BUY / SELL / HOLD / SHORT / COVER
     reason: str
     confidence: float = 0.0
     position_size_pct: float = 0.0
-    side: str = "LONG"                       # LONG, DIP, SHORT
-    partial_exit_fraction: float = 0.0       # >0 = vender fracción, no toda la posición
+    side: str = "LONG"  # LONG, DIP, SHORT
+    partial_exit_fraction: float = 0.0  # >0 = vender fracción, no toda la posición
 
 
 class PositionState:
     """Guarda estado de una posición abierta para trailing stop, partial TP, time exit y breakeven."""
 
-    def __init__(self, entry_price: float, entry_atr: float, params: StrategyParams, side: str = "LONG", entry_date=None):
+    def __init__(
+        self, entry_price: float, entry_atr: float, params: StrategyParams, side: str = "LONG", entry_date=None
+    ):
         self.entry_price = entry_price
         self.entry_atr = entry_atr
         self.max_price = entry_price
@@ -400,8 +409,12 @@ class PositionState:
         return fraction
 
     def should_exit(
-        self, current_price: float, rsi: float = 50.0, regime: str = "BULL",
-        current_date=None, stop_loss_pct: float | None = None,
+        self,
+        current_price: float,
+        rsi: float = 50.0,
+        regime: str = "BULL",
+        current_date=None,
+        stop_loss_pct: float | None = None,
         take_profit_pct: float | None = None,
     ) -> tuple[bool, str]:
         """Retorna (should_exit, reason).
@@ -488,7 +501,10 @@ class PositionState:
                 mult = self._effective_trail_mult()
                 trailing_stop = self.max_price - mult * self.entry_atr
                 if current_price <= trailing_stop:
-                    return True, f"trailing-stop ({current_price:.2f} <= {trailing_stop:.2f}, ATR={self.entry_atr:.2f}, mult={mult:.1f})"
+                    return (
+                        True,
+                        f"trailing-stop ({current_price:.2f} <= {trailing_stop:.2f}, ATR={self.entry_atr:.2f}, mult={mult:.1f})",
+                    )
 
         elif self.side == "SHORT":
             pnl_pct = (self.entry_price / current_price) - 1.0
@@ -531,9 +547,12 @@ class TradingBrain:
     _neural_brain: object | None = None
     _lstm_predictor: LSTMPredictor | None = None
 
-    def __init__(self, params: StrategyParams | None = None,
-                 rl_agent_instance: RLExitAgent | None = None,
-                 kelly_instance: KellyCalculator | None = None) -> None:
+    def __init__(
+        self,
+        params: StrategyParams | None = None,
+        rl_agent_instance: RLExitAgent | None = None,
+        kelly_instance: KellyCalculator | None = None,
+    ) -> None:
         self.params = params or StrategyParams()
         self._positions: dict[str, PositionState] = {}
         # Inyección de dependencias: permite testear sin singletons globales
@@ -541,33 +560,41 @@ class TradingBrain:
         self._kelly = kelly_instance or kelly_tracker
         self._ensemble = ensemble
         self.last_ensemble_result = None  # poblado por _decide_entry para el ShadowTrader
-        self._load_neural_if_needed()
+        if self.params.use_neural_brain:
+            self._load_neural_if_needed()
 
     @classmethod
     def _load_neural_if_needed(cls) -> None:
         if cls._neural_brain is not None:
             return
         try:
-            from ml.neural_brain import NeuralTradingBrain
-            model = NeuralTradingBrain()
+            from ml.neural_brain import NeuralTradingBrain, NeuralTrainer
+
             model_path = Path(__file__).resolve().parent.parent / "data" / "neural_brain.pth"
             if model_path.exists():
-                ckpt = __import__("torch").load(str(model_path), map_location="cpu", weights_only=True)
-                model.load_state_dict(ckpt["model_state"])
-                model.eval()
+                # Usar NeuralTrainer.load que auto-detecta TCN vs FFN
+                trainer = NeuralTrainer()
+                trainer.load(str(model_path))
+                model = trainer.model
+            else:
+                model = NeuralTradingBrain()
             cls._neural_brain = model
         except Exception:
             cls._neural_brain = False  # no disponible
 
     @classmethod
-    def _neural_predict(cls, df, idx, score, has_position, position_pnl_pct, weekly_trend, market_regime, position_side, prev_score):
+    def _neural_predict(
+        cls, df, idx, score, has_position, position_pnl_pct, weekly_trend, market_regime, position_side, prev_score
+    ):
         """Decisión vía Neural Brain."""
         from ml.neural_brain import extract_features
+
         if cls._neural_brain is None or cls._neural_brain is False:
             return None
         try:
-            feats = extract_features(df, idx, score, has_position, position_pnl_pct,
-                                     weekly_trend, market_regime, position_side, prev_score)
+            feats = extract_features(
+                df, idx, score, has_position, position_pnl_pct, weekly_trend, market_regime, position_side, prev_score
+            )
             result = cls._neural_brain.predict(feats)
             return result
         except Exception:
@@ -591,7 +618,7 @@ class TradingBrain:
         vol_multiplier = 1.0
         if p.use_volatility_targeting and current_index >= 20:
             try:
-                recent_returns = df["close"].iloc[max(0, current_index - 20):current_index + 1].pct_change().dropna()
+                recent_returns = df["close"].iloc[max(0, current_index - 20) : current_index + 1].pct_change().dropna()
                 if len(recent_returns) >= 10:
                     annual_vol = float(recent_returns.std() * np.sqrt(252))
                     if annual_vol > 0:
@@ -621,7 +648,10 @@ class TradingBrain:
         return max(p.min_position_size_pct, min(p.max_position_size_pct, size))
 
     def _adaptive_sltp(
-        self, df: pd.DataFrame, current_index: int, regime: str | None = None,
+        self,
+        df: pd.DataFrame,
+        current_index: int,
+        regime: str | None = None,
     ) -> tuple[float, float]:
         """Calcula stop-loss y take-profit dinámicos según ATR + volatilidad + régimen.
 
@@ -652,7 +682,12 @@ class TradingBrain:
         # Ajustar por volatilidad relativa
         if current_index >= p.adaptive_sltp_vol_lookback:
             try:
-                returns = df["close"].iloc[current_index - p.adaptive_sltp_vol_lookback:current_index + 1].pct_change().dropna()
+                returns = (
+                    df["close"]
+                    .iloc[current_index - p.adaptive_sltp_vol_lookback : current_index + 1]
+                    .pct_change()
+                    .dropna()
+                )
                 recent_vol = float(returns.std())
                 median_vol = float(returns.rolling(p.adaptive_sltp_vol_lookback // 2).std().median())
                 if median_vol > 0 and recent_vol > median_vol * 1.5:
@@ -714,8 +749,12 @@ class TradingBrain:
             return True
 
         # Momentum negativo + volumen (breakdown suave)
-        if (pd.notna(momentum) and float(momentum) <= p.short_momentum_threshold
-            and pd.notna(volume) and float(volume) >= 0.15):
+        if (
+            pd.notna(momentum)
+            and float(momentum) <= p.short_momentum_threshold
+            and pd.notna(volume)
+            and float(volume) >= 0.15
+        ):
             return True
 
         return False
@@ -733,10 +772,11 @@ class TradingBrain:
         ticker: str = "",
         position_side: str = "LONG",
         # ── Mejoras de Win Rate ──────────────────────────
-        prev_score: float = 0.0,           # Score del día anterior (confirmación)
-        weekly_trend: str = "NEUTRAL",     # BULLISH / BEARISH / NEUTRAL (multi-TF)
-        market_regime: str = "BULL",       # BULL / BEAR / LATERAL (HMM)
-        earnings_blackout: bool = False,   # True si estamos cerca de earnings
+        prev_score: float = 0.0,  # Score del día anterior (confirmación)
+        weekly_trend: str = "NEUTRAL",  # BULLISH / BEARISH / NEUTRAL (multi-TF)
+        market_regime: str = "BULL",  # BULL / BEAR / LATERAL (HMM)
+        earnings_blackout: bool = False,  # True si estamos cerca de earnings
+        advisor_action: str | None = None,  # ALLOW / REDUCE / BLOCK del OnlineAdvisor
     ) -> Decision:
         if df.empty:
             return Decision("HOLD", "no market data")
@@ -797,19 +837,37 @@ class TradingBrain:
             # Partial take profit: vender fracción si se alcanzó un nivel
             partial_frac = pos.check_partial_tp(close)
             if partial_frac > 0:
-                return Decision("SELL", f"partial TP: vendiendo {partial_frac:.0%}",
-                                confidence=0.8, side=pos.side, partial_exit_fraction=partial_frac)
+                return Decision(
+                    "SELL",
+                    f"partial TP: vendiendo {partial_frac:.0%}",
+                    confidence=0.8,
+                    side=pos.side,
+                    partial_exit_fraction=partial_frac,
+                )
 
             current_date = df.index[idx] if idx is not None and idx < len(df) else None
             adaptive_sl, adaptive_tp = self._adaptive_sltp(df, idx, market_regime)
             should_exit, reason = pos.should_exit(
-                close, rsi=rsi, regime=market_regime, current_date=current_date,
-                stop_loss_pct=adaptive_sl, take_profit_pct=adaptive_tp,
+                close,
+                rsi=rsi,
+                regime=market_regime,
+                current_date=current_date,
+                stop_loss_pct=adaptive_sl,
+                take_profit_pct=adaptive_tp,
             )
             if should_exit:
                 pnl = pos.current_pnl_pct(close)
                 self._kelly.record(pnl)
-                self._rl_agent.update(pnl, rsi, market_regime, action=1, reward=pnl, next_pnl_pct=0.0, next_rsi=rsi, next_regime=market_regime)
+                self._rl_agent.update(
+                    pnl,
+                    rsi,
+                    market_regime,
+                    action=1,
+                    reward=pnl,
+                    next_pnl_pct=0.0,
+                    next_rsi=rsi,
+                    next_regime=market_regime,
+                )
                 self._rl_agent.save_model()
                 del self._positions[ticker_key]
                 if pos.side == "SHORT":
@@ -858,19 +916,28 @@ class TradingBrain:
         # ── Neural Brain: reemplaza TODAS las reglas si está activo ──────
         if p.use_neural_brain:
             nn_result = self._neural_predict(
-                df, idx, smooth_score, has_position, position_pnl_pct,
-                weekly_trend, market_regime, position_side, prev_score,
+                df,
+                idx,
+                smooth_score,
+                has_position,
+                position_pnl_pct,
+                weekly_trend,
+                market_regime,
+                position_side,
+                prev_score,
             )
             if nn_result and nn_result["confidence"] >= p.neural_brain_min_confidence:
                 action = nn_result["action"]
                 conf = nn_result["confidence"]
                 size = nn_result["position_size_pct"]
                 if action == "BUY":
-                    return Decision("BUY", f"NN: buy (conf={conf:.2%})", confidence=conf,
-                                    position_size_pct=size, side="LONG")
+                    return Decision(
+                        "BUY", f"NN: buy (conf={conf:.2%})", confidence=conf, position_size_pct=size, side="LONG"
+                    )
                 elif action == "SHORT":
-                    return Decision("SHORT", f"NN: short (conf={conf:.2%})", confidence=conf,
-                                    position_size_pct=size, side="SHORT")
+                    return Decision(
+                        "SHORT", f"NN: short (conf={conf:.2%})", confidence=conf, position_size_pct=size, side="SHORT"
+                    )
                 elif action in ("SELL", "COVER"):
                     return Decision(action, f"NN: exit (conf={conf:.2%})", confidence=conf, side=position_side)
                 else:  # HOLD
@@ -886,8 +953,7 @@ class TradingBrain:
             sig_momentum = float(last.get("sig_momentum", 0.0))
             sig_volume = float(last.get("sig_volume", 0.0))
             volume_ok = sig_volume >= (p.scalp_volume_min - 1.0)
-            if (sig_momentum >= p.scalp_momentum_min
-                and volume_ok):
+            if sig_momentum >= p.scalp_momentum_min and volume_ok:
                 return Decision(
                     "BUY",
                     f"Scalp: momentum={sig_momentum:.2f} vol={sig_volume:.2f}",
@@ -903,8 +969,7 @@ class TradingBrain:
                 sig_volume = float(last.get("sig_volume", 0.0))
                 volume_ok = sig_volume >= (p.intraday_scalp_volume_min - 1.0)
                 vwap_ok = self._check_vwap(last, p) if p.use_vwap_filter else True
-                if (sig_momentum >= p.intraday_scalp_momentum_min
-                    and volume_ok and vwap_ok):
+                if sig_momentum >= p.intraday_scalp_momentum_min and volume_ok and vwap_ok:
                     return Decision(
                         "BUY",
                         f"Intraday Scalp: mom={sig_momentum:.2f} vol={sig_volume:.2f}",
@@ -921,8 +986,7 @@ class TradingBrain:
             rsi_val = last.get("rsi")
             prev_close = float(df["close"].iloc[idx - 1]) if idx > 0 else close
             one_day_drop = (close / prev_close) - 1.0
-            if (pd.notna(rsi_val) and float(rsi_val) <= p.mean_rev_rsi_max
-                and one_day_drop <= p.mean_rev_drop_pct):
+            if pd.notna(rsi_val) and float(rsi_val) <= p.mean_rev_rsi_max and one_day_drop <= p.mean_rev_drop_pct:
                 return Decision(
                     "BUY",
                     f"MeanRev: RSI={float(rsi_val):.1f} drop={one_day_drop:.2%}",
@@ -963,7 +1027,9 @@ class TradingBrain:
             sentiment_label=sentiment_label,
             prev_score=prev_score,
             weekly_trend=weekly_trend,
-            market_regime=market_regime
+            market_regime=market_regime,
+            advisor_action=advisor_action,
+            ticker=ticker,
         )
 
     def _decide_entry(
@@ -976,35 +1042,56 @@ class TradingBrain:
         sentiment_label: str | None,
         prev_score: float = 0.0,
         weekly_trend: str = "NEUTRAL",
-        market_regime: str = "BULL"
+        market_regime: str = "BULL",
+        advisor_action: str | None = None,
+        ticker: str = "",
     ) -> Decision:
         p = self.params
         # Usar score suavizado si está disponible
-        smooth_score = getattr(self, '_last_smooth_score', score)
+        smooth_score = getattr(self, "_last_smooth_score", score)
         entry_score = smooth_score if smooth_score != score else score
+
+        # RSI actual para señales RL/advisor
+        last_row = df.iloc[current_index] if current_index < len(df) else df.iloc[-1]
+        rsi_val = float(last_row.get("rsi", 50.0)) if pd.notna(last_row.get("rsi")) else 50.0
 
         # ── Ensemble adaptativo ────────────────────────────────────────
         if p.use_ensemble:
             xgb_signal = None
             if ml_direction is not None and ml_probability is not None:
                 xgb_dir = "BULLISH" if ml_direction == "ALCISTA" else "BEARISH"
-                xgb_signal = ModelSignal(direction=xgb_dir, probability=ml_probability, score=(ml_probability * 2 - 1))
+                # Score con signo según dirección: BULLISH → +, BEARISH → -
+                xgb_score = (ml_probability * 2 - 1) if xgb_dir == "BULLISH" else -(ml_probability * 2 - 1)
+                xgb_signal = ModelSignal(direction=xgb_dir, probability=ml_probability, score=xgb_score)
             nn_signal = None
             if p.use_neural_brain and self._neural_brain and self._neural_brain is not False:
                 nn_result = self._neural_predict(
-                    df, current_index, entry_score, has_position=False,
-                    position_pnl_pct=0.0, weekly_trend=weekly_trend,
-                    market_regime=market_regime, position_side="LONG",
+                    df,
+                    current_index,
+                    entry_score,
+                    has_position=False,
+                    position_pnl_pct=0.0,
+                    weekly_trend=weekly_trend,
+                    market_regime=market_regime,
+                    position_side="LONG",
                     prev_score=prev_score,
                 )
                 if nn_result and nn_result["confidence"] >= 0.3:
-                    nn_dir = {"BUY": "BULLISH", "HOLD": "NEUTRAL", "SELL": "BEARISH"}.get(nn_result["action"], "NEUTRAL")
-                    nn_signal = ModelSignal(direction=nn_dir, probability=nn_result["confidence"], score=(nn_result["confidence"] * 2 - 1))
+                    nn_dir = {"BUY": "BULLISH", "HOLD": "NEUTRAL", "SELL": "BEARISH"}.get(
+                        nn_result["action"], "NEUTRAL"
+                    )
+                    nn_signal = ModelSignal(
+                        direction=nn_dir, probability=nn_result["confidence"], score=(nn_result["confidence"] * 2 - 1)
+                    )
 
             lstm_signal = None
             if self._lstm_predictor is None:
                 try:
-                    self._lstm_predictor = LSTMPredictor()
+                    predictor = LSTMPredictor()
+                    lstm_path = Path(__file__).resolve().parent.parent / "ml" / "models" / "lstm_price.pth"
+                    if lstm_path.exists():
+                        predictor.load(lstm_path)
+                    self._lstm_predictor = predictor
                 except Exception:
                     self._lstm_predictor = False
             if self._lstm_predictor and self._lstm_predictor is not False:
@@ -1025,23 +1112,98 @@ class TradingBrain:
             if ensemble_regime not in ("BULL", "BEAR", "LATERAL"):
                 ensemble_regime = "BULL" if ensemble_regime == "NEUTRAL" else "HIGH_VOL"
 
+            # ── RL Agent: señal de entrada derivada de la Q-table ───────
+            rl_signal = None
+            try:
+                rl_entry = self._rl_agent.get_entry_signal(rsi_val, ensemble_regime)
+                if rl_entry is not None:
+                    rl_dir, rl_conf = rl_entry
+                    rl_signal = ModelSignal(
+                        direction=rl_dir,
+                        probability=rl_conf,
+                        score=rl_conf if rl_dir == "BULLISH" else -rl_conf,
+                    )
+            except Exception:
+                pass
+
+            # ── Online Advisor: señal desde el Q-learning online ────────
+            advisor_signal = None
+            if advisor_action is not None:
+                adv_map = {"ALLOW": "BULLISH", "REDUCE": "NEUTRAL", "BLOCK": "BEARISH"}
+                adv_dir = adv_map.get(advisor_action, "NEUTRAL")
+                if adv_dir != "NEUTRAL":
+                    advisor_signal = ModelSignal(
+                        direction=adv_dir,
+                        probability=0.6,
+                        score=0.4 if adv_dir == "BULLISH" else -0.4,
+                    )
+
+            # ── Panel Model: señal cross-sectional (si está entrenado) ──
+            panel_signal = None
+            try:
+                from ml.panel_model import predict_panel
+
+                panel_result = predict_panel(ticker)
+                if panel_result and panel_result.get("direction"):
+                    # Panel model retorna "ALCISTA"/"BAJISTA", ensemble usa "BULLISH"/"BEARISH"
+                    panel_dir_raw = panel_result["direction"]
+                    panel_dir = "BULLISH" if panel_dir_raw == "ALCISTA" else "BEARISH"
+                    panel_conf = panel_result.get("probability", 0.5)
+                    panel_signal = ModelSignal(
+                        direction=panel_dir,
+                        probability=panel_conf,
+                        score=panel_conf if panel_dir == "BULLISH" else -panel_conf,
+                    )
+            except Exception:
+                pass
+
+            # ── PPO: señal del agente PPO entrenado ─────────────────────
+            ppo_signal = None
+            try:
+                from ml.ppo_signal import ppo_predict
+
+                ppo_result = ppo_predict(ticker, df)
+                if ppo_result and ppo_result.get("direction"):
+                    ppo_dir = ppo_result["direction"]
+                    ppo_conf = ppo_result.get("probability", 0.6)
+                    ppo_signal = ModelSignal(
+                        direction=ppo_dir,
+                        probability=ppo_conf,
+                        score=ppo_conf if ppo_dir == "BULLISH" else -ppo_conf,
+                    )
+            except Exception:
+                pass
+
             ens_result = self._ensemble.predict(
                 regime=ensemble_regime,
                 xgboost_signal=xgb_signal,
                 neural_brain_signal=nn_signal,
+                rl_agent_signal=rl_signal,
+                online_advisor_signal=advisor_signal,
                 ta_score=entry_score,
                 lstm_signal=lstm_signal,
+                panel_signal=panel_signal,
+                ppo_signal=ppo_signal,
             )
             # Exponer el resultado del ensemble para que el ShadowTrader pueda
             # registrar las señales por modelo y medir accuracy en vivo.
             self.last_ensemble_result = ens_result
+
+            try:
+                from api.metrics import record_prediction as _rp
+
+                _rp("ensemble", ens_result.consensus_direction, ens_result.confidence)
+            except Exception:
+                pass
 
             if ens_result.consensus_direction == "BULLISH" and ens_result.confidence >= 0.3:
                 entry_score = max(entry_score, ens_result.blended_score)
                 ml_direction = "ALCISTA"
                 ml_probability = ens_result.confidence
             elif ens_result.consensus_direction == "BEARISH" and ens_result.confidence >= 0.4:
-                return Decision("HOLD", f"Ensemble bearish ({ens_result.blended_score:.2f}, conf={ens_result.confidence:.2f})")
+                return Decision(
+                    "HOLD", f"Ensemble bearish ({ens_result.blended_score:.2f}, conf={ens_result.confidence:.2f})"
+                )
 
         if entry_score < p.buy_score_threshold:
             return Decision("HOLD", f"score below buy threshold ({entry_score:.2f})")
@@ -1055,7 +1217,7 @@ class TradingBrain:
             if alcistas < required:
                 return Decision(
                     "HOLD",
-                    f"Confirmación insuficiente: {alcistas}/{p.confirmation_bars} velas alcistas (req. {required})"
+                    f"Confirmación insuficiente: {alcistas}/{p.confirmation_bars} velas alcistas (req. {required})",
                 )
 
         # ── Nuevos Filtros ──────────────────────────────────────────
@@ -1125,7 +1287,9 @@ class TradingBrain:
             return "BEAR"
         return "LATERAL"
 
-    def on_position_opened(self, ticker: str, entry_price: float, df: pd.DataFrame, current_index: int | None = None, side: str = "LONG") -> None:
+    def on_position_opened(
+        self, ticker: str, entry_price: float, df: pd.DataFrame, current_index: int | None = None, side: str = "LONG"
+    ) -> None:
         """Registra una posición abierta para trailing stop."""
         idx = len(df) - 1 if current_index is None else current_index
         last = df.iloc[idx]
@@ -1166,11 +1330,16 @@ class TradingBrain:
                 self._positions[ticker] = ps
 
                 state_manager.save_position(
-                    ticker=ticker, side="LONG", entry_price=entry_price,
-                    entry_atr=atr_est, qty=float(pos.get("qty", 0)),
-                    max_price=ps.max_price, min_price=ps.min_price,
+                    ticker=ticker,
+                    side="LONG",
+                    entry_price=entry_price,
+                    entry_atr=atr_est,
+                    qty=float(pos.get("qty", 0)),
+                    max_price=ps.max_price,
+                    min_price=ps.min_price,
                     breakeven_active=ps._breakeven_active,
-                    tp1_hit=ps._tp1_hit, tp2_hit=ps._tp2_hit,
+                    tp1_hit=ps._tp1_hit,
+                    tp2_hit=ps._tp2_hit,
                 )
             count += 1
 
@@ -1184,11 +1353,16 @@ class TradingBrain:
         if ps is None:
             return
         state_manager.save_position(
-            ticker=ticker, side=ps.side, entry_price=ps.entry_price,
-            entry_atr=ps.entry_atr, qty=qty,
-            max_price=ps.max_price, min_price=ps.min_price,
+            ticker=ticker,
+            side=ps.side,
+            entry_price=ps.entry_price,
+            entry_atr=ps.entry_atr,
+            qty=qty,
+            max_price=ps.max_price,
+            min_price=ps.min_price,
             breakeven_active=ps._breakeven_active,
-            tp1_hit=ps._tp1_hit, tp2_hit=ps._tp2_hit,
+            tp1_hit=ps._tp1_hit,
+            tp2_hit=ps._tp2_hit,
         )
 
     @staticmethod
@@ -1196,7 +1370,7 @@ class TradingBrain:
         """Verifica que la vela esté dentro del horario de mercado líquido."""
         p = StrategyParams()  # valores por defecto para session
         ts = last.name
-        if not hasattr(ts, 'hour'):
+        if not hasattr(ts, "hour"):
             return True  # datos diarios, no filtrar
         h, m = ts.hour, ts.minute
         sess_start = p.session_start_hour * 60 + p.session_start_minute
@@ -1247,11 +1421,11 @@ def create_web_bot_strategy_params() -> StrategyParams:
         use_short_selling=True,
         short_score_threshold=-0.25,
         short_min_rsi=55.0,
-        short_stop_loss_pct=0.030,      # +3% price rise = cover
-        short_take_profit_pct=-0.050,    # -5% price drop = cover
-        short_position_size_pct=0.07,    # 7% max per short
+        short_stop_loss_pct=0.030,  # +3% price rise = cover
+        short_take_profit_pct=-0.050,  # -5% price drop = cover
+        short_position_size_pct=0.07,  # 7% max per short
         short_momentum_threshold=-0.30,
-        short_min_adx=22.0,              # Solo shorts si hay momentum bajista real
+        short_min_adx=22.0,  # Solo shorts si hay momentum bajista real
         use_partial_take_profit=False,
         use_dynamic_trailing=True,
         use_confirmation_filter=True,

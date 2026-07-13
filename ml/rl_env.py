@@ -9,6 +9,7 @@ class TradingEnv(gym.Env):
     Entorno de trading para Reinforcement Learning.
     El agente interactúa con el mercado, recibiendo los features técnicos y macro.
     """
+
     def __init__(self, df_features: pd.DataFrame, df_prices: pd.DataFrame, initial_balance=10000.0, commission=0.001):
         super().__init__()
 
@@ -24,9 +25,7 @@ class TradingEnv(gym.Env):
 
         # Observaciones: Vector de características (features)
         self.obs_shape = df_features.shape[1]
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.obs_shape,), dtype=np.float32
-        )
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.obs_shape,), dtype=np.float32)
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -47,8 +46,8 @@ class TradingEnv(gym.Env):
         if done:
             return self._get_obs(), 0.0, done, False, {}
 
-        current_price = self.df_prices.iloc[self.current_step]['close']
-        next_price = self.df_prices.iloc[self.current_step + 1]['close']
+        current_price = self.df_prices.iloc[self.current_step]["close"]
+        next_price = self.df_prices.iloc[self.current_step + 1]["close"]
 
         reward = 0.0
 

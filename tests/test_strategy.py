@@ -19,10 +19,11 @@ from ml.ensemble import EnsembleResult
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
+
 def make_frame(close_values, extra_cols=None):
     """Build a minimal OHLCV DataFrame with common indicators."""
-    n = len(close_values) if not isinstance(close_values, (int, float)) else 1
-    if isinstance(close_values, (int, float)):
+    n = len(close_values) if not isinstance(close_values, int | float) else 1
+    if isinstance(close_values, int | float):
         close_values = [float(close_values)]
         n = 1
     dates = pd.date_range("2025-01-01", periods=n, freq="D")
@@ -49,6 +50,7 @@ def make_frame(close_values, extra_cols=None):
 
 
 # ── StrategyParams ──────────────────────────────────────────────────────
+
 
 class TestStrategyParams:
     def test_default_values(self):
@@ -86,6 +88,7 @@ class TestStrategyParams:
 
 # ── Decision ────────────────────────────────────────────────────────────
 
+
 class TestDecision:
     def test_default_confidence_zero(self):
         d = Decision("HOLD", "test")
@@ -106,6 +109,7 @@ class TestDecision:
 
 
 # ── PositionState ───────────────────────────────────────────────────────
+
 
 class TestPositionState:
     def test_init(self):
@@ -163,8 +167,9 @@ class TestPositionState:
         assert "take-profit" in reason
 
     def test_should_exit_long_trailing_stop(self):
-        params = StrategyParams(use_rl_exits=False, use_trailing_stop=True,
-                                trailing_stop_atr_mult=2.0, use_dynamic_trailing=False)
+        params = StrategyParams(
+            use_rl_exits=False, use_trailing_stop=True, trailing_stop_atr_mult=2.0, use_dynamic_trailing=False
+        )
         pos = PositionState(100.0, 2.0, params, side="LONG")
         pos.update_extremes(110.0)
         # trailing stop = 110 - 2*2.0 = 106, current 105 < 106
@@ -190,9 +195,13 @@ class TestPositionState:
 
     def test_should_exit_short_trailing_stop(self):
         """Trigger trailing stop without hitting take-profit first."""
-        params = StrategyParams(use_rl_exits=False, use_trailing_stop=True,
-                                trailing_stop_atr_mult=2.0, use_dynamic_trailing=False,
-                                short_take_profit_pct=-0.10)  # very deep TP
+        params = StrategyParams(
+            use_rl_exits=False,
+            use_trailing_stop=True,
+            trailing_stop_atr_mult=2.0,
+            use_dynamic_trailing=False,
+            short_take_profit_pct=-0.10,
+        )  # very deep TP
         pos = PositionState(100.0, 2.0, params, side="SHORT")
         pos.update_extremes(90.0)  # min_price=90
         # trailing stop = 90 + 2*2.0 = 94, current=95 > 94 → exit
@@ -235,8 +244,7 @@ class TestPositionState:
     # ── Breakeven stop ──────────────────────────────────────────────────
 
     def test_breakeven_activates_and_triggers(self):
-        params = StrategyParams(use_breakeven_stop=True, breakeven_trigger_pct=0.03,
-                                use_rl_exits=False)
+        params = StrategyParams(use_breakeven_stop=True, breakeven_trigger_pct=0.03, use_rl_exits=False)
         pos = PositionState(100.0, 2.0, params, side="LONG")
         should, reason = pos.should_exit(105.0)
         assert should is False
@@ -248,8 +256,7 @@ class TestPositionState:
     # ── Time-based exit ─────────────────────────────────────────────────
 
     def test_time_based_exit(self):
-        params = StrategyParams(use_time_based_exit=True, max_hold_days=5,
-                                use_rl_exits=False)
+        params = StrategyParams(use_time_based_exit=True, max_hold_days=5, use_rl_exits=False)
         entry = pd.Timestamp("2025-01-01")
         current = pd.Timestamp("2025-01-10")
         pos = PositionState(100.0, 2.0, params, side="LONG", entry_date=entry)
@@ -260,9 +267,13 @@ class TestPositionState:
     # ── Partial TP ──────────────────────────────────────────────────────
 
     def test_partial_tp_fraction(self):
-        params = StrategyParams(use_partial_take_profit=True,
-                                partial_tp1_pct=0.05, partial_tp1_fraction=0.33,
-                                partial_tp2_pct=0.10, partial_tp2_fraction=0.33)
+        params = StrategyParams(
+            use_partial_take_profit=True,
+            partial_tp1_pct=0.05,
+            partial_tp1_fraction=0.33,
+            partial_tp2_pct=0.10,
+            partial_tp2_fraction=0.33,
+        )
         pos = PositionState(100.0, 2.0, params, side="LONG")
         frac = pos.check_partial_tp(106.0)
         assert frac == 0.33
@@ -283,8 +294,7 @@ class TestPositionState:
     # ── Dynamic trailing ────────────────────────────────────────────────
 
     def test_effective_trail_mult_tight_after_big_pnl(self):
-        params = StrategyParams(use_dynamic_trailing=True,
-                                trail_atr_base=3.0, trail_atr_tight=1.5)
+        params = StrategyParams(use_dynamic_trailing=True, trail_atr_base=3.0, trail_atr_tight=1.5)
         pos = PositionState(100.0, 2.0, params)
         pos.max_price = 115.0
         mult = pos._effective_trail_mult()
@@ -322,6 +332,7 @@ class TestPositionState:
 
 
 # ── KellyCalculator ─────────────────────────────────────────────────────
+
 
 class TestKellyCalculator:
     def test_win_rate_zero_on_empty(self, tmp_path):
@@ -424,6 +435,7 @@ class TestKellyCalculator:
 
 # ── TradingBrain ────────────────────────────────────────────────────────
 
+
 class TestTradingBrainInit:
     def test_default_params(self):
         brain = TradingBrain()
@@ -475,8 +487,7 @@ class TestTradingBrainDecideEntry:
         assert "below buy threshold" in d.reason
 
     def test_buy_success(self):
-        brain = TradingBrain(StrategyParams(use_ensemble=False, use_ml_filter=False,
-                                            require_price_above_sma200=False))
+        brain = TradingBrain(StrategyParams(use_ensemble=False, use_ml_filter=False, require_price_above_sma200=False))
         df = make_frame(100.0, {"rsi": 50.0, "adx": 25.0, "atr": 2.0})
         d = brain.decide(df=df, score=0.50, has_position=False)
         assert d.action == "BUY"
@@ -485,16 +496,14 @@ class TestTradingBrainDecideEntry:
         assert d.side == "LONG"
 
     def test_buy_with_sma200_filter(self):
-        brain = TradingBrain(StrategyParams(require_price_above_sma200=True,
-                                            use_ensemble=False, use_ml_filter=False))
+        brain = TradingBrain(StrategyParams(require_price_above_sma200=True, use_ensemble=False, use_ml_filter=False))
         df = make_frame(80.0, {"sma_200": 100.0, "rsi": 50.0, "adx": 25.0})
         d = brain.decide(df=df, score=0.50, has_position=False)
         assert d.action == "HOLD"
         assert "SMA200" in d.reason
 
     def test_buy_rsi_too_high(self):
-        brain = TradingBrain(StrategyParams(max_buy_rsi=60.0, use_ensemble=False,
-                                            use_ml_filter=False))
+        brain = TradingBrain(StrategyParams(max_buy_rsi=60.0, use_ensemble=False, use_ml_filter=False))
         df = make_frame(100.0, {"sma_200": 90.0, "rsi": 80.0, "adx": 25.0})
         d = brain.decide(df=df, score=0.50, has_position=False)
         assert d.action == "HOLD"
@@ -517,25 +526,20 @@ class TestTradingBrainDecideEntry:
     def test_ml_filter_blocks_when_missing(self):
         brain = TradingBrain(StrategyParams(use_ml_filter=True, use_ensemble=False))
         df = make_frame(100.0, {"sma_200": 90.0, "rsi": 50.0, "adx": 25.0})
-        d = brain.decide(df=df, score=0.50, has_position=False,
-                         ml_direction=None, ml_probability=None)
+        d = brain.decide(df=df, score=0.50, has_position=False, ml_direction=None, ml_probability=None)
         assert d.action == "HOLD"
         assert "ML confirmation missing" in d.reason
 
     def test_ml_filter_rejects(self):
-        brain = TradingBrain(StrategyParams(use_ml_filter=True, use_ensemble=False,
-                                            min_ml_buy_probability=0.60))
+        brain = TradingBrain(StrategyParams(use_ml_filter=True, use_ensemble=False, min_ml_buy_probability=0.60))
         df = make_frame(100.0, {"sma_200": 90.0, "rsi": 50.0, "adx": 25.0})
-        d = brain.decide(df=df, score=0.50, has_position=False,
-                         ml_direction="BAJISTA", ml_probability=0.9)
+        d = brain.decide(df=df, score=0.50, has_position=False, ml_direction="BAJISTA", ml_probability=0.9)
         assert d.action == "HOLD"
         assert "ML rejected" in d.reason
 
     def test_donchian_breakout_blocks(self):
-        brain = TradingBrain(StrategyParams(use_donchian_breakout=True,
-                                            use_ensemble=False, use_ml_filter=False))
-        df = make_frame(90.0, {"donchian_upper_20": 100.0, "sma_200": 85.0,
-                               "rsi": 50.0, "adx": 25.0})
+        brain = TradingBrain(StrategyParams(use_donchian_breakout=True, use_ensemble=False, use_ml_filter=False))
+        df = make_frame(90.0, {"donchian_upper_20": 100.0, "sma_200": 85.0, "rsi": 50.0, "adx": 25.0})
         d = brain.decide(df=df, score=0.50, has_position=False)
         assert d.action == "HOLD"
         assert "donchian" in d.reason.lower() or "breakout" in d.reason.lower()
@@ -544,13 +548,22 @@ class TestTradingBrainDecideEntry:
         n = 20
         close = np.linspace(100, 105, n)
         sig = np.where(np.arange(n) < 12, -0.2, 0.3)
-        brain = TradingBrain(StrategyParams(use_confirmation_filter=True,
-                                            confirmation_bars=10, confirmation_min_ratio=0.9,
-                                            use_ensemble=False, use_ml_filter=False,
-                                            signal_smoothing_periods=1))
+        brain = TradingBrain(
+            StrategyParams(
+                use_confirmation_filter=True,
+                confirmation_bars=10,
+                confirmation_min_ratio=0.9,
+                use_ensemble=False,
+                use_ml_filter=False,
+                signal_smoothing_periods=1,
+            )
+        )
         cols = {
             "sig_composite": sig.tolist(),
-            "sma_200": [95] * n, "rsi": [50] * n, "adx": [25] * n, "atr": [2.0] * n,
+            "sma_200": [95] * n,
+            "rsi": [50] * n,
+            "adx": [25] * n,
+            "atr": [2.0] * n,
         }
         df = make_frame(close.tolist(), cols)
         d = brain.decide(df=df, score=0.50, has_position=False, current_index=n - 1)
@@ -558,8 +571,7 @@ class TestTradingBrainDecideEntry:
         assert "Confirmaci" in d.reason or "insufficient" in d.reason
 
     def test_earnings_blackout_blocks(self):
-        brain = TradingBrain(StrategyParams(use_earnings_blackout=True,
-                                            use_ensemble=False))
+        brain = TradingBrain(StrategyParams(use_earnings_blackout=True, use_ensemble=False))
         df = make_frame(100.0, {"rsi": 50.0, "adx": 25.0})
         d = brain.decide(df=df, score=0.50, has_position=False, earnings_blackout=True)
         assert d.action == "HOLD"
@@ -575,8 +587,7 @@ class TestTradingBrainRegimeFilter:
         assert "R" in d.reason and "gimen" in d.reason
 
     def test_regime_filter_allows_bull(self):
-        brain = TradingBrain(StrategyParams(use_regime_filter=True, use_ensemble=False,
-                                            use_ml_filter=False))
+        brain = TradingBrain(StrategyParams(use_regime_filter=True, use_ensemble=False, use_ml_filter=False))
         df = make_frame(100.0, {"sma_200": 90.0, "rsi": 50.0, "adx": 25.0, "atr": 2.0})
         d = brain.decide(df=df, score=0.50, has_position=False, market_regime="BULL")
         assert d.action == "BUY"
@@ -600,12 +611,15 @@ class TestTradingBrainScalp:
     def test_momentum_scalp_triggers(self):
         brain = TradingBrain(StrategyParams(use_momentum_scalp=True, use_ensemble=False))
         n = 5
-        df = make_frame([100.0] * n, {
-            "sig_momentum": [0.5] * n,
-            "sig_volume": [0.5] * n,
-            "rsi": [50] * n,
-            "adx": [25] * n,
-        })
+        df = make_frame(
+            [100.0] * n,
+            {
+                "sig_momentum": [0.5] * n,
+                "sig_volume": [0.5] * n,
+                "rsi": [50] * n,
+                "adx": [25] * n,
+            },
+        )
         d = brain.decide(df=df, score=0.50, has_position=False, current_index=n - 1)
         assert d.action == "BUY"
         assert d.side == "SCALP"
@@ -614,12 +628,15 @@ class TestTradingBrainScalp:
     def test_scalp_low_momentum_does_not_trigger(self):
         brain = TradingBrain(StrategyParams(use_momentum_scalp=True, use_ensemble=False))
         n = 5
-        df = make_frame([100.0] * n, {
-            "sig_momentum": [0.1] * n,
-            "sig_volume": [0.5] * n,
-            "rsi": [50] * n,
-            "adx": [25] * n,
-        })
+        df = make_frame(
+            [100.0] * n,
+            {
+                "sig_momentum": [0.1] * n,
+                "sig_volume": [0.5] * n,
+                "rsi": [50] * n,
+                "adx": [25] * n,
+            },
+        )
         d = brain.decide(df=df, score=0.50, has_position=False, current_index=n - 1)
         assert d.side != "SCALP"
 
@@ -628,13 +645,18 @@ class TestTradingBrainDip:
     def test_dip_detected(self):
         n = 10
         close = [100.0, 99.0, 98.0, 97.0, 96.0, 95.0, 94.0, 89.0, 85.0, 81.0]
-        brain = TradingBrain(StrategyParams(use_contrarian_dip=True, dip_drop_pct=-0.04,
-                                            dip_drop_days=3, dip_rsi_max=35.0,
-                                            use_ensemble=False))
-        df = make_frame(close, {
-            "rsi": [50] * 7 + [30] * 3,
-            "adx": [25] * n,
-        })
+        brain = TradingBrain(
+            StrategyParams(
+                use_contrarian_dip=True, dip_drop_pct=-0.04, dip_drop_days=3, dip_rsi_max=35.0, use_ensemble=False
+            )
+        )
+        df = make_frame(
+            close,
+            {
+                "rsi": [50] * 7 + [30] * 3,
+                "adx": [25] * n,
+            },
+        )
         d = brain.decide(df=df, score=0.0, has_position=False, current_index=n - 1)
         assert d.action == "BUY"
         assert d.side == "DIP"
@@ -642,13 +664,18 @@ class TestTradingBrainDip:
     def test_dip_not_detected_when_rsi_high(self):
         n = 10
         close = [100.0, 99.0, 98.0, 97.0, 96.0, 95.0, 94.0, 93.0, 92.0, 91.0]
-        brain = TradingBrain(StrategyParams(use_contrarian_dip=True, dip_drop_pct=-0.04,
-                                            dip_drop_days=3, dip_rsi_max=35.0,
-                                            use_ensemble=False))
-        df = make_frame(close, {
-            "rsi": [50] * n,
-            "adx": [25] * n,
-        })
+        brain = TradingBrain(
+            StrategyParams(
+                use_contrarian_dip=True, dip_drop_pct=-0.04, dip_drop_days=3, dip_rsi_max=35.0, use_ensemble=False
+            )
+        )
+        df = make_frame(
+            close,
+            {
+                "rsi": [50] * n,
+                "adx": [25] * n,
+            },
+        )
         d = brain.decide(df=df, score=0.0, has_position=False, current_index=n - 1)
         assert d.action != "BUY"
 
@@ -656,47 +683,67 @@ class TestTradingBrainDip:
 class TestTradingBrainShort:
     def test_short_entry_via_donchian(self):
         n = 10
-        brain = TradingBrain(StrategyParams(use_short_selling=True, short_score_threshold=-0.25,
-                                            short_min_rsi=55.0, short_min_adx=18.0,
-                                            use_ensemble=False, signal_smoothing_periods=1,
-                                            use_contrarian_dip=False))
-        df = make_frame([95.0] * n, {
-            "rsi": [60] * n,
-            "adx": [25] * n,
-            "donchian_lower_20": [100.0] * n,
-        })
+        brain = TradingBrain(
+            StrategyParams(
+                use_short_selling=True,
+                short_score_threshold=-0.25,
+                short_min_rsi=55.0,
+                short_min_adx=18.0,
+                use_ensemble=False,
+                signal_smoothing_periods=1,
+                use_contrarian_dip=False,
+            )
+        )
+        df = make_frame(
+            [95.0] * n,
+            {
+                "rsi": [60] * n,
+                "adx": [25] * n,
+                "donchian_lower_20": [100.0] * n,
+            },
+        )
         d = brain.decide(df=df, score=-0.50, has_position=False, current_index=n - 1)
         assert d.action == "SHORT"
         assert d.side == "SHORT"
 
     def test_short_entry_via_momentum(self):
         n = 10
-        brain = TradingBrain(StrategyParams(use_short_selling=True, short_score_threshold=-0.25,
-                                            short_min_rsi=55.0, short_min_adx=18.0,
-                                            short_momentum_threshold=-0.30,
-                                            use_ensemble=False, signal_smoothing_periods=1,
-                                            use_contrarian_dip=False))
-        df = make_frame([100.0] * n, {
-            "rsi": [60] * n,
-            "adx": [25] * n,
-            "sig_momentum": [-0.4] * n,
-            "sig_volume": [0.5] * n,
-        })
+        brain = TradingBrain(
+            StrategyParams(
+                use_short_selling=True,
+                short_score_threshold=-0.25,
+                short_min_rsi=55.0,
+                short_min_adx=18.0,
+                short_momentum_threshold=-0.30,
+                use_ensemble=False,
+                signal_smoothing_periods=1,
+                use_contrarian_dip=False,
+            )
+        )
+        df = make_frame(
+            [100.0] * n,
+            {
+                "rsi": [60] * n,
+                "adx": [25] * n,
+                "sig_momentum": [-0.4] * n,
+                "sig_volume": [0.5] * n,
+            },
+        )
         d = brain.decide(df=df, score=-0.50, has_position=False, current_index=n - 1)
         assert d.action == "SHORT"
         assert d.side == "SHORT"
 
     def test_short_not_triggered_when_score_high(self):
-        brain = TradingBrain(StrategyParams(use_short_selling=True, short_score_threshold=-0.25,
-                                            use_ensemble=False))
+        brain = TradingBrain(StrategyParams(use_short_selling=True, short_score_threshold=-0.25, use_ensemble=False))
         n = 5
         df = make_frame([100.0] * n, {"rsi": [60] * n, "adx": [25] * n})
         d = brain.decide(df=df, score=0.0, has_position=False, current_index=n - 1)
         assert d.action != "SHORT"
 
     def test_short_not_triggered_when_adx_low(self):
-        brain = TradingBrain(StrategyParams(use_short_selling=True, short_score_threshold=-0.25,
-                                            short_min_adx=18.0, use_ensemble=False))
+        brain = TradingBrain(
+            StrategyParams(use_short_selling=True, short_score_threshold=-0.25, short_min_adx=18.0, use_ensemble=False)
+        )
         n = 5
         df = make_frame([100.0] * n, {"rsi": [60] * n, "adx": [10] * n})
         d = brain.decide(df=df, score=-0.50, has_position=False, current_index=n - 1)
@@ -707,14 +754,22 @@ class TestTradingBrainMeanReversion:
     def test_mean_reversion_triggers(self):
         n = 10
         close = [100.0, 99.0, 98.0, 97.0, 96.0, 95.0, 94.0, 93.0, 85.0, 83.0]
-        brain = TradingBrain(StrategyParams(use_mean_reversion=True, mean_rev_rsi_max=28.0,
-                                            mean_rev_drop_pct=-0.02,
-                                            disable_meanrev_in_trend=False,
-                                            use_ensemble=False))
-        df = make_frame(close, {
-            "rsi": [50] * 7 + [25] * 3,
-            "adx": [25] * n,
-        })
+        brain = TradingBrain(
+            StrategyParams(
+                use_mean_reversion=True,
+                mean_rev_rsi_max=28.0,
+                mean_rev_drop_pct=-0.02,
+                disable_meanrev_in_trend=False,
+                use_ensemble=False,
+            )
+        )
+        df = make_frame(
+            close,
+            {
+                "rsi": [50] * 7 + [25] * 3,
+                "adx": [25] * n,
+            },
+        )
         d = brain.decide(df=df, score=0.0, has_position=False, current_index=n - 1)
         assert d.action == "BUY"
         assert d.side == "MEANREV"
@@ -722,43 +777,55 @@ class TestTradingBrainMeanReversion:
     def test_mean_reversion_blocked_when_disable_in_trend(self):
         n = 10
         close = [100.0, 99.0, 98.0, 97.0, 96.0, 95.0, 94.0, 93.0, 92.0, 91.0]
-        brain = TradingBrain(StrategyParams(use_mean_reversion=True, mean_rev_rsi_max=28.0,
-                                            mean_rev_drop_pct=-0.02,
-                                            disable_meanrev_in_trend=True,
-                                            use_ensemble=False))
-        df = make_frame(close, {
-            "rsi": [50] * 7 + [25] * 3,
-            "adx": [25] * n,
-        })
+        brain = TradingBrain(
+            StrategyParams(
+                use_mean_reversion=True,
+                mean_rev_rsi_max=28.0,
+                mean_rev_drop_pct=-0.02,
+                disable_meanrev_in_trend=True,
+                use_ensemble=False,
+            )
+        )
+        df = make_frame(
+            close,
+            {
+                "rsi": [50] * 7 + [25] * 3,
+                "adx": [25] * n,
+            },
+        )
         d = brain.decide(df=df, score=0.0, has_position=False, current_index=n - 1)
         assert d.side != "MEANREV"
 
 
 class TestTradingBrainExits:
     def test_exit_stop_loss(self):
-        brain = TradingBrain(StrategyParams(stop_loss_pct=-0.05, use_rl_exits=False,
-                                            use_adaptive_sltp=False, use_contrarian_dip=False))
-        df = make_frame([100.0, 94.0], {"rsi": [50, 50], "adx": [25, 25],
-                                         "sma_200": [90.0, 90.0], "atr": [2.0, 2.0]})
+        brain = TradingBrain(
+            StrategyParams(stop_loss_pct=-0.05, use_rl_exits=False, use_adaptive_sltp=False, use_contrarian_dip=False)
+        )
+        df = make_frame([100.0, 94.0], {"rsi": [50, 50], "adx": [25, 25], "sma_200": [90.0, 90.0], "atr": [2.0, 2.0]})
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="LONG")
         d = brain.decide(df=df, score=0.0, has_position=True, current_index=1, ticker="TEST")
         assert d.action == "SELL"
         assert "stop-loss" in d.reason.lower()
 
     def test_exit_take_profit(self):
-        brain = TradingBrain(StrategyParams(take_profit_pct=0.10, use_rl_exits=False,
-                                            use_adaptive_sltp=False, use_contrarian_dip=False,
-                                            use_partial_take_profit=False))
-        df = make_frame([100.0, 115.0], {"rsi": [50, 70], "adx": [25, 25],
-                                          "sma_200": [90.0, 90.0], "atr": [2.0, 2.0]})
+        brain = TradingBrain(
+            StrategyParams(
+                take_profit_pct=0.10,
+                use_rl_exits=False,
+                use_adaptive_sltp=False,
+                use_contrarian_dip=False,
+                use_partial_take_profit=False,
+            )
+        )
+        df = make_frame([100.0, 115.0], {"rsi": [50, 70], "adx": [25, 25], "sma_200": [90.0, 90.0], "atr": [2.0, 2.0]})
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="LONG")
         d = brain.decide(df=df, score=0.0, has_position=True, current_index=1, ticker="TEST")
         assert d.action == "SELL"
         assert "take-profit" in d.reason.lower()
 
     def test_exit_short_when_score_turns_bullish(self):
-        brain = TradingBrain(StrategyParams(use_short_selling=True, use_rl_exits=False,
-                                            use_contrarian_dip=False))
+        brain = TradingBrain(StrategyParams(use_short_selling=True, use_rl_exits=False, use_contrarian_dip=False))
         n = 5
         df = make_frame([100.0] * n, {"rsi": [60] * n, "adx": [25] * n, "atr": [2.0] * n})
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="SHORT", current_index=0)
@@ -766,11 +833,12 @@ class TestTradingBrainExits:
         assert d.action == "COVER"
 
     def test_exit_short_take_profit(self):
-        brain = TradingBrain(StrategyParams(use_short_selling=True,
-                                            short_take_profit_pct=-0.03,
-                                            use_rl_exits=False, use_contrarian_dip=False))
-        df = make_frame([100.0, 99.0, 98.0, 97.0, 96.0],
-                        {"rsi": [60] * 5, "adx": [25] * 5, "atr": [2.0] * 5})
+        brain = TradingBrain(
+            StrategyParams(
+                use_short_selling=True, short_take_profit_pct=-0.03, use_rl_exits=False, use_contrarian_dip=False
+            )
+        )
+        df = make_frame([100.0, 99.0, 98.0, 97.0, 96.0], {"rsi": [60] * 5, "adx": [25] * 5, "atr": [2.0] * 5})
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="SHORT", current_index=0)
         d = brain.decide(df=df, score=-0.10, has_position=True, current_index=4, ticker="TEST")
         assert d.action == "COVER"
@@ -779,19 +847,23 @@ class TestTradingBrainExits:
     def test_hold_with_position_valid(self):
         brain = TradingBrain(StrategyParams(use_ensemble=False, use_rl_exits=False))
         n = 5
-        df = make_frame([100.0] * n, {"rsi": [50] * n, "adx": [25] * n, "atr": [2.0] * n,
-                                      "sma_200": [90.0] * n})
+        df = make_frame([100.0] * n, {"rsi": [50] * n, "adx": [25] * n, "atr": [2.0] * n, "sma_200": [90.0] * n})
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="LONG", current_index=0)
         d = brain.decide(df=df, score=0.0, has_position=True, current_index=n - 1, ticker="TEST")
         assert d.action == "HOLD"
 
     def test_exit_partial_tp(self):
-        brain = TradingBrain(StrategyParams(use_partial_take_profit=True,
-                                            partial_tp1_pct=0.05, partial_tp1_fraction=0.33,
-                                            use_rl_exits=False, use_adaptive_sltp=False,
-                                            use_contrarian_dip=False))
-        df = make_frame([100.0, 106.0], {"rsi": [50, 60], "adx": [25, 25],
-                                         "sma_200": [90, 90], "atr": [2.0, 2.0]})
+        brain = TradingBrain(
+            StrategyParams(
+                use_partial_take_profit=True,
+                partial_tp1_pct=0.05,
+                partial_tp1_fraction=0.33,
+                use_rl_exits=False,
+                use_adaptive_sltp=False,
+                use_contrarian_dip=False,
+            )
+        )
+        df = make_frame([100.0, 106.0], {"rsi": [50, 60], "adx": [25, 25], "sma_200": [90, 90], "atr": [2.0, 2.0]})
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="LONG")
         d = brain.decide(df=df, score=0.0, has_position=True, current_index=1, ticker="TEST")
         assert d.action == "SELL"
@@ -800,8 +872,7 @@ class TestTradingBrainExits:
 
 class TestTradingBrainPositionSize:
     def test_position_size_default(self):
-        brain = TradingBrain(StrategyParams(atr_position_sizing=True, atr_risk_pct=0.02,
-                                            trail_atr_base=2.0))
+        brain = TradingBrain(StrategyParams(atr_position_sizing=True, atr_risk_pct=0.02, trail_atr_base=2.0))
         df = make_frame(100.0, {"atr": 2.0, "close": 100.0})
         size = brain._position_size(df, 0, score=0.50)
         assert size > 0
@@ -811,18 +882,23 @@ class TestTradingBrainPositionSize:
         n = 30
         rng = np.random.default_rng(42)
         close = (100.0 + np.cumsum(rng.normal(0, 0.5, n))).tolist()
-        brain = TradingBrain(StrategyParams(use_volatility_targeting=True,
-                                            atr_position_sizing=True, atr_risk_pct=0.02,
-                                            trail_atr_base=2.0))
+        brain = TradingBrain(
+            StrategyParams(
+                use_volatility_targeting=True, atr_position_sizing=True, atr_risk_pct=0.02, trail_atr_base=2.0
+            )
+        )
         df = make_frame(close, {"atr": [2.0] * n, "close": close})
         size = brain._position_size(df, n - 1, score=0.30)
         assert 0 < size <= 0.25
 
     def test_position_size_atr_zero_falls_back(self):
-        brain = TradingBrain()
+        kelly = KellyCalculator(fractional=0.25)
+        kelly.trades = []
+        brain = TradingBrain(kelly_instance=kelly)
         df = make_frame(100.0, {"atr": 0.0, "close": 100.0})
         size = brain._position_size(df, 0, score=0.0)
-        assert size == StrategyParams().min_position_size_pct
+        # Sin ATR: usa max_position_size * conviction_boost (0.25 * 0.7 = 0.175)
+        assert size == pytest.approx(0.175, rel=1e-6)
 
     def test_position_size_with_kelly_multiplier(self):
         kelly = MagicMock()
@@ -857,10 +933,14 @@ class TestTradingBrainAdaptiveSLTP:
         assert tp == StrategyParams().take_profit_pct
 
     def test_adaptive_sltp_atr_based(self):
-        brain = TradingBrain(StrategyParams(use_adaptive_sltp=True,
-                                            adaptive_sltp_atr_mult_stop=2.0,
-                                            adaptive_sltp_atr_mult_tp=3.0,
-                                            adaptive_sltp_min_stop_pct=-0.04))
+        brain = TradingBrain(
+            StrategyParams(
+                use_adaptive_sltp=True,
+                adaptive_sltp_atr_mult_stop=2.0,
+                adaptive_sltp_atr_mult_tp=3.0,
+                adaptive_sltp_min_stop_pct=-0.04,
+            )
+        )
         df = make_frame(100.0, {"atr": 2.0, "close": 100.0})
         sl, tp = brain._adaptive_sltp(df, 0)
         # atr_pct = 2/100 = 0.02, sl = -(0.02 * 2.0) = -0.04
@@ -869,24 +949,32 @@ class TestTradingBrainAdaptiveSLTP:
         assert tp == pytest.approx(0.06)
 
     def test_adaptive_sltp_bear_regime(self):
-        brain = TradingBrain(StrategyParams(use_adaptive_sltp=True,
-                                            adaptive_sltp_atr_mult_stop=2.0,
-                                            adaptive_sltp_atr_mult_stop_bear=1.5,
-                                            adaptive_sltp_atr_mult_tp=3.0,
-                                            adaptive_sltp_min_stop_pct=-0.03))
+        brain = TradingBrain(
+            StrategyParams(
+                use_adaptive_sltp=True,
+                adaptive_sltp_atr_mult_stop=2.0,
+                adaptive_sltp_atr_mult_stop_bear=1.5,
+                adaptive_sltp_atr_mult_tp=3.0,
+                adaptive_sltp_min_stop_pct=-0.03,
+            )
+        )
         df = make_frame(100.0, {"atr": 2.0, "close": 100.0})
         sl, _tp = brain._adaptive_sltp(df, 0, regime="BEAR")
         # bear: mult_stop = 1.5, sl = -(0.02 * 1.5) = -0.03
         assert sl == pytest.approx(-0.03)
 
     def test_adaptive_sltp_clamped(self):
-        brain = TradingBrain(StrategyParams(use_adaptive_sltp=True,
-                                            adaptive_sltp_atr_mult_stop=100.0,
-                                            adaptive_sltp_atr_mult_tp=100.0,
-                                            adaptive_sltp_min_stop_pct=-0.02,
-                                            adaptive_sltp_max_stop_pct=-0.12,
-                                            adaptive_sltp_min_tp_pct=0.03,
-                                            adaptive_sltp_max_tp_pct=0.30))
+        brain = TradingBrain(
+            StrategyParams(
+                use_adaptive_sltp=True,
+                adaptive_sltp_atr_mult_stop=100.0,
+                adaptive_sltp_atr_mult_tp=100.0,
+                adaptive_sltp_min_stop_pct=-0.02,
+                adaptive_sltp_max_stop_pct=-0.12,
+                adaptive_sltp_min_tp_pct=0.03,
+                adaptive_sltp_max_tp_pct=0.30,
+            )
+        )
         df = make_frame(100.0, {"atr": 2.0, "close": 100.0})
         sl, tp = brain._adaptive_sltp(df, 0)
         assert sl >= -0.12
@@ -905,10 +993,14 @@ class TestTradingBrainAdaptiveSLTP:
         n = 30
         close = list(np.linspace(100, 110, n))
         close[-5:] = [108, 115, 112, 118, 120]
-        brain = TradingBrain(StrategyParams(use_adaptive_sltp=True,
-                                            adaptive_sltp_atr_mult_stop=2.0,
-                                            adaptive_sltp_atr_mult_tp=3.0,
-                                            adaptive_sltp_vol_lookback=20))
+        brain = TradingBrain(
+            StrategyParams(
+                use_adaptive_sltp=True,
+                adaptive_sltp_atr_mult_stop=2.0,
+                adaptive_sltp_atr_mult_tp=3.0,
+                adaptive_sltp_vol_lookback=20,
+            )
+        )
         df = make_frame(close, {"atr": [2.0] * n, "close": close})
         sl, tp = brain._adaptive_sltp(df, n - 1)
         assert isinstance(sl, float)
@@ -921,16 +1013,18 @@ class TestTradingBrainCheckDip:
     def test_check_dip_true(self):
         n = 10
         close = [100.0, 99.0, 98.0, 97.0, 96.0, 95.0, 94.0, 89.0, 85.0, 81.0]
-        brain = TradingBrain(StrategyParams(use_contrarian_dip=True, dip_drop_pct=-0.04,
-                                            dip_drop_days=3, dip_rsi_max=35.0))
+        brain = TradingBrain(
+            StrategyParams(use_contrarian_dip=True, dip_drop_pct=-0.04, dip_drop_days=3, dip_rsi_max=35.0)
+        )
         df = make_frame(close, {"rsi": [50] * 7 + [30] * 3})
         assert brain._check_dip(df, n - 1) is True
 
     def test_check_dip_false_when_rsi_high(self):
         n = 10
         close = [100.0, 99.0, 98.0, 97.0, 96.0, 95.0, 94.0, 93.0, 92.0, 91.0]
-        brain = TradingBrain(StrategyParams(use_contrarian_dip=True, dip_drop_pct=-0.04,
-                                            dip_drop_days=3, dip_rsi_max=35.0))
+        brain = TradingBrain(
+            StrategyParams(use_contrarian_dip=True, dip_drop_pct=-0.04, dip_drop_days=3, dip_rsi_max=35.0)
+        )
         df = make_frame(close, {"rsi": [50] * n})
         assert brain._check_dip(df, n - 1) is False
 
@@ -947,17 +1041,23 @@ class TestTradingBrainCheckDip:
 
 class TestTradingBrainCheckShortEntry:
     def test_short_check_passes_with_donchian_breakdown(self):
-        brain = TradingBrain(StrategyParams(use_short_selling=True, short_score_threshold=-0.25,
-                                            short_min_adx=18.0, short_min_rsi=55.0))
+        brain = TradingBrain(
+            StrategyParams(use_short_selling=True, short_score_threshold=-0.25, short_min_adx=18.0, short_min_rsi=55.0)
+        )
         df = make_frame(95.0, {"donchian_lower_20": 100.0, "adx": 25.0, "rsi": 60.0})
         assert brain._check_short_entry(df, 0, -0.50) is True
 
     def test_short_check_passes_with_momentum(self):
-        brain = TradingBrain(StrategyParams(use_short_selling=True, short_score_threshold=-0.25,
-                                            short_min_adx=18.0, short_min_rsi=55.0,
-                                            short_momentum_threshold=-0.30))
-        df = make_frame(100.0, {"sig_momentum": -0.4, "sig_volume": 0.5,
-                                "adx": 25.0, "rsi": 60.0})
+        brain = TradingBrain(
+            StrategyParams(
+                use_short_selling=True,
+                short_score_threshold=-0.25,
+                short_min_adx=18.0,
+                short_min_rsi=55.0,
+                short_momentum_threshold=-0.30,
+            )
+        )
+        df = make_frame(100.0, {"sig_momentum": -0.4, "sig_volume": 0.5, "adx": 25.0, "rsi": 60.0})
         assert brain._check_short_entry(df, 0, -0.50) is True
 
     def test_short_check_fails_when_disabled(self):
@@ -1020,9 +1120,18 @@ class TestTradingBrainMisc:
         brain = TradingBrain()
         state_mgr = MagicMock()
         state_mgr.get_positions.return_value = [
-            {"ticker": "AAPL", "entry_price": 100.0, "entry_atr": 2.0, "side": "LONG",
-             "max_price": 105.0, "min_price": 95.0, "entry_date": "2025-01-01",
-             "tp1_hit": False, "tp2_hit": False, "breakeven_active": False}
+            {
+                "ticker": "AAPL",
+                "entry_price": 100.0,
+                "entry_atr": 2.0,
+                "side": "LONG",
+                "max_price": 105.0,
+                "min_price": 95.0,
+                "entry_date": "2025-01-01",
+                "tp1_hit": False,
+                "tp2_hit": False,
+                "breakeven_active": False,
+            }
         ]
         alpaca = [{"symbol": "AAPL", "avg_entry_price": "100.0", "current_price": "105.0", "qty": "10"}]
         count = brain.restore_positions(state_mgr, alpaca)
@@ -1078,31 +1187,40 @@ class TestTradingBrainSignalSmoothing:
     def test_signal_smoothing_applied(self):
         n = 10
         sig = [0.5, -0.3, 0.6, 0.2, 0.7, 0.3, 0.8, 0.4, 0.9, 0.5]
-        brain = TradingBrain(StrategyParams(signal_smoothing_periods=3, use_ensemble=False,
-                                            use_ml_filter=False))
-        df = make_frame([100.0] * n, {
-            "sig_composite": sig,
-            "sma_200": [95] * n,
-            "rsi": [50] * n,
-            "adx": [25] * n,
-            "atr": [2.0] * n,
-        })
+        brain = TradingBrain(StrategyParams(signal_smoothing_periods=3, use_ensemble=False, use_ml_filter=False))
+        df = make_frame(
+            [100.0] * n,
+            {
+                "sig_composite": sig,
+                "sma_200": [95] * n,
+                "rsi": [50] * n,
+                "adx": [25] * n,
+                "atr": [2.0] * n,
+            },
+        )
         brain.decide(df=df, score=0.5, has_position=False, current_index=n - 1)
-        assert hasattr(brain, '_last_smooth_score')
+        assert hasattr(brain, "_last_smooth_score")
 
 
 class TestTradingBrainRLExits:
     def test_rl_agent_triggers_exit(self):
         rl = MagicMock()
         rl.get_action.return_value = 1  # CLOSE
-        brain = TradingBrain(StrategyParams(use_rl_exits=True, use_ensemble=False,
-                                            use_adaptive_sltp=False, use_contrarian_dip=False,
-                                            use_partial_take_profit=False),
-                             rl_agent_instance=rl)
+        brain = TradingBrain(
+            StrategyParams(
+                use_rl_exits=True,
+                use_ensemble=False,
+                use_adaptive_sltp=False,
+                use_contrarian_dip=False,
+                use_partial_take_profit=False,
+            ),
+            rl_agent_instance=rl,
+        )
         n = 5
-        df = make_frame([100.0, 101.0, 102.0, 103.0, 104.0],
-                        {"rsi": [50] * 5, "adx": [25] * 5, "atr": [2.0] * 5,
-                         "sma_200": [90] * 5})
+        df = make_frame(
+            [100.0, 101.0, 102.0, 103.0, 104.0],
+            {"rsi": [50] * 5, "adx": [25] * 5, "atr": [2.0] * 5, "sma_200": [90] * 5},
+        )
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="LONG", current_index=0)
         with patch("bot.strategy.get_rl_agent", return_value=rl):
             d = brain.decide(df=df, score=0.0, has_position=True, current_index=n - 1, ticker="TEST")
@@ -1114,11 +1232,11 @@ class TestTradingBrainRLExits:
 
     def test_rl_agent_not_called_when_disabled(self):
         rl = MagicMock()
-        brain = TradingBrain(StrategyParams(use_rl_exits=False, use_ensemble=False,
-                                            use_adaptive_sltp=False, use_contrarian_dip=False),
-                             rl_agent_instance=rl)
-        df = make_frame([100.0, 94.0], {"rsi": [50, 50], "adx": [25, 25],
-                                        "sma_200": [90, 90], "atr": [2.0, 2.0]})
+        brain = TradingBrain(
+            StrategyParams(use_rl_exits=False, use_ensemble=False, use_adaptive_sltp=False, use_contrarian_dip=False),
+            rl_agent_instance=rl,
+        )
+        df = make_frame([100.0, 94.0], {"rsi": [50, 50], "adx": [25, 25], "sma_200": [90, 90], "atr": [2.0, 2.0]})
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="LONG")
         d = brain.decide(df=df, score=0.0, has_position=True, current_index=1, ticker="TEST")
         rl.get_action.assert_not_called()
@@ -1127,12 +1245,17 @@ class TestTradingBrainRLExits:
     def test_rl_agent_hold_when_action_zero(self):
         rl = MagicMock()
         rl.get_action.return_value = 0  # HOLD
-        brain = TradingBrain(StrategyParams(use_rl_exits=True, use_ensemble=False,
-                                            stop_loss_pct=-0.05, use_trailing_stop=False,
-                                            use_partial_take_profit=False),
-                             rl_agent_instance=rl)
-        df = make_frame([100.0, 101.0], {"rsi": [50, 50], "adx": [25, 25],
-                                         "sma_200": [90, 90], "atr": [2.0, 2.0]})
+        brain = TradingBrain(
+            StrategyParams(
+                use_rl_exits=True,
+                use_ensemble=False,
+                stop_loss_pct=-0.05,
+                use_trailing_stop=False,
+                use_partial_take_profit=False,
+            ),
+            rl_agent_instance=rl,
+        )
+        df = make_frame([100.0, 101.0], {"rsi": [50, 50], "adx": [25, 25], "sma_200": [90, 90], "atr": [2.0, 2.0]})
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="LONG")
         d = brain.decide(df=df, score=0.0, has_position=True, current_index=1, ticker="TEST")
         assert d.action == "HOLD"
@@ -1140,25 +1263,31 @@ class TestTradingBrainRLExits:
 
 class TestTradingBrainEnsemble:
     def test_ensemble_bullish_passes_through(self):
-        brain = TradingBrain(StrategyParams(use_ensemble=True, buy_score_threshold=0.0,
-                                            use_ml_filter=False))
-        df = make_frame(105.0, {"sma_200": 100.0, "rsi": 50.0, "adx": 25.0, "atr": 2.0,
-                                "sig_composite": 0.3})
-        d = brain.decide(df=df, score=0.3, has_position=False, ml_direction="ALCISTA",
-                         ml_probability=0.7, market_regime="BULL")
+        brain = TradingBrain(StrategyParams(use_ensemble=True, buy_score_threshold=0.0, use_ml_filter=False))
+        df = make_frame(105.0, {"sma_200": 100.0, "rsi": 50.0, "adx": 25.0, "atr": 2.0, "sig_composite": 0.3})
+        d = brain.decide(
+            df=df, score=0.3, has_position=False, ml_direction="ALCISTA", ml_probability=0.7, market_regime="BULL"
+        )
         assert d.action in ("BUY", "HOLD")
 
     def test_ensemble_bearish_blocks_entry(self):
-        brain = TradingBrain(StrategyParams(use_ensemble=True, buy_score_threshold=-0.5,
-                                            use_ml_filter=False, use_regime_filter=False,
-                                            use_contrarian_dip=False, use_mean_reversion=False))
+        brain = TradingBrain(
+            StrategyParams(
+                use_ensemble=True,
+                buy_score_threshold=-0.5,
+                use_ml_filter=False,
+                use_regime_filter=False,
+                use_contrarian_dip=False,
+                use_mean_reversion=False,
+            )
+        )
         # Mock ensemble to return BEARISH with high confidence
         mock_result = EnsembleResult(consensus_direction="BEARISH", blended_score=-0.4, confidence=0.7)
         brain._ensemble.predict = MagicMock(return_value=mock_result)
-        df = make_frame(100.0, {"sma_200": 95.0, "rsi": 50.0, "adx": 25.0, "atr": 2.0,
-                                "sig_composite": -0.3})
-        d = brain.decide(df=df, score=-0.3, has_position=False, ml_direction="BEARISH",
-                         ml_probability=0.8, market_regime="BEAR")
+        df = make_frame(100.0, {"sma_200": 95.0, "rsi": 50.0, "adx": 25.0, "atr": 2.0, "sig_composite": -0.3})
+        d = brain.decide(
+            df=df, score=-0.3, has_position=False, ml_direction="BEARISH", ml_probability=0.8, market_regime="BEAR"
+        )
         assert d.action == "HOLD"
         assert "Ensemble bearish" in d.reason
         brain._ensemble.predict.assert_called_once()
@@ -1170,14 +1299,13 @@ class TestTradingBrainEnsemble:
         assert d.action == "BUY"
 
     def test_last_ensemble_result_populated(self):
-        brain = TradingBrain(StrategyParams(use_ensemble=True, buy_score_threshold=0.0,
-                                            use_ml_filter=False))
-        df = make_frame(105.0, {"sma_200": 100.0, "rsi": 50.0, "adx": 25.0, "atr": 2.0,
-                                "sig_composite": 0.3})
-        brain.decide(df=df, score=0.3, has_position=False, ml_direction="ALCISTA",
-                     ml_probability=0.7, market_regime="BULL")
+        brain = TradingBrain(StrategyParams(use_ensemble=True, buy_score_threshold=0.0, use_ml_filter=False))
+        df = make_frame(105.0, {"sma_200": 100.0, "rsi": 50.0, "adx": 25.0, "atr": 2.0, "sig_composite": 0.3})
+        brain.decide(
+            df=df, score=0.3, has_position=False, ml_direction="ALCISTA", ml_probability=0.7, market_regime="BULL"
+        )
         assert brain.last_ensemble_result is not None
-        assert hasattr(brain.last_ensemble_result, 'consensus_direction')
+        assert hasattr(brain.last_ensemble_result, "consensus_direction")
 
 
 class TestTradingBrainHasPositionNoState:
@@ -1191,11 +1319,11 @@ class TestTradingBrainHasPositionNoState:
 
 class TestTradingBrainScoreBearishExit:
     def test_bearish_score_exits_position(self):
-        brain = TradingBrain(StrategyParams(use_ensemble=False, use_rl_exits=False,
-                                            use_adaptive_sltp=False, use_contrarian_dip=False))
+        brain = TradingBrain(
+            StrategyParams(use_ensemble=False, use_rl_exits=False, use_adaptive_sltp=False, use_contrarian_dip=False)
+        )
         n = 5
-        df = make_frame([100.0] * n, {"rsi": [50] * n, "adx": [25] * n, "atr": [2.0] * n,
-                                      "sma_200": [90] * n})
+        df = make_frame([100.0] * n, {"rsi": [50] * n, "adx": [25] * n, "atr": [2.0] * n, "sma_200": [90] * n})
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="LONG", current_index=0)
         d = brain.decide(df=df, score=-0.50, has_position=True, current_index=n - 1, ticker="TEST")
         assert d.action == "SELL"
@@ -1206,8 +1334,9 @@ class TestTradingBrainIntradayScalp:
     def test_intraday_scalp_not_triggered_with_daily_data(self):
         brain = TradingBrain(StrategyParams(use_intraday_scalp=True, use_ensemble=False))
         n = 5
-        df = make_frame([100.0] * n, {"sig_momentum": [0.8] * n, "sig_volume": [0.8] * n,
-                                      "rsi": [50] * n, "adx": [25] * n})
+        df = make_frame(
+            [100.0] * n, {"sig_momentum": [0.8] * n, "sig_volume": [0.8] * n, "rsi": [50] * n, "adx": [25] * n}
+        )
         d = brain.decide(df=df, score=0.50, has_position=False, current_index=n - 1)
         assert d.side != "SCALP_INTRADAY"
 
@@ -1228,8 +1357,7 @@ class TestTradingBrainEdgeCases:
 
     def test_decide_with_current_index_legacy(self):
         brain = TradingBrain(StrategyParams(use_ensemble=False, use_ml_filter=False))
-        df = make_frame([100.0, 105.0], {"sma_200": [95, 95], "rsi": [50, 50],
-                                         "adx": [25, 25], "atr": [2.0, 2.0]})
+        df = make_frame([100.0, 105.0], {"sma_200": [95, 95], "rsi": [50, 50], "adx": [25, 25], "atr": [2.0, 2.0]})
         d = brain.decide(df=df, score=0.50, has_position=False, current_index=None)
         assert d.action == "BUY"
 

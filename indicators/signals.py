@@ -3,6 +3,7 @@ Generación de señales — lógica de compra / venta / espera basada en
 indicadores técnicos. Señales **continuas** (−1 … +1) para score compuesto
 que funcione en cualquier día, no solo en cruces.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from config import INDICATOR_PARAMS, SIGNAL_WEIGHTS_RANGE, SIGNAL_WEIGHTS_TREND
 
 # ── Tipos ─────────────────────────────────────────────────────────────
 
+
 class Action(StrEnum):
     BUY = "COMPRA"
     SELL = "VENTA"
@@ -27,11 +29,12 @@ class Signal:
     timestamp: datetime
     ticker: str
     action: Action
-    strength: float          # 0.0 – 1.0
+    strength: float  # 0.0 – 1.0
     reason: str
 
 
 # ── Generador ─────────────────────────────────────────────────────────
+
 
 class SignalGenerator:
     """Genera señales de trading continuas a partir de un DataFrame con indicadores."""
@@ -93,14 +96,14 @@ class SignalGenerator:
         # Continuo: pendiente de EMA12, confirmación de momentum
         df["sig_ema"] = 0.0
         if "ema_12" in df.columns:
-            ema_change = df["ema_12"].pct_change(5)  # Cambio 5 días
+            ema_change = df["ema_12"].pct_change(5, fill_method=None)  # Cambio 5 días
             df["sig_ema"] = (ema_change * 20).clip(-1.0, 1.0)  # 5% -> 1.0
 
         # Momentum (ROC 10 días) ──────────────────────────────────────
         # Factor de momentum: los activos con momentum positivo tienden a continuar
         df["sig_momentum"] = 0.0
         if "close" in df.columns:
-            roc = df["close"].pct_change(10)
+            roc = df["close"].pct_change(10, fill_method=None)
             df["sig_momentum"] = np.tanh(roc * 10)  # 10% change → ~0.76
 
         # Volumen (confirmación de rupturas) ──────────────────────────
@@ -149,9 +152,15 @@ class SignalGenerator:
         total_weight = df[w_all].sum(axis=1).replace(0, np.nan).fillna(1.0)
 
         df["sig_composite"] = 0.0
-        mappings = [("sig_rsi", "w_rsi"), ("sig_macd", "w_macd"), ("sig_bb", "w_bollinger"),
-                    ("sig_sma", "w_sma_cross"), ("sig_momentum", "w_momentum"),
-                    ("sig_volume", "w_volume"), ("sig_obv", "w_obv")]
+        mappings = [
+            ("sig_rsi", "w_rsi"),
+            ("sig_macd", "w_macd"),
+            ("sig_bb", "w_bollinger"),
+            ("sig_sma", "w_sma_cross"),
+            ("sig_momentum", "w_momentum"),
+            ("sig_volume", "w_volume"),
+            ("sig_obv", "w_obv"),
+        ]
         for col, wcol in mappings:
             safe_signal = df[col].fillna(0.0)
             df["sig_composite"] += safe_signal * (df[wcol] / total_weight)
@@ -170,8 +179,8 @@ class SignalGenerator:
         if "sma_50" in df.columns and "sma_200" in df.columns:
             gap = df["sma_50"] - df["sma_200"]
             prev_gap = gap.shift(1)
-            df.loc[(gap > 0) & (prev_gap <= 0), "sig_sma_cross"] = 1    # golden cross
-            df.loc[(gap < 0) & (prev_gap >= 0), "sig_sma_cross"] = -1   # death cross
+            df.loc[(gap > 0) & (prev_gap <= 0), "sig_sma_cross"] = 1  # golden cross
+            df.loc[(gap < 0) & (prev_gap >= 0), "sig_sma_cross"] = -1  # death cross
 
         return df
 
@@ -195,16 +204,13 @@ class SignalGenerator:
             sig_rsi = last.get("sig_rsi", 0)
             if rsi > 70:
                 s = min((rsi - 70) / 30, 1.0)
-                signals.append(Signal(ts, ticker, Action.SELL, s,
-                                      f"RSI sobrecompra ({rsi:.1f}) — régimen {regime}"))
+                signals.append(Signal(ts, ticker, Action.SELL, s, f"RSI sobrecompra ({rsi:.1f}) — régimen {regime}"))
             elif rsi < 30:
                 s = min((30 - rsi) / 30, 1.0)
-                signals.append(Signal(ts, ticker, Action.BUY, s,
-                                      f"RSI sobreventa ({rsi:.1f}) — régimen {regime}"))
+                signals.append(Signal(ts, ticker, Action.BUY, s, f"RSI sobreventa ({rsi:.1f}) — régimen {regime}"))
             else:
                 bias = "alcista" if sig_rsi > 0.2 else "bajista" if sig_rsi < -0.2 else "neutral"
-                signals.append(Signal(ts, ticker, Action.HOLD, 0.0,
-                                      f"RSI {rsi:.1f} (sesgo {bias}) — régimen {regime}"))
+                signals.append(Signal(ts, ticker, Action.HOLD, 0.0, f"RSI {rsi:.1f} (sesgo {bias}) — régimen {regime}"))
 
         # ── MACD ─────────────────────────────────────────────────────
         if all(c in df.columns for c in ("macd", "macd_signal")):
@@ -213,15 +219,14 @@ class SignalGenerator:
             cross = last.get("sig_macd_cross", 0)
             if prev is not None and cross != 0:
                 if cross == 1:
-                    signals.append(Signal(ts, ticker, Action.BUY, 0.7,
-                                          f"Cruce MACD alcista — régimen {regime}"))
+                    signals.append(Signal(ts, ticker, Action.BUY, 0.7, f"Cruce MACD alcista — régimen {regime}"))
                 elif cross == -1:
-                    signals.append(Signal(ts, ticker, Action.SELL, 0.7,
-                                          f"Cruce MACD bajista — régimen {regime}"))
+                    signals.append(Signal(ts, ticker, Action.SELL, 0.7, f"Cruce MACD bajista — régimen {regime}"))
             else:
                 bias = "alcista" if sig_macd > 0.3 else "bajista" if sig_macd < -0.3 else "neutral"
-                signals.append(Signal(ts, ticker, Action.HOLD, 0.0,
-                                      f"MACD sesgo {bias} ({sig_macd:+.2f}) — régimen {regime}"))
+                signals.append(
+                    Signal(ts, ticker, Action.HOLD, 0.0, f"MACD sesgo {bias} ({sig_macd:+.2f}) — régimen {regime}")
+                )
 
         # ── Bollinger ─────────────────────────────────────────────────
         if all(c in df.columns for c in ("bb_upper", "bb_lower", "close")):
@@ -229,15 +234,18 @@ class SignalGenerator:
             sig_bb = last.get("sig_bb", 0)
             if pd.notna(bbu):
                 if close <= bbl:
-                    signals.append(Signal(ts, ticker, Action.BUY, 0.6,
-                                          f"Precio toca banda Bollinger inferior — régimen {regime}"))
+                    signals.append(
+                        Signal(ts, ticker, Action.BUY, 0.6, f"Precio toca banda Bollinger inferior — régimen {regime}")
+                    )
                 elif close >= bbu:
-                    signals.append(Signal(ts, ticker, Action.SELL, 0.6,
-                                          f"Precio toca banda Bollinger superior — régimen {regime}"))
+                    signals.append(
+                        Signal(ts, ticker, Action.SELL, 0.6, f"Precio toca banda Bollinger superior — régimen {regime}")
+                    )
                 else:
                     bias = "alcista" if sig_bb > 0.3 else "bajista" if sig_bb < -0.3 else "neutral"
-                    signals.append(Signal(ts, ticker, Action.HOLD, 0.0,
-                                          f"Precio dentro de Bollinger ({bias}) — régimen {regime}"))
+                    signals.append(
+                        Signal(ts, ticker, Action.HOLD, 0.0, f"Precio dentro de Bollinger ({bias}) — régimen {regime}")
+                    )
 
         # ── SMA ───────────────────────────────────────────────────────
         if "sma_50" in df.columns and "sma_200" in df.columns and prev is not None:
@@ -247,25 +255,34 @@ class SignalGenerator:
             sig_sma = last.get("sig_sma", 0)
             if pd.notna(s50) and pd.notna(ps50) and pd.notna(s200) and pd.notna(ps200):
                 if cross == 1:
-                    signals.append(Signal(ts, ticker, Action.BUY, 0.8,
-                                          f"Golden Cross (SMA50 > SMA200) — régimen {regime}"))
+                    signals.append(
+                        Signal(ts, ticker, Action.BUY, 0.8, f"Golden Cross (SMA50 > SMA200) — régimen {regime}")
+                    )
                 elif cross == -1:
-                    signals.append(Signal(ts, ticker, Action.SELL, 0.8,
-                                          f"Death Cross (SMA50 < SMA200) — régimen {regime}"))
+                    signals.append(
+                        Signal(ts, ticker, Action.SELL, 0.8, f"Death Cross (SMA50 < SMA200) — régimen {regime}")
+                    )
                 else:
                     trend = "alcista" if sig_sma > 0.3 else "bajista" if sig_sma < -0.3 else "lateral"
-                    signals.append(Signal(ts, ticker, Action.HOLD, 0.0,
-                                          f"Tendencia SMA {trend} ({sig_sma:+.2f}) — régimen {regime}"))
+                    signals.append(
+                        Signal(
+                            ts, ticker, Action.HOLD, 0.0, f"Tendencia SMA {trend} ({sig_sma:+.2f}) — régimen {regime}"
+                        )
+                    )
 
         # ── ADX / Régimen ─────────────────────────────────────────────
         if "adx" in df.columns and pd.notna(last.get("adx")):
             adx_val = last["adx"]
             if adx_val >= INDICATOR_PARAMS.adx_trend_threshold:
-                signals.append(Signal(ts, ticker, Action.HOLD, 0.0,
-                                      f"Tendencia fuerte (ADX={adx_val:.1f}) — priorizar MACD/SMA"))
+                signals.append(
+                    Signal(ts, ticker, Action.HOLD, 0.0, f"Tendencia fuerte (ADX={adx_val:.1f}) — priorizar MACD/SMA")
+                )
             elif adx_val <= INDICATOR_PARAMS.adx_range_threshold:
-                signals.append(Signal(ts, ticker, Action.HOLD, 0.0,
-                                      f"Mercado en rango (ADX={adx_val:.1f}) — priorizar RSI/Bollinger"))
+                signals.append(
+                    Signal(
+                        ts, ticker, Action.HOLD, 0.0, f"Mercado en rango (ADX={adx_val:.1f}) — priorizar RSI/Bollinger"
+                    )
+                )
 
         return signals
 

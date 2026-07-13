@@ -12,10 +12,12 @@ router = APIRouter()
 optimizer = PortfolioOptimizer()
 allocator = PortfolioAllocator()
 
+
 class PortfolioOptimizeRequest(BaseModel):
     tickers: list[str]
     period: str = "1y"
     risk_free_rate: float = 0.04
+
 
 @router.post("/optimize")
 async def optimize_portfolio(req: PortfolioOptimizeRequest):
@@ -48,7 +50,7 @@ async def optimize_portfolio(req: PortfolioOptimizeRequest):
             "weights": dict(zip(tickers, eq_weights)),
             "return": eq_ret,
             "volatility": eq_vol,
-            "sharpe_ratio": eq_sharpe
+            "sharpe_ratio": eq_sharpe,
         }
 
         # 6. Mapear frontera eficiente (2000 simulaciones de Monte Carlo)
@@ -58,18 +60,18 @@ async def optimize_portfolio(req: PortfolioOptimizeRequest):
 
         frontier_points = []
         for _, row in random_ports_df.iterrows():
-            frontier_points.append({
-                "volatility": row["volatility"],
-                "return": row["return"],
-                "sharpe_ratio": row["sharpe_ratio"]
-            })
+            frontier_points.append(
+                {"volatility": row["volatility"], "return": row["return"], "sharpe_ratio": row["sharpe_ratio"]}
+            )
 
-        return sanitize_for_json({
-            "max_sharpe": max_sharpe_res,
-            "min_volatility": min_vol_res,
-            "equal_weight": eq_res,
-            "frontier": frontier_points
-        })
+        return sanitize_for_json(
+            {
+                "max_sharpe": max_sharpe_res,
+                "min_volatility": min_vol_res,
+                "equal_weight": eq_res,
+                "frontier": frontier_points,
+            }
+        )
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -93,14 +95,17 @@ async def compute_allocation(req: AllocateRequest):
     try:
         tickers = [t.upper().strip() for t in req.tickers]
         alloc = PortfolioAllocator(
-            method=req.method, max_weight=req.max_weight,
+            method=req.method,
+            max_weight=req.max_weight,
         )
         weights = alloc.compute_target_weights(tickers)
         usd = alloc.target_allocations_usd(tickers, req.equity)
-        return sanitize_for_json({
-            "weights": weights,
-            "allocations_usd": usd,
-        })
+        return sanitize_for_json(
+            {
+                "weights": weights,
+                "allocations_usd": usd,
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

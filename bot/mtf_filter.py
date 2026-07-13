@@ -8,6 +8,7 @@ Solo permite entradas LONG cuando:
 
 Si el semanal es bajista → ni siquiera se considera la compra, sin importar el score.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -109,9 +110,10 @@ class MTFFilter:
             sma20_above_sma50 = sma20w > sma50w if pd.notna(sma50w) and sma50w > 0 else True
             bullish = price_above_sma20 and sma20_above_sma50
 
-            reason = "OK" if bullish else (
-                "precio debajo de SMA20 semanal" if not price_above_sma20 else
-                "SMA20 semanal debajo de SMA50"
+            reason = (
+                "OK"
+                if bullish
+                else ("precio debajo de SMA20 semanal" if not price_above_sma20 else "SMA20 semanal debajo de SMA50")
             )
             return bullish, {
                 "weekly_price": round(price, 2),

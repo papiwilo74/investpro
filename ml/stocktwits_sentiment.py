@@ -20,13 +20,7 @@ class StockTwitsAnalyzer:
 
         url = self.base_url.format(ticker)
 
-        result = {
-            "bullish_pct": 0.5,
-            "bearish_pct": 0.5,
-            "volume": 0,
-            "score": 0.0,
-            "status": "OK"
-        }
+        result = {"bullish_pct": 0.5, "bearish_pct": 0.5, "volume": 0, "score": 0.0, "status": "OK"}
 
         try:
             response = requests.get(url, headers=headers, timeout=5)
@@ -72,6 +66,7 @@ class StockTwitsAnalyzer:
         except Exception:
             result["status"] = "EXCEPTION"
             return result
+
 
 if __name__ == "__main__":
     analyzer = StockTwitsAnalyzer()

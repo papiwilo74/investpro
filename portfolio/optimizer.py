@@ -2,6 +2,7 @@
 Optimización de Portafolio — Asignación de pesos óptimos (Markowitz / Sharpe Ratio).
 Usa scipy.optimize para resolver problemas de optimización de media-varianza.
 """
+
 from __future__ import annotations
 
 import logging
@@ -226,10 +227,12 @@ class PortfolioOptimizer:
         for i in range(num_portfolios):
             weights = random_weights[i]
             ret, vol, sharpe = self.portfolio_performance(weights, expected_returns, cov_matrix, rf)
-            results.append({
-                "return": ret,
-                "volatility": vol,
-                "sharpe_ratio": sharpe,
-            })
+            results.append(
+                {
+                    "return": ret,
+                    "volatility": vol,
+                    "sharpe_ratio": sharpe,
+                }
+            )
 
         return pd.DataFrame(results)

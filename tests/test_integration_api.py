@@ -54,24 +54,22 @@ class TestAnalysis:
 
 @pytest.mark.integration
 class TestStaticFiles:
-    async def test_static_css_served(self, client):
-        response = await client.get("/static/css/app.css")
-        assert response.status_code == 200
-        assert "text/css" in response.headers["content-type"]
-
-    async def test_static_js_served(self, client):
-        response = await client.get("/static/js/app.js")
-        assert response.status_code == 200
-        assert (
-            "application/javascript" in response.headers["content-type"]
-            or "text/javascript" in response.headers["content-type"]
-        )
-
-    async def test_performance_html_served(self, client):
-        response = await client.get("/static/performance.html")
-        assert response.status_code == 200
-
     async def test_index_html_served(self, client):
         response = await client.get("/")
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
+
+    async def test_favicon_served(self, client):
+        response = await client.get("/favicon.ico")
+        assert response.status_code == 200
+
+    async def test_spa_fallback_returns_html(self, client):
+        """Rutas no-API devuelven index.html (SPA routing)."""
+        response = await client.get("/some-spa-route")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+
+    async def test_api_404_not_intercepted_by_spa(self, client):
+        """Rutas de API inexistentes devuelven 404 real, no index.html."""
+        response = await client.get("/api/nonexistent-endpoint")
+        assert response.status_code == 404

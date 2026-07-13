@@ -1,4 +1,5 @@
 """Tests for KellyCalculator (both JSON and DB modes)."""
+
 from bot.strategy import KellyCalculator
 
 

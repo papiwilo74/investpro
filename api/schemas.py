@@ -3,6 +3,7 @@
 Centraliza la definición de tipos para que FastAPI genere OpenAPI docs
 automáticos y valide todas las respuestas en desarrollo.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -10,6 +11,7 @@ from typing import Any
 from pydantic import BaseModel
 
 # ── Account ──────────────────────────────────────────────────────────
+
 
 class AccountSummary(BaseModel):
     equity: float = 0.0
@@ -20,6 +22,7 @@ class AccountSummary(BaseModel):
 
 
 # ── Positions ────────────────────────────────────────────────────────
+
 
 class PositionItem(BaseModel):
     symbol: str
@@ -33,6 +36,7 @@ class PositionItem(BaseModel):
 
 
 # ── Risk ─────────────────────────────────────────────────────────────
+
 
 class KellySuggestion(BaseModel):
     kelly_pct: float = 0.0
@@ -53,6 +57,7 @@ class RiskState(BaseModel):
 
 # ── Market ───────────────────────────────────────────────────────────
 
+
 class MarketRegimeInfo(BaseModel):
     regime: str = "UNKNOWN"
     spy_trend: str = "UNKNOWN"
@@ -64,6 +69,7 @@ class MarketRegimeInfo(BaseModel):
 
 
 # ── Bot ──────────────────────────────────────────────────────────────
+
 
 class BotStatus(BaseModel):
     active: bool = False
@@ -106,6 +112,7 @@ class AdvisorInfo(BaseModel):
 
 # ── Dashboard ────────────────────────────────────────────────────────
 
+
 class DashboardResponse(BaseModel):
     bot_status: BotStatus
     account: Any = None  # Raw account dict from broker
@@ -121,12 +128,14 @@ class DashboardResponse(BaseModel):
 
 # ── Health ───────────────────────────────────────────────────────────
 
+
 class HealthCheck(BaseModel):
     status: str = "ok"
     checks: dict[str, str] = {}
 
 
 # ── Advisor ──────────────────────────────────────────────────────────
+
 
 class AdvisorAction(BaseModel):
     action: str = "ALLOW"
@@ -145,6 +154,7 @@ class AdvisorAdvice(BaseModel):
 
 
 # ── Auth ──────────────────────────────────────────────────────────────
+
 
 class LoginRequest(BaseModel):
     username: str

@@ -60,10 +60,12 @@ def test_scanner_rejects_low_volume_candidate_with_reason():
 
 def test_scanner_orders_candidates_by_rank_score():
     scanner = MarketScanner(
-        fetcher=FakeFetcher({
-            "STRONG": make_frame(close_start=80, close_end=140, volume=6_000_000),
-            "WEAK": make_frame(close_start=100, close_end=105, volume=1_500_000),
-        }),
+        fetcher=FakeFetcher(
+            {
+                "STRONG": make_frame(close_start=80, close_end=140, volume=6_000_000),
+                "WEAK": make_frame(close_start=100, close_end=105, volume=1_500_000),
+            }
+        ),
         config=ScannerConfig(min_score=-1.0, min_adx=0.0),
     )
 

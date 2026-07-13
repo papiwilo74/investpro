@@ -3,6 +3,7 @@
 Usa descargas paralelas (ThreadPoolExecutor) y procesamiento multi-hilo
 para aprovechar CPU multi-core (i7-13650HX: 14 cores / 20 hilos) y GPU (RTX 4060).
 """
+
 from __future__ import annotations
 
 import time
@@ -218,10 +219,7 @@ class MarketScanner:
                 raise RuntimeError(f"{ticker}: {exc}") from exc
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = {
-                executor.submit(_process_one, ticker, df): ticker
-                for ticker, df in data.items()
-            }
+            futures = {executor.submit(_process_one, ticker, df): ticker for ticker, df in data.items()}
             for future in as_completed(futures):
                 ticker = futures[future]
                 try:
@@ -249,12 +247,7 @@ class MarketScanner:
         trend_score = self._trend_score(last, close)
         liquidity_score = min(1.0, avg_volume / 5_000_000)
         volatility_score = self._volatility_score(atr_pct)
-        rank_score = (
-            signal_score * 0.40
-            + trend_score * 0.25
-            + liquidity_score * 0.20
-            + volatility_score * 0.15
-        )
+        rank_score = signal_score * 0.40 + trend_score * 0.25 + liquidity_score * 0.20 + volatility_score * 0.15
 
         reasons: list[str] = []
         warnings: list[str] = []
@@ -339,12 +332,7 @@ class MarketScanner:
         trend_score = self._trend_score(last, close)
         liquidity_score = min(1.0, avg_volume / 5_000_000)
         volatility_score = self._volatility_score(atr_pct)
-        rank_score = (
-            signal_score * 0.40
-            + trend_score * 0.25
-            + liquidity_score * 0.20
-            + volatility_score * 0.15
-        )
+        rank_score = signal_score * 0.40 + trend_score * 0.25 + liquidity_score * 0.20 + volatility_score * 0.15
 
         reasons: list[str] = []
         warnings: list[str] = []

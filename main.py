@@ -53,7 +53,7 @@ def run_pipeline(ticker: str, period: str, interval: str) -> None:
     # 2. Indicadores técnicos ------------------------------------------
     print("Calculando indicadores...")
     df = TechnicalIndicators.add_all(df)
-    print(f"   * SMA{INDICATOR_PARAMS.sma_periods}, " f"EMA{INDICATOR_PARAMS.ema_periods}, RSI, MACD, Bollinger")
+    print(f"   * SMA{INDICATOR_PARAMS.sma_periods}, EMA{INDICATOR_PARAMS.ema_periods}, RSI, MACD, Bollinger")
 
     # 3. Señales -------------------------------------------------------
     print("Generando señales...")
@@ -227,7 +227,7 @@ def run_bot_backtest(ticker: str, period: str, interval: str, leverage: float = 
             print(f"  Win rate:           {m['win_rate']:>12.0%}")
             print(f"  Profit factor:      {pf_str:>12s}")
             print(
-                f"  Avg P&L per trade:  ${m['capital_final']/m['total_trades']-BACKTEST_PARAMS.initial_capital/m['total_trades']:>12,.2f}"
+                f"  Avg P&L per trade:  ${m['capital_final'] / m['total_trades'] - BACKTEST_PARAMS.initial_capital / m['total_trades']:>12,.2f}"
             )
 
             # Razones de venta
@@ -423,7 +423,7 @@ def run_full_validation(
         bar_len = 40
         filled = int(bar_len * pct)
         bar = "█" * filled + "░" * (bar_len - filled)
-        print(f"\r  [{bar}] {pct*100:5.1f}% | {msg}", end="", flush=True)
+        print(f"\r  [{bar}] {pct * 100:5.1f}% | {msg}", end="", flush=True)
 
     # 5. Ejecutar pipeline
     print("\nEjecutando pipeline de validación...\n")
@@ -452,8 +452,8 @@ def run_full_validation(
     print(f"  Periodo:         {result.period} ({result.interval})")
     print(f"  Veredicto:       {result.verdict}")
     print(f"  OOS Sharpe:      {result.aggregated_oos_sharpe:.3f}")
-    print(f"  OOS Return:      {result.aggregated_oos_return*100:.2f}%")
-    print(f"  OOS Max DD:      {result.aggregated_oos_max_dd*100:.2f}%")
+    print(f"  OOS Return:      {result.aggregated_oos_return * 100:.2f}%")
+    print(f"  OOS Max DD:      {result.aggregated_oos_max_dd * 100:.2f}%")
     print(f"  Consistency:     {result.consistency_score:.2f}")
 
     # Walk-Forward
@@ -468,11 +468,13 @@ def run_full_validation(
     mc = result.monte_carlo
     if mc and mc.n_simulations > 0:
         print(f"\n  Monte Carlo ({mc.n_simulations} sims):")
-        print(f"    P5/P50/P95 Return:  {mc.p5_return*100:.1f}% / {mc.p50_return*100:.1f}% / {mc.p95_return*100:.1f}%")
+        print(
+            f"    P5/P50/P95 Return:  {mc.p5_return * 100:.1f}% / {mc.p50_return * 100:.1f}% / {mc.p95_return * 100:.1f}%"
+        )
         print(f"    P5/P50/P95 Sharpe:  {mc.p5_sharpe:.2f} / {mc.p50_sharpe:.2f} / {mc.p95_sharpe:.2f}")
-        print(f"    P50 Max DD:         {mc.p50_max_drawdown*100:.1f}%")
-        print(f"    Prob pérdida:       {mc.prob_negative_return*100:.1f}%")
-        print(f"    Prob Sharpe>1:      {mc.prob_sharpe_above_1*100:.1f}%")
+        print(f"    P50 Max DD:         {mc.p50_max_drawdown * 100:.1f}%")
+        print(f"    Prob pérdida:       {mc.prob_negative_return * 100:.1f}%")
+        print(f"    Prob Sharpe>1:      {mc.prob_sharpe_above_1 * 100:.1f}%")
 
     # Overfit flags
     if result.overfit_flags:
@@ -922,8 +924,7 @@ def main() -> None:
 
         async def _print_data(data):
             print(
-                f"[{data['type'].upper()}] {data['ticker']:6s} | "
-                f"precio={data.get('price', data.get('close', 'N/A'))}"
+                f"[{data['type'].upper()}] {data['ticker']:6s} | precio={data.get('price', data.get('close', 'N/A'))}"
             )
 
         async def _run_stream():

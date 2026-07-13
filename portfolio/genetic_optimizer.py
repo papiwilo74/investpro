@@ -6,6 +6,7 @@ cruce uniforme y mutación adaptativa.  Usa threads (no procesos)
 para evitar la explosión de RAM en Windows con ProcessPoolExecutor.
 Los datos se precargan una sola vez en un diccionario global.
 """
+
 from __future__ import annotations
 
 import copy
@@ -37,54 +38,55 @@ INTERVAL = "1d"
 
 # ── Rangos de búsqueda ────────────────────────────────────────────────
 PARAM_RANGES: dict[str, tuple[float, float]] = {
-    "buy_score_threshold":      (0.0, 0.40),
-    "sell_score_threshold":     (-0.60, -0.10),
-    "stop_loss_pct":            (-0.15, -0.02),
-    "take_profit_pct":          (0.05, 0.30),
-    "trailing_stop_atr_mult":   (1.5, 4.0),
-    "max_buy_rsi":              (55.0, 80.0),
-    "min_ml_buy_probability":   (0.50, 0.65),
-    "max_position_size_pct":    (0.08, 0.30),
-    "min_position_size_pct":    (0.02, 0.15),
-    "atr_risk_pct":             (0.01, 0.04),
-    "mean_rev_rsi_max":         (20.0, 35.0),
-    "mean_rev_drop_pct":        (-0.05, -0.01),
+    "buy_score_threshold": (0.0, 0.40),
+    "sell_score_threshold": (-0.60, -0.10),
+    "stop_loss_pct": (-0.15, -0.02),
+    "take_profit_pct": (0.05, 0.30),
+    "trailing_stop_atr_mult": (1.5, 4.0),
+    "max_buy_rsi": (55.0, 80.0),
+    "min_ml_buy_probability": (0.50, 0.65),
+    "max_position_size_pct": (0.08, 0.30),
+    "min_position_size_pct": (0.02, 0.15),
+    "atr_risk_pct": (0.01, 0.04),
+    "mean_rev_rsi_max": (20.0, 35.0),
+    "mean_rev_drop_pct": (-0.05, -0.01),
     "mean_rev_position_size_pct": (0.03, 0.12),
-    "dip_drop_pct":             (-0.08, -0.02),
-    "dip_rsi_max":              (28.0, 42.0),
-    "dip_position_size_pct":    (0.05, 0.20),
-    "short_score_threshold":    (-0.50, -0.10),
-    "short_min_adx":            (15.0, 25.0),
-    "short_position_size_pct":  (0.05, 0.18),
-    "scalp_momentum_min":       (0.20, 0.60),
-    "scalp_position_size_pct":  (0.03, 0.12),
-    "trail_atr_base":           (2.0, 4.0),
-    "trail_atr_tight":          (1.0, 2.5),
+    "dip_drop_pct": (-0.08, -0.02),
+    "dip_rsi_max": (28.0, 42.0),
+    "dip_position_size_pct": (0.05, 0.20),
+    "short_score_threshold": (-0.50, -0.10),
+    "short_min_adx": (15.0, 25.0),
+    "short_position_size_pct": (0.05, 0.18),
+    "scalp_momentum_min": (0.20, 0.60),
+    "scalp_position_size_pct": (0.03, 0.12),
+    "trail_atr_base": (2.0, 4.0),
+    "trail_atr_tight": (1.0, 2.5),
     # Intraday scalping
-    "intraday_scalp_momentum_min":       (0.40, 0.80),
-    "intraday_scalp_stop_loss_pct":      (-0.025, -0.005),
-    "intraday_scalp_take_profit_pct":    (0.01, 0.04),
-    "intraday_scalp_position_size_pct":  (0.05, 0.20),
-    "intraday_max_hold_minutes":         (15, 120),
-    "vwap_deviation_pct":               (0.001, 0.015),
+    "intraday_scalp_momentum_min": (0.40, 0.80),
+    "intraday_scalp_stop_loss_pct": (-0.025, -0.005),
+    "intraday_scalp_take_profit_pct": (0.01, 0.04),
+    "intraday_scalp_position_size_pct": (0.05, 0.20),
+    "intraday_max_hold_minutes": (15, 120),
+    "vwap_deviation_pct": (0.001, 0.015),
 }
 
 DISCRETE_PARAMS: dict[str, list[bool]] = {
-    "use_momentum_scalp":    [True, False],
-    "use_mean_reversion":    [True, False],
-    "use_contrarian_dip":    [True, False],
-    "use_short_selling":     [True, False],
-    "use_dynamic_trailing":  [True, False],
+    "use_momentum_scalp": [True, False],
+    "use_mean_reversion": [True, False],
+    "use_contrarian_dip": [True, False],
+    "use_short_selling": [True, False],
+    "use_dynamic_trailing": [True, False],
     "use_partial_take_profit": [True, False],
-    "use_multi_timeframe":   [True, False],
-    "use_regime_filter":     [True, False],
-    "use_intraday_scalp":    [True, False],
-    "use_session_filter":    [True, False],
-    "use_vwap_filter":       [True, False],
+    "use_multi_timeframe": [True, False],
+    "use_regime_filter": [True, False],
+    "use_intraday_scalp": [True, False],
+    "use_session_filter": [True, False],
+    "use_vwap_filter": [True, False],
 }
 
 
 # ── Worker de fitness (corre en threads, datos compartidos) ───────────
+
 
 def _preload_data() -> None:
     """Carga datos de todos los tickers una sola vez en el cache global."""
@@ -111,8 +113,12 @@ def _evaluate_params(params_dict: dict) -> dict:
     global _DATA_CACHE
 
     total_metrics = {
-        "retorno_total": 0.0, "sharpe_ratio": 0.0, "max_drawdown": 0.0,
-        "total_trades": 0, "win_rate": 0.0, "profit_factor": 0.0,
+        "retorno_total": 0.0,
+        "sharpe_ratio": 0.0,
+        "max_drawdown": 0.0,
+        "total_trades": 0,
+        "win_rate": 0.0,
+        "profit_factor": 0.0,
     }
     n = 0
     for ticker in DEFAULT_TICKERS:
@@ -174,6 +180,7 @@ def _compute_fitness(metrics: dict) -> float:
 
 # ── Individuo ─────────────────────────────────────────────────────────
 
+
 @dataclass
 class Individual:
     params: dict = field(default_factory=dict)
@@ -191,6 +198,7 @@ class Individual:
 
 
 # ── Optimizador Genético ──────────────────────────────────────────────
+
 
 class GeneticOptimizer:
     """Optimizador genético con ThreadPoolExecutor para CPU multinúcleo.
@@ -226,10 +234,7 @@ class GeneticOptimizer:
         self.wfo_train_months = wfo_train_months
         self.wfo_test_months = wfo_test_months
         self.hall_of_fame: list[Individual] = []
-        self._hof_path = (
-            Path(__file__).resolve().parent.parent
-            / "data" / "genetic_hall_of_fame.json"
-        )
+        self._hof_path = Path(__file__).resolve().parent.parent / "data" / "genetic_hall_of_fame.json"
         self._load_hof()
 
     # ── Persistencia ──────────────────────────────────────────────────
@@ -254,9 +259,7 @@ class GeneticOptimizer:
         try:
             self._hof_path.parent.mkdir(parents=True, exist_ok=True)
             data = [ind.to_dict() for ind in self.hall_of_fame[:50]]
-            self._hof_path.write_text(
-                json.dumps(data, indent=2, default=str), encoding="utf-8"
-            )
+            self._hof_path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
         except Exception:
             pass
 
@@ -348,24 +351,23 @@ class GeneticOptimizer:
             for gen in range(generations):
                 gen_start = time.time()
 
-                futures = [
-                    executor.submit(_evaluate_params, ind)
-                    for ind in population
-                ]
+                futures = [executor.submit(_evaluate_params, ind) for ind in population]
                 results: list[Individual] = []
                 for future in as_completed(futures):
                     try:
                         data = future.result()
-                        results.append(Individual(
-                            params=data["params"],
-                            fitness=data["fitness"],
-                            metrics=data["metrics"],
-                        ))
+                        results.append(
+                            Individual(
+                                params=data["params"],
+                                fitness=data["fitness"],
+                                metrics=data["metrics"],
+                            )
+                        )
                     except Exception:
                         pass
 
                 if not results:
-                    print(f"[GEN {gen+1}/{generations}] Todos los workers fallaron")
+                    print(f"[GEN {gen + 1}/{generations}] Todos los workers fallaron")
                     continue
 
                 # Ordenar por fitness descendente
@@ -403,11 +405,11 @@ class GeneticOptimizer:
                 elapsed = time.time() - gen_start
                 metrics = gen_best.metrics or {}
                 print(
-                    f"[GEN {gen+1}/{generations}] "
+                    f"[GEN {gen + 1}/{generations}] "
                     f"fit={gen_best.fitness:.2f} | "
                     f"sharpe={metrics.get('sharpe_ratio', 0):.2f} | "
-                    f"ret={metrics.get('retorno_total', 0)*100:.1f}% | "
-                    f"dd={metrics.get('max_drawdown', 0)*100:.1f}% | "
+                    f"ret={metrics.get('retorno_total', 0) * 100:.1f}% | "
+                    f"dd={metrics.get('max_drawdown', 0) * 100:.1f}% | "
                     f"trades={metrics.get('total_trades', 0)} | "
                     f"time={elapsed:.1f}s"
                 )
@@ -415,17 +417,22 @@ class GeneticOptimizer:
                 # Notificar progreso al callback (para el job system de la API)
                 if progress_callback is not None:
                     try:
-                        progress_callback(gen + 1, generations, best_overall.fitness, {
-                            "gen": gen + 1,
-                            "total_gens": generations,
-                            "best_fitness": round(best_overall.fitness, 4),
-                            "gen_fitness": round(gen_best.fitness, 4),
-                            "sharpe": round(metrics.get("sharpe_ratio", 0), 3),
-                            "retorno": round(metrics.get("retorno_total", 0), 4),
-                            "max_drawdown": round(metrics.get("max_drawdown", 0), 4),
-                            "total_trades": metrics.get("total_trades", 0),
-                            "elapsed_s": round(elapsed, 1),
-                        })
+                        progress_callback(
+                            gen + 1,
+                            generations,
+                            best_overall.fitness,
+                            {
+                                "gen": gen + 1,
+                                "total_gens": generations,
+                                "best_fitness": round(best_overall.fitness, 4),
+                                "gen_fitness": round(gen_best.fitness, 4),
+                                "sharpe": round(metrics.get("sharpe_ratio", 0), 3),
+                                "retorno": round(metrics.get("retorno_total", 0), 4),
+                                "max_drawdown": round(metrics.get("max_drawdown", 0), 4),
+                                "total_trades": metrics.get("total_trades", 0),
+                                "elapsed_s": round(elapsed, 1),
+                            },
+                        )
                     except Exception:
                         pass
 
@@ -587,10 +594,10 @@ class GeneticOptimizer:
         bm = result.get("best_metrics") or {}
         print(f"  Fitness:          {result['best_fitness']:.4f}")
         print(f"  Sharpe:           {bm.get('sharpe_ratio', 0):.2f}")
-        print(f"  Retorno total:    {bm.get('retorno_total', 0)*100:.1f}%")
-        print(f"  Max Drawdown:     {bm.get('max_drawdown', 0)*100:.1f}%")
+        print(f"  Retorno total:    {bm.get('retorno_total', 0) * 100:.1f}%")
+        print(f"  Max Drawdown:     {bm.get('max_drawdown', 0) * 100:.1f}%")
         print(f"  Profit Factor:    {bm.get('profit_factor', 0):.2f}")
-        print(f"  Win Rate:         {bm.get('win_rate', 0)*100:.1f}%")
+        print(f"  Win Rate:         {bm.get('win_rate', 0) * 100:.1f}%")
         print(f"  Trades totales:   {bm.get('total_trades', 0)}")
         print(f"  Evaluaciones:     {result['total_evaluations']}")
         print(f"  Aprobado WFO:     {'SI' if result['is_approved_by_wfo'] else 'NO'}")

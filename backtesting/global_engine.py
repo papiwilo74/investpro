@@ -28,7 +28,9 @@ class GlobalBacktester:
 
         capital_per_ticker = self.initial_capital / len(tickers)
         print(f"\n[GLOBAL] Iniciando simulación en {len(tickers)} activos.")
-        print(f"[GLOBAL] Capital total: ${self.initial_capital:,.2f} | Asignación por activo: ${capital_per_ticker:,.2f}")
+        print(
+            f"[GLOBAL] Capital total: ${self.initial_capital:,.2f} | Asignación por activo: ${capital_per_ticker:,.2f}"
+        )
 
         all_trades = []
         equity_curves = []
@@ -104,7 +106,7 @@ class GlobalBacktester:
 
         gross_profit = sum(t.pnl for t in winning_trades)
         gross_loss = abs(sum(t.pnl for t in losing_trades))
-        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float('inf')
+        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float("inf")
 
         avg_win = np.mean([t.pnl_pct for t in winning_trades]) if winning_trades else 0
         avg_loss = np.mean([t.pnl_pct for t in losing_trades]) if losing_trades else 0
@@ -122,10 +124,11 @@ class GlobalBacktester:
             "win_rate": win_rate,
             "profit_factor": profit_factor,
             "expectancy_pct": expectancy,
-            "successful_assets": successful_tickers
+            "successful_assets": successful_tickers,
         }
 
         return metrics, all_trades, global_equity
+
 
 if __name__ == "__main__":
     tester = GlobalBacktester()

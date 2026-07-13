@@ -14,6 +14,7 @@ Niveles de protección:
 - ALERT: Mercado débil → cobertura parcial (15% del portafolio en SH)
 - PANIC: Caída brusca → cobertura total (25-40% en SH/SQQQ)
 """
+
 from __future__ import annotations
 
 import logging
@@ -158,9 +159,7 @@ class HedgeMonitor:
                 "hedge_ticker": "SH",
             }
 
-    def calculate_hedge_size(
-        self, equity: float, portfolio_beta: float, hedge_ticker: str = "SH"
-    ) -> dict:
+    def calculate_hedge_size(self, equity: float, portfolio_beta: float, hedge_ticker: str = "SH") -> dict:
         """Calcula cuántas acciones del ETF inverso comprar para neutralizar delta.
 
         Args:

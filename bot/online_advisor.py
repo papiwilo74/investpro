@@ -18,6 +18,7 @@ Acciones:
 
 Reward: P&L porcentual real de la operación resultante.
 """
+
 from __future__ import annotations
 
 import json
@@ -34,6 +35,7 @@ from sqlalchemy.orm import Session
 from db.repositories import AdvisorRepository
 
 # ── Discretización de estado ─────────────────────────────────────────
+
 
 def _discretize(value: float, bins: list[float]) -> int:
     """Convierte un valor continuo en un índice de bins."""
@@ -65,9 +67,11 @@ def _regime_bin(regime: str) -> int:
 
 # ── Agente Q-Learning online ─────────────────────────────────────────
 
+
 @dataclass
 class OnlineAdvisorState:
     """Estado discretizado del mercado en el momento de una decisión."""
+
     score_bin: int
     adx_bin: int
     rsi_bin: int
@@ -140,7 +144,9 @@ class OnlineAdvisor:
             data = json.loads(raw)
             self.q_table = {k: list(v) for k, v in data.get("q_table", {}).items()}
             self.visits = defaultdict(lambda: [0, 0, 0], {k: list(v) for k, v in data.get("visits", {}).items()})
-            self.rewards = defaultdict(lambda: [[], [], []], {k: [list(a) for a in v] for k, v in data.get("rewards", {}).items()})
+            self.rewards = defaultdict(
+                lambda: [[], [], []], {k: [list(a) for a in v] for k, v in data.get("rewards", {}).items()}
+            )
             self.trade_log = data.get("trade_log", [])
             self.total_updates = data.get("total_updates", 0)
             self.epsilon = max(self.epsilon_min, data.get("epsilon", self.epsilon))
@@ -293,17 +299,19 @@ class OnlineAdvisor:
         self.rewards[key][action_idx].append(reward)
         self.total_updates += 1
 
-        self.trade_log.append({
-            "timestamp": pd.Timestamp.now().isoformat(),
-            "state_key": key,
-            "action": action_taken,
-            "pnl_pct": pnl_pct,
-            "score": score,
-            "adx": adx,
-            "rsi": rsi,
-            "vol": annual_volatility,
-            "regime": market_regime,
-        })
+        self.trade_log.append(
+            {
+                "timestamp": pd.Timestamp.now().isoformat(),
+                "state_key": key,
+                "action": action_taken,
+                "pnl_pct": pnl_pct,
+                "score": score,
+                "adx": adx,
+                "rsi": rsi,
+                "vol": annual_volatility,
+                "regime": market_regime,
+            }
+        )
 
         if self._use_db and self._repo is not None:
             try:
@@ -348,9 +356,7 @@ class OnlineAdvisor:
             }
 
         # Simular impacto: BLOCK evita el P&L, REDUCE mitad, ALLOW completo
-        simulated_pnl = sum(
-            t["pnl_pct"] * self.sizing_multiplier(t["action"]) for t in self.trade_log
-        )
+        simulated_pnl = sum(t["pnl_pct"] * self.sizing_multiplier(t["action"]) for t in self.trade_log)
         buy_and_hold_pnl = sum(all_pnls)
 
         return {

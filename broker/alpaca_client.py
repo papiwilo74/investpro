@@ -8,10 +8,11 @@ from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
 from alpaca.trading.requests import GetOrdersRequest, LimitOrderRequest, MarketOrderRequest
 from loguru import logger
 
+from broker.base_client import BaseBrokerClient
 from config import BROKER_CONFIG
 
 
-class AlpacaClient:
+class AlpacaClient(BaseBrokerClient):
     """Wrapper for Alpaca Trading API"""
 
     def __init__(self):
@@ -125,6 +126,7 @@ class AlpacaClient:
             logger.info("Limit order placed: {} {} {} @ ${} (id={})", side, qty, symbol, limit_price, order.id)
 
             import time
+
             deadline = time.time() + timeout_seconds
             while time.time() < deadline:
                 try:
@@ -135,7 +137,11 @@ class AlpacaClient:
                             "order_id": str(updated.id),
                             "symbol": updated.symbol,
                             "qty": float(updated.filled_qty),
-                            "filled_avg_price": float(updated.filled_avg_price) if hasattr(updated, 'filled_avg_price') and updated.filled_avg_price else limit_price,
+                            "filled_avg_price": (
+                                float(updated.filled_avg_price)
+                                if hasattr(updated, "filled_avg_price") and updated.filled_avg_price
+                                else limit_price
+                            ),
                             "side": updated.side.name,
                         }
                     if updated.status in ("canceled", "expired", "rejected"):
@@ -150,8 +156,15 @@ class AlpacaClient:
             logger.error("Error placing limit order for {}: {}", symbol, e)
             return {"status": "error", "msg": str(e)}
 
-    def place_smart_order(self, symbol: str, qty: float, side: str, last_price: float,
-                           use_limit: bool = True, limit_offset_pct: float = 0.005) -> dict:
+    def place_smart_order(
+        self,
+        symbol: str,
+        qty: float,
+        side: str,
+        last_price: float,
+        use_limit: bool = True,
+        limit_offset_pct: float = 0.005,
+    ) -> dict:
         """Orden inteligente: intenta limit al last_price + offset_pct, fallback a market."""
         if not use_limit:
             return self.place_market_order(symbol, qty, side)
@@ -176,6 +189,7 @@ class AlpacaClient:
             return None
         try:
             from alpaca.data.historical import StockHistoricalDataClient
+
             api_key = os.getenv("ALPACA_API_KEY", BROKER_CONFIG.api_key)
             secret_key = os.getenv("ALPACA_SECRET_KEY", BROKER_CONFIG.secret_key)
             data_client = StockHistoricalDataClient(api_key, secret_key)
@@ -269,12 +283,12 @@ class AlpacaClient:
                 data = resp.json()
                 return [
                     {
-                        "headline": a.get('headline'),
-                        "summary": a.get('summary'),
-                        "url": a.get('url'),
-                        "created_at": a.get('created_at'),
+                        "headline": a.get("headline"),
+                        "summary": a.get("summary"),
+                        "url": a.get("url"),
+                        "created_at": a.get("created_at"),
                     }
-                    for a in data.get('news', [])
+                    for a in data.get("news", [])
                 ]
             else:
                 logger.warning("Error fetching news: {} - {}", resp.status_code, resp.text)
@@ -285,8 +299,9 @@ class AlpacaClient:
 
     # ── OPTIONS TRADING ──────────────────────────────────────────────
 
-    def get_options_chain(self, ticker: str, option_type: str = "call",
-                          expiry_min_days: int = 14, expiry_max_days: int = 45) -> list:
+    def get_options_chain(
+        self, ticker: str, option_type: str = "call", expiry_min_days: int = 14, expiry_max_days: int = 45
+    ) -> list:
         if self.missing_credentials:
             return []
 
@@ -386,6 +401,7 @@ class AlpacaStreamer:
 
         try:
             from alpaca.data.live import StockDataStream
+
             self._stream = StockDataStream(api_key, secret_key)
         except ImportError:
             logger.error("AlpacaStreamer: alpaca-py >= 0.17.3 required")
@@ -400,45 +416,57 @@ class AlpacaStreamer:
     def on_trade(self, ticker: str, callback: Callable) -> None:
         if not self._stream or self._missing:
             return
+
         async def _handler(data):
-            await callback({
-                "type": "trade",
-                "ticker": data.symbol,
-                "price": float(data.price),
-                "size": float(data.size),
-                "timestamp": str(data.timestamp),
-            })
+            await callback(
+                {
+                    "type": "trade",
+                    "ticker": data.symbol,
+                    "price": float(data.price),
+                    "size": float(data.size),
+                    "timestamp": str(data.timestamp),
+                }
+            )
+
         self._stream.subscribe_trades(_handler, ticker)
 
     def on_quote(self, ticker: str, callback: Callable) -> None:
         if not self._stream or self._missing:
             return
+
         async def _handler(data):
-            await callback({
-                "type": "quote",
-                "ticker": data.symbol,
-                "bid": float(data.bid_price),
-                "ask": float(data.ask_price),
-                "bid_size": float(data.bid_size),
-                "ask_size": float(data.ask_size),
-                "timestamp": str(data.timestamp),
-            })
+            await callback(
+                {
+                    "type": "quote",
+                    "ticker": data.symbol,
+                    "bid": float(data.bid_price),
+                    "ask": float(data.ask_price),
+                    "bid_size": float(data.bid_size),
+                    "ask_size": float(data.ask_size),
+                    "timestamp": str(data.timestamp),
+                }
+            )
+
         self._stream.subscribe_quotes(_handler, ticker)
 
     def on_bar(self, ticker: str, callback: Callable) -> None:
         if not self._stream or self._missing:
             return
+
         async def _handler(data):
-            await callback({
-                "type": "bar",
-                "ticker": data.symbol,
-                "open": float(data.open),
-                "high": float(data.high),
-                "low": float(data.low),
-                "close": float(data.close),
-                "volume": float(data.volume),
-                "timestamp": str(data.timestamp),
-            })
+            await callback(
+                {
+                    "type": "bar",
+                    "ticker": data.symbol,
+                    "open": float(data.open),
+                    "high": float(data.high),
+                    "low": float(data.low),
+                    "close": float(data.close),
+                    "volume": float(data.volume),
+                    "timestamp": str(data.timestamp),
+                }
+            )
+
         self._stream.subscribe_bars(_handler, ticker)
 
     async def start(self) -> None:
@@ -446,13 +474,25 @@ class AlpacaStreamer:
             return
         self._running = True
         logger.info("AlpacaStreamer: connected, waiting for data...")
-        try:
-            await self._stream._run_forever()
-        except asyncio.CancelledError:
-            pass
-        finally:
-            self._running = False
-            logger.info("AlpacaStreamer: disconnected")
+
+        delay = 2
+        max_delay = 60
+
+        while self._running:
+            try:
+                await self._stream._run_forever()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error("AlpacaStreamer: network connection lost ({}). Reconnecting in {}s...", e, delay)
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, max_delay)
+            else:
+                # Conexión finalizada de manera normal
+                break
+
+        self._running = False
+        logger.info("AlpacaStreamer: disconnected")
 
     async def stop(self) -> None:
         if self._stream:

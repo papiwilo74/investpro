@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -15,8 +14,12 @@ router = APIRouter()
 fetcher = DataFetcher()
 trainer = ModelTrainer()
 
+
 class MLTrainRequest(BaseModel):
     optimize: bool = False
+    horizon: int | None = None
+    min_return: float | None = None
+
 
 class GateEvaluateRequest(BaseModel):
     accuracy: float
@@ -24,11 +27,12 @@ class GateEvaluateRequest(BaseModel):
     test_size: int
     rel_vs_baseline: float = 0.0
 
+
 @router.get("/{ticker}")
 async def get_ml_status(
     ticker: str,
     period: str = Query("1y", description="Periodo de datos"),
-    interval: str = Query("1d", description="Intervalo de datos")
+    interval: str = Query("1d", description="Intervalo de datos"),
 ):
     try:
         ticker = ticker.upper().strip()
@@ -42,39 +46,54 @@ async def get_ml_status(
 
         prediction = trainer.predict_trend(ticker, df)
 
-        return sanitize_for_json({
-            "has_model": True,
-            "prediction": prediction,
-            "metrics": model_data["metrics"],
-            "feature_importances": model_data["feature_importances"],
-            "best_params": model_data.get("best_params", {}),
-            "optimized": model_data.get("optimized", False)
-        })
+        return sanitize_for_json(
+            {
+                "has_model": True,
+                "prediction": prediction,
+                "metrics": model_data["metrics"],
+                "feature_importances": model_data["feature_importances"],
+                "best_params": model_data.get("best_params", {}),
+                "optimized": model_data.get("optimized", False),
+                "horizon": model_data.get("horizon", 3),
+                "min_return": model_data.get("min_return", 0.01),
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.post("/{ticker}/train")
 async def train_ml_model(ticker: str, req: MLTrainRequest):
     try:
         ticker = ticker.upper().strip()
-        # Entrenar con el periodo histórico predeterminado (2 años)
-        model_data = trainer.train_and_save(ticker, period="2y", optimize=req.optimize)
+        # Entrenar con el periodo histórico predeterminado (10 años)
+        kwargs = {"period": "10y", "optimize": req.optimize}
+        if req.horizon is not None:
+            kwargs["horizon"] = req.horizon
+        if req.min_return is not None:
+            kwargs["min_return"] = req.min_return
+        model_data = trainer.train_and_save(ticker, **kwargs)
 
         # Obtener predicción inmediata
         df = fetcher.get_data(ticker, period="1y", interval="1d")
         df = TechnicalIndicators.add_all(df)
         prediction = trainer.predict_trend(ticker, df)
 
-        return sanitize_for_json({
-            "has_model": True,
-            "prediction": prediction,
-            "metrics": model_data["metrics"],
-            "feature_importances": model_data["feature_importances"],
-            "best_params": model_data.get("best_params", {}),
-            "optimized": model_data.get("optimized", False)
-        })
+        return sanitize_for_json(
+            {
+                "has_model": True,
+                "prediction": prediction,
+                "metrics": model_data["metrics"],
+                "feature_importances": model_data["feature_importances"],
+                "best_params": model_data.get("best_params", {}),
+                "optimized": model_data.get("optimized", False),
+                "horizon": model_data.get("horizon", 3),
+                "min_return": model_data.get("min_return", 0.01),
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.get("/{ticker}/simulate")
 async def simulate_ml_strategy(
@@ -82,7 +101,7 @@ async def simulate_ml_strategy(
     buy_threshold: float = Query(0.55, description="Límite de probabilidad de compra"),
     sell_threshold: float = Query(0.45, description="Límite de probabilidad de venta"),
     period: str = Query("1y", description="Periodo de datos"),
-    interval: str = Query("1d", description="Intervalo de datos")
+    interval: str = Query("1d", description="Intervalo de datos"),
 ):
     try:
         ticker = ticker.upper().strip()
@@ -119,23 +138,18 @@ async def simulate_ml_strategy(
         eq_ta = [{"time": idx.strftime("%Y-%m-%d"), "value": float(val)} for idx, val in res_ta.equity_curve.items()]
         eq_bh = [{"time": idx.strftime("%Y-%m-%d"), "value": float(val)} for idx, val in res_bh.equity_curve.items()]
 
-        return sanitize_for_json({
-            "metrics": {
-                "ml": res_ml.metrics,
-                "ta": res_ta.metrics,
-                "bh": res_bh.metrics
-            },
-            "equity_curves": {
-                "ml": eq_ml,
-                "ta": eq_ta,
-                "bh": eq_bh
+        return sanitize_for_json(
+            {
+                "metrics": {"ml": res_ml.metrics, "ta": res_ta.metrics, "bh": res_bh.metrics},
+                "equity_curves": {"ml": eq_ml, "ta": eq_ta, "bh": eq_bh},
             }
-        })
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 # ── ModelGate endpoints ─────────────────────────────────────────────
+
 
 @router.get("/gate/status")
 async def get_gate_status():
@@ -170,11 +184,13 @@ async def evaluate_gate(ticker: str, req: GateEvaluateRequest):
             "rel_vs_baseline": req.rel_vs_baseline,
         }
         approved = model_gate.evaluate_metadata(ticker, metadata)
-        return sanitize_for_json({
-            "ticker": ticker,
-            "approved": approved,
-            "status": model_gate.get_status(ticker),
-        })
+        return sanitize_for_json(
+            {
+                "ticker": ticker,
+                "approved": approved,
+                "status": model_gate.get_status(ticker),
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -190,6 +206,7 @@ async def revoke_gate(ticker: str, reason: str = Query("manual", description="Re
 
 
 # ── ChampionChallenger endpoints ─────────────────────────────────────
+
 
 @router.get("/champion")
 async def get_all_champions():

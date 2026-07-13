@@ -2,6 +2,7 @@
 
 Professional-grade validation pipeline to ensure strategy edge is real.
 """
+
 from __future__ import annotations
 
 import math
@@ -111,8 +112,8 @@ class WalkForwardOptimizer:
             if test_end >= len(df):
                 break
 
-            train_df = df.iloc[train_start:train_end + 1]
-            test_df = df.iloc[test_start:test_end + 1]
+            train_df = df.iloc[train_start : train_end + 1]
+            test_df = df.iloc[test_start : test_end + 1]
 
             if len(train_df) < 30 or len(test_df) < 10:
                 break
@@ -151,19 +152,21 @@ class WalkForwardOptimizer:
             oos_sharpe = test_metrics.get("sharpe_ratio", 0)
             overfit_ratio = oos_sharpe / is_sharpe if is_sharpe > 0 else 0
 
-            results.append(WindowResult(
-                window_idx=w,
-                train_start=str(dates[train_start])[:10] if train_start < len(dates) else "",
-                train_end=str(dates[train_end])[:10] if train_end < len(dates) else "",
-                test_start=str(dates[test_start])[:10] if test_start < len(dates) else "",
-                test_end=str(dates[test_end])[:10] if test_end < len(dates) else "",
-                train_metrics=best_train_metrics,
-                test_metrics=test_metrics,
-                best_params={k: round(v, 4) if isinstance(v, float) else v for k, v in best_params.items()},
-                sharpe_oos=round(oos_sharpe, 4),
-                sharpe_is=round(is_sharpe, 4),
-                overfit_ratio=round(overfit_ratio, 4),
-            ))
+            results.append(
+                WindowResult(
+                    window_idx=w,
+                    train_start=str(dates[train_start])[:10] if train_start < len(dates) else "",
+                    train_end=str(dates[train_end])[:10] if train_end < len(dates) else "",
+                    test_start=str(dates[test_start])[:10] if test_start < len(dates) else "",
+                    test_end=str(dates[test_end])[:10] if test_end < len(dates) else "",
+                    train_metrics=best_train_metrics,
+                    test_metrics=test_metrics,
+                    best_params={k: round(v, 4) if isinstance(v, float) else v for k, v in best_params.items()},
+                    sharpe_oos=round(oos_sharpe, 4),
+                    sharpe_is=round(is_sharpe, 4),
+                    overfit_ratio=round(overfit_ratio, 4),
+                )
+            )
 
         return results
 
@@ -180,10 +183,16 @@ class MonteCarloSimulator:
         if len(trades) < 5:
             return MonteCarloResult(
                 n_simulations=0,
-                p5_return=0, p50_return=0, p95_return=0,
-                p5_sharpe=0, p50_sharpe=0, p95_sharpe=0,
-                p_max_drawdown=0, p50_max_drawdown=0,
-                prob_negative_return=0, prob_sharpe_above_1=0,
+                p5_return=0,
+                p50_return=0,
+                p95_return=0,
+                p5_sharpe=0,
+                p50_sharpe=0,
+                p95_sharpe=0,
+                p_max_drawdown=0,
+                p50_max_drawdown=0,
+                prob_negative_return=0,
+                prob_sharpe_above_1=0,
             )
 
         trade_pnl_pcts = [t.pnl_pct for t in trades]
@@ -253,24 +262,20 @@ class OverfitDetector:
         for w in walk_forward_results:
             if w.overfit_ratio < 0.5:
                 flags.append(
-                    f"Window {w.window_idx}: OOS/IS Sharpe ratio = {w.overfit_ratio:.2f} "
-                    f"(< 0.50) - posible overfitting"
+                    f"Window {w.window_idx}: OOS/IS Sharpe ratio = {w.overfit_ratio:.2f} (< 0.50) - posible overfitting"
                 )
 
         # 2. Final OOS test: Sharpe should be > 0
         if oos_metrics.get("sharpe_ratio", -1) <= 0:
             flags.append(
-                f"Sharpe ratio en OOS final = {oos_metrics['sharpe_ratio']:.2f} "
-                f"(<= 0) - estrategia no generaliza"
+                f"Sharpe ratio en OOS final = {oos_metrics['sharpe_ratio']:.2f} (<= 0) - estrategia no generaliza"
             )
 
         # 3. Sharpe inflation: IS Sharpe much higher than OOS
         is_sharpe = is_metrics.get("sharpe_ratio", 0)
         oos_sharpe = oos_metrics.get("sharpe_ratio", 0)
         if is_sharpe > 0 and oos_sharpe < is_sharpe * 0.5:
-            flags.append(
-                f"Sharpe IS ({is_sharpe:.2f}) >> Sharpe OOS ({oos_sharpe:.2f}) - overfitting severo"
-            )
+            flags.append(f"Sharpe IS ({is_sharpe:.2f}) >> Sharpe OOS ({oos_sharpe:.2f}) - overfitting severo")
 
         # 4. Performance consistency: trades should not cluster
         if not flags:
@@ -299,8 +304,16 @@ class OverfitDetector:
 def _metrics_to_table_rows(metrics: dict) -> str:
     """Convert metrics dict to HTML table rows."""
     rows = ""
-    for key in ["retorno_total", "retorno_anualizado", "sharpe_ratio", "max_drawdown",
-                 "win_rate", "profit_factor", "total_trades", "capital_final"]:
+    for key in [
+        "retorno_total",
+        "retorno_anualizado",
+        "sharpe_ratio",
+        "max_drawdown",
+        "win_rate",
+        "profit_factor",
+        "total_trades",
+        "capital_final",
+    ]:
         val = metrics.get(key)
         if val is None:
             continue
@@ -319,7 +332,7 @@ def _metrics_to_table_rows(metrics: dict) -> str:
             color = "#10b981" if val >= 0 else "#ef4444"
         elif key in ("sharpe_ratio", "profit_factor"):
             formatted = f"{val:.2f}"
-            color = "#10b981" if val >= 1.0 else ( "#f59e0b" if val >= 0 else "#ef4444")
+            color = "#10b981" if val >= 1.0 else ("#f59e0b" if val >= 0 else "#ef4444")
         elif key == "win_rate":
             formatted = f"{val * 100:.1f}%"
             color = "#10b981" if val >= 0.5 else "#ef4444"
@@ -346,15 +359,15 @@ def _mc_to_html(mc: MonteCarloResult) -> str:
             <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Retorno Esperado</div>
             <div style="margin-top:8px;display:flex;justify-content:space-between;font-size:13px;">
                 <span style="color:#94a3b8;">P5</span>
-                <span style="font-weight:700;color:#ef4444;">{mc.p5_return*100:.2f}%</span>
+                <span style="font-weight:700;color:#ef4444;">{mc.p5_return * 100:.2f}%</span>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:13px;">
                 <span style="color:#94a3b8;">P50</span>
-                <span style="font-weight:700;color:#1e293b;">{mc.p50_return*100:.2f}%</span>
+                <span style="font-weight:700;color:#1e293b;">{mc.p50_return * 100:.2f}%</span>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:13px;">
                 <span style="color:#94a3b8;">P95</span>
-                <span style="font-weight:700;color:#10b981;">{mc.p95_return*100:.2f}%</span>
+                <span style="font-weight:700;color:#10b981;">{mc.p95_return * 100:.2f}%</span>
             </div>
         </div>
         <div style="background:#f8fafc;border-radius:12px;padding:16px;border:1px solid #e2e8f0;">
@@ -374,11 +387,11 @@ def _mc_to_html(mc: MonteCarloResult) -> str:
         </div>
         <div style="background:#f8fafc;border-radius:12px;padding:16px;border:1px solid #e2e8f0;">
             <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Max Drawdown (P50)</div>
-            <div style="margin-top:4px;font-size:20px;font-weight:800;color:#ef4444;">{mc.p50_max_drawdown*100:.2f}%</div>
+            <div style="margin-top:4px;font-size:20px;font-weight:800;color:#ef4444;">{mc.p50_max_drawdown * 100:.2f}%</div>
         </div>
         <div style="background:#f8fafc;border-radius:12px;padding:16px;border:1px solid #e2e8f0;">
             <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Prob. Pérdida</div>
-            <div style="margin-top:4px;font-size:20px;font-weight:800;color:{'#ef4444' if mc.prob_negative_return > 0.25 else '#10b981'};">{mc.prob_negative_return*100:.1f}%</div>
+            <div style="margin-top:4px;font-size:20px;font-weight:800;color:{"#ef4444" if mc.prob_negative_return > 0.25 else "#10b981"};">{mc.prob_negative_return * 100:.1f}%</div>
         </div>
     </div>
     """
@@ -389,8 +402,8 @@ def _wfo_to_html(windows: list[WindowResult]) -> str:
         return "<p style='color:#94a3b8;font-size:14px;'>No se generaron ventanas WFO (datos insuficientes).</p>"
     rows = ""
     for w in windows:
-        sharpe_color = "#10b981" if w.sharpe_oos >= 0.5 else ( "#f59e0b" if w.sharpe_oos >= 0 else "#ef4444")
-        ratio_color = "#10b981" if w.overfit_ratio >= 0.7 else ( "#f59e0b" if w.overfit_ratio >= 0.5 else "#ef4444")
+        sharpe_color = "#10b981" if w.sharpe_oos >= 0.5 else ("#f59e0b" if w.sharpe_oos >= 0 else "#ef4444")
+        ratio_color = "#10b981" if w.overfit_ratio >= 0.7 else ("#f59e0b" if w.overfit_ratio >= 0.5 else "#ef4444")
         rows += f"""
         <tr>
             <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:12px;">{w.window_idx}</td>

@@ -61,6 +61,7 @@ class TestRiskController:
 
     def test_leverage_disabled(self, controller, mock_risk):
         from config import BROKER_CONFIG
+
         original = BROKER_CONFIG.leverage_enabled
         try:
             BROKER_CONFIG.leverage_enabled = False
@@ -71,6 +72,7 @@ class TestRiskController:
 
     def test_leverage_scales_with_confidence(self, controller, mock_risk):
         from config import BROKER_CONFIG
+
         original = BROKER_CONFIG.leverage_enabled
         try:
             BROKER_CONFIG.leverage_enabled = True

@@ -385,8 +385,7 @@ class TestLoadHofParams:
 
         base = StrategyParams()
         hof_json = (
-            '[{"params": {"use_neural_brain": true, "some_unknown_key": "bad"},'
-            ' "fitness": 1.0, "generation": 1}]'
+            '[{"params": {"use_neural_brain": true, "some_unknown_key": "bad"}, "fitness": 1.0, "generation": 1}]'
         )
         with (
             patch.object(Path, "exists", return_value=True),
@@ -399,10 +398,7 @@ class TestLoadHofParams:
         from bot.engine import TradingBot
 
         base = StrategyParams()
-        hof_json = (
-            '[{"params": {"buy_score_threshold": 0.5},'
-            ' "fitness": 0, "generation": 1}]'
-        )
+        hof_json = '[{"params": {"buy_score_threshold": 0.5}, "fitness": 0, "generation": 1}]'
         with (
             patch.object(Path, "exists", return_value=True),
             patch.object(Path, "read_text", return_value=hof_json),
@@ -524,13 +520,16 @@ class TestIsMarketOpen:
 
 class TestDecisionContext:
     def test_returns_formatted_string(self, sample_df, bot):
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.8, position_size_pct=0.1
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.1)
         result = bot._decision_context(
-            "AAPL", sample_df, 0.5, decision,
-            has_position=False, pnl_pct=0.0,
-            ml_direction="BULLISH", ml_probability=0.75,
+            "AAPL",
+            sample_df,
+            0.5,
+            decision,
+            has_position=False,
+            pnl_pct=0.0,
+            ml_direction="BULLISH",
+            ml_probability=0.75,
             sentiment_label="POSITIVE",
         )
         assert "AAPL" in result
@@ -539,37 +538,46 @@ class TestDecisionContext:
         assert "POSITIVE" in result
 
     def test_handles_none_ml(self, sample_df, bot):
-        decision = Decision(
-            action="HOLD", reason="test", confidence=0.5, position_size_pct=0.0
-        )
+        decision = Decision(action="HOLD", reason="test", confidence=0.5, position_size_pct=0.0)
         result = bot._decision_context(
-            "AAPL", sample_df, 0.0, decision,
-            has_position=True, pnl_pct=0.02,
-            ml_direction=None, ml_probability=None,
+            "AAPL",
+            sample_df,
+            0.0,
+            decision,
+            has_position=True,
+            pnl_pct=0.02,
+            ml_direction=None,
+            ml_probability=None,
             sentiment_label=None,
         )
         assert "N/A" in result
 
     def test_handles_sma200_trend(self, sample_df, bot):
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.7, position_size_pct=0.05
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.7, position_size_pct=0.05)
         result = bot._decision_context(
-            "AAPL", sample_df, 0.5, decision,
-            has_position=False, pnl_pct=0.0,
-            ml_direction=None, ml_probability=None,
+            "AAPL",
+            sample_df,
+            0.5,
+            decision,
+            has_position=False,
+            pnl_pct=0.0,
+            ml_direction=None,
+            ml_probability=None,
             sentiment_label=None,
         )
         assert "SMA200" in result
 
     def test_shows_position_info(self, sample_df, bot):
-        decision = Decision(
-            action="SELL", reason="take_profit", confidence=0.9, position_size_pct=0.1
-        )
+        decision = Decision(action="SELL", reason="take_profit", confidence=0.9, position_size_pct=0.1)
         result = bot._decision_context(
-            "AAPL", sample_df, -0.3, decision,
-            has_position=True, pnl_pct=0.05,
-            ml_direction="BULLISH", ml_probability=0.6,
+            "AAPL",
+            sample_df,
+            -0.3,
+            decision,
+            has_position=True,
+            pnl_pct=0.05,
+            ml_direction="BULLISH",
+            ml_probability=0.6,
             sentiment_label="NEUTRAL",
         )
         assert "SI" in result
@@ -587,9 +595,7 @@ class TestRouteOrder:
         bot.smart_router = None
         result = asyncio.run(bot._route_order("AAPL", 10, "buy", 150.0))
         assert result == {"id": "test"}
-        bot.order_manager.route_order.assert_called_once_with(
-            "AAPL", 10, "buy", 150.0, True
-        )
+        bot.order_manager.route_order.assert_called_once_with("AAPL", 10, "buy", 150.0, True)
 
     def test_sets_smart_router_when_available(self, bot):
         bot.order_manager.route_order.return_value = {"id": "test"}
@@ -663,9 +669,7 @@ class TestGetMLPrediction:
 
     def test_returns_prediction_in_legacy_mode(self, bot):
         bot.trainer.load_model.return_value = {"some": "data"}
-        bot.trainer.predict_trend.return_value = {
-            "direction": "BULLISH", "probability": 0.8
-        }
+        bot.trainer.predict_trend.return_value = {"direction": "BULLISH", "probability": 0.8}
         result = bot._get_ml_prediction("AAPL", pd.DataFrame())
         assert result == ("BULLISH", 0.8)
 
@@ -685,9 +689,7 @@ class TestGetMLPrediction:
     def test_model_gate_allows_in_web_mode(self, bot):
         bot.strategy_mode = "web"
         bot.trainer.load_model.return_value = {"some": "data"}
-        bot.trainer.predict_trend.return_value = {
-            "direction": "BULLISH", "probability": 0.75
-        }
+        bot.trainer.predict_trend.return_value = {"direction": "BULLISH", "probability": 0.75}
         with patch("ml.model_gate.model_gate") as mock_gate:
             mock_gate.is_approved.return_value = True
             result = bot._get_ml_prediction("AAPL", pd.DataFrame())
@@ -774,12 +776,8 @@ class TestRecordOrder:
     def test_records_in_state(self, bot):
         bot._orders_today = 0
         bot._orders_date = datetime.now().date()
-        bot._record_order(
-            "AAPL", "buy", 10, 150.0, order_id="ord1", leverage=1.5
-        )
-        bot.state.record_order.assert_called_once_with(
-            "AAPL", "buy", 10, 150.0, "ord1", leverage=1.5, confidence=0.0
-        )
+        bot._record_order("AAPL", "buy", 10, 150.0, order_id="ord1", leverage=1.5)
+        bot.state.record_order.assert_called_once_with("AAPL", "buy", 10, 150.0, "ord1", leverage=1.5, confidence=0.0)
 
     def test_resets_counter_on_new_day(self, bot):
         bot._orders_today = 20
@@ -1022,27 +1020,71 @@ class TestActiveTickers:
 
     def test_scanner_returns_tickers(self, bot):
         accepted = [
-            ScanCandidate(ticker="AAPL", accepted=True, rank_score=0.8, signal_score=0, trend_score=0, liquidity_score=0, volatility_score=0, close=150, change_pct=0, avg_volume=1000000, atr_pct=0.02, adx=25, rsi=50, reasons=["momentum"]),
-            ScanCandidate(ticker="MSFT", accepted=True, rank_score=0.7, signal_score=0, trend_score=0, liquidity_score=0, volatility_score=0, close=300, change_pct=0, avg_volume=2000000, atr_pct=0.02, adx=25, rsi=50, reasons=["breakout"]),
+            ScanCandidate(
+                ticker="AAPL",
+                accepted=True,
+                rank_score=0.8,
+                signal_score=0,
+                trend_score=0,
+                liquidity_score=0,
+                volatility_score=0,
+                close=150,
+                change_pct=0,
+                avg_volume=1000000,
+                atr_pct=0.02,
+                adx=25,
+                rsi=50,
+                reasons=["momentum"],
+            ),
+            ScanCandidate(
+                ticker="MSFT",
+                accepted=True,
+                rank_score=0.7,
+                signal_score=0,
+                trend_score=0,
+                liquidity_score=0,
+                volatility_score=0,
+                close=300,
+                change_pct=0,
+                avg_volume=2000000,
+                atr_pct=0.02,
+                adx=25,
+                rsi=50,
+                reasons=["breakout"],
+            ),
         ]
         bot.scanner.scan.return_value = ScanResult(
-            universe="nasdaq100", scanned=2, accepted=accepted, rejected=[], errors={},
+            universe="nasdaq100",
+            scanned=2,
+            accepted=accepted,
+            rejected=[],
+            errors={},
         )
         result = bot.scanner.scan(
-            universe="nasdaq100", period="1y", interval="1d",
-            limit=10, include_rejected=False,
+            universe="nasdaq100",
+            period="1y",
+            interval="1d",
+            limit=10,
+            include_rejected=False,
         )
         tickers = [c.ticker for c in result.accepted]
         assert tickers == ["AAPL", "MSFT"]
 
     def test_scanner_empty_falls_back_to_watchlist(self, bot):
         bot.scanner.scan.return_value = ScanResult(
-            universe="nasdaq100", scanned=0, accepted=[], rejected=[], errors={},
+            universe="nasdaq100",
+            scanned=0,
+            accepted=[],
+            rejected=[],
+            errors={},
         )
         with patch("bot.engine.WATCHLIST", ["SPY", "QQQ"]):
             result = bot.scanner.scan(
-                universe="nasdaq100", period="1y", interval="1d",
-                limit=10, include_rejected=False,
+                universe="nasdaq100",
+                period="1y",
+                interval="1d",
+                limit=10,
+                include_rejected=False,
             )
             scan_tickers = [c.ticker for c in result.accepted]
             if not scan_tickers:
@@ -1070,43 +1112,27 @@ class TestPreTradeChecklist:
     """_pre_trade_checklist validation logic."""
 
     def test_passes_good_signal(self, bot, market_regime_dict):
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.8, position_size_pct=0.1
-        )
-        passed, checks = bot._pre_trade_checklist(
-            "AAPL", 0.5, decision, market_regime_dict
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.1)
+        passed, checks = bot._pre_trade_checklist("AAPL", 0.5, decision, market_regime_dict)
         assert passed is True
         assert len(checks) > 0
 
     def test_fails_low_score(self, bot, market_regime_dict):
         bot._strategy_params.buy_score_threshold = 0.3
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.8, position_size_pct=0.1
-        )
-        passed, checks = bot._pre_trade_checklist(
-            "AAPL", 0.1, decision, market_regime_dict
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.1)
+        passed, checks = bot._pre_trade_checklist("AAPL", 0.1, decision, market_regime_dict)
         assert passed is False
         assert any("Score" in c and "❌" in c for c in checks)
 
     def test_fails_low_confidence(self, bot, market_regime_dict):
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.3, position_size_pct=0.1
-        )
-        passed, checks = bot._pre_trade_checklist(
-            "AAPL", 0.5, decision, market_regime_dict
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.3, position_size_pct=0.1)
+        passed, checks = bot._pre_trade_checklist("AAPL", 0.5, decision, market_regime_dict)
         assert passed is False
         assert any("Confianza" in c and "❌" in c for c in checks)
 
     def test_fails_zero_position_size(self, bot, market_regime_dict):
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.8, position_size_pct=0.0
-        )
-        passed, checks = bot._pre_trade_checklist(
-            "AAPL", 0.5, decision, market_regime_dict
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.0)
+        passed, checks = bot._pre_trade_checklist("AAPL", 0.5, decision, market_regime_dict)
         assert passed is False
         assert any("tamaño" in c.lower() and "❌" in c for c in checks)
 
@@ -1114,12 +1140,8 @@ class TestPreTradeChecklist:
         regime = {"regime": "CAUTIOUS", "can_trade_long": True, "reason": "vix_high"}
         bot._strategy_params.buy_score_threshold = 0.1
         bot._strategy_params.cautious_regime_score_boost = 0.15
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.8, position_size_pct=0.1
-        )
-        passed, checks = bot._pre_trade_checklist(
-            "AAPL", 0.2, decision, regime
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.1)
+        passed, checks = bot._pre_trade_checklist("AAPL", 0.2, decision, regime)
         # 0.2 < 0.1 + 0.15 = 0.25 → should fail
         assert passed is False
         assert any("cauteloso" in c.lower() for c in checks)
@@ -1128,12 +1150,13 @@ class TestPreTradeChecklist:
         regime = {"regime": "UNFAVORABLE", "can_trade_long": False, "reason": "bear"}
         bot._strategy_params.short_score_threshold = -0.25
         decision = Decision(
-            action="SHORT", reason="test", confidence=0.8,
-            position_size_pct=0.1, side="SHORT",
+            action="SHORT",
+            reason="test",
+            confidence=0.8,
+            position_size_pct=0.1,
+            side="SHORT",
         )
-        passed, checks = bot._pre_trade_checklist(
-            "AAPL", -0.5, decision, regime, side="SHORT"
-        )
+        passed, checks = bot._pre_trade_checklist("AAPL", -0.5, decision, regime, side="SHORT")
         assert passed is True
         assert any("SHORT" in c for c in checks)
 
@@ -1141,33 +1164,30 @@ class TestPreTradeChecklist:
         regime = {"regime": "UNFAVORABLE", "can_trade_long": False, "reason": "bear"}
         bot._strategy_params.short_score_threshold = -0.25
         decision = Decision(
-            action="SHORT", reason="test", confidence=0.8,
-            position_size_pct=0.1, side="SHORT",
+            action="SHORT",
+            reason="test",
+            confidence=0.8,
+            position_size_pct=0.1,
+            side="SHORT",
         )
-        passed, checks = bot._pre_trade_checklist(
-            "AAPL", 0.0, decision, regime, side="SHORT"
-        )
+        passed, checks = bot._pre_trade_checklist("AAPL", 0.0, decision, regime, side="SHORT")
         assert passed is False
         assert any("máximo SHORT" in c for c in checks)
 
     def test_market_breadth_blocks_when_cant_trade(self, bot, market_regime_dict):
         bot.market_breadth = MagicMock()
         bot.market_breadth.to_dict.return_value = {
-            "can_trade": False, "level": "UNHEALTHY", "reason": "broad_decline",
+            "can_trade": False,
+            "level": "UNHEALTHY",
+            "reason": "broad_decline",
         }
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.8, position_size_pct=0.1
-        )
-        passed, _ = bot._pre_trade_checklist(
-            "AAPL", 0.5, decision, market_regime_dict
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.1)
+        passed, _ = bot._pre_trade_checklist("AAPL", 0.5, decision, market_regime_dict)
         assert passed is False
 
     def test_regime_blocks_when_cant_trade_long(self, bot):
         regime = {"regime": "UNFAVORABLE", "can_trade_long": False, "reason": "bear"}
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.8, position_size_pct=0.1
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.1)
         passed, _ = bot._pre_trade_checklist("AAPL", 0.5, decision, regime)
         assert passed is False
 
@@ -1252,7 +1272,8 @@ class TestCheckMarketBreadth:
     def test_returns_breadth_dict(self, bot):
         bot.market_breadth = MagicMock()
         bot.market_breadth.to_dict.return_value = {
-            "level": "HEALTHY", "can_trade": True,
+            "level": "HEALTHY",
+            "can_trade": True,
         }
         result = bot._check_market_breadth()
         assert result["level"] == "HEALTHY"
@@ -1430,7 +1451,8 @@ class TestFetcherErrorHandling:
     def test_returns_zero_when_fetcher_returns_empty_df(self, bot):
         bot.fetcher.get_data.return_value = pd.DataFrame()
         bot.client.get_account_summary.return_value = {
-            "buying_power": 50000, "equity": 100000,
+            "buying_power": 50000,
+            "equity": 100000,
         }
         bot.client.get_positions.return_value = []
 
@@ -1439,29 +1461,24 @@ class TestFetcherErrorHandling:
             patch("bot.engine.SignalGenerator.add_signal_columns"),
             patch("bot.engine.SignalGenerator.composite_score"),
         ):
-            result = asyncio.run(
-                bot._evaluate_and_trade("AAPL", "1d", single_ticker=True)
-            )
+            result = asyncio.run(bot._evaluate_and_trade("AAPL", "1d", single_ticker=True))
             assert result == 0.0
 
     def test_handles_fetcher_exception_gracefully(self, bot):
         bot.fetcher.get_data.side_effect = RuntimeError("API timeout")
         bot.client.get_account_summary.return_value = {
-            "buying_power": 50000, "equity": 100000,
+            "buying_power": 50000,
+            "equity": 100000,
         }
         bot.client.get_positions.return_value = []
 
         with patch("bot.engine.logger"):
-            result = asyncio.run(
-                bot._evaluate_and_trade("AAPL", "1d", single_ticker=True)
-            )
+            result = asyncio.run(bot._evaluate_and_trade("AAPL", "1d", single_ticker=True))
             assert result == 0.0
 
     def test_returns_zero_when_no_account(self, bot):
         bot.client.get_account_summary.return_value = None
-        result = asyncio.run(
-            bot._evaluate_and_trade("AAPL", "1d", single_ticker=True)
-        )
+        result = asyncio.run(bot._evaluate_and_trade("AAPL", "1d", single_ticker=True))
         assert result == 0.0
 
     def test_load_price_history_handles_fetcher_error(self, bot):
@@ -1489,7 +1506,9 @@ class TestEvaluateAndTrade:
         bot._executor.execute_buy.return_value = 1500.0
 
         decision = Decision(
-            action="BUY", reason="test_signal", confidence=0.8,
+            action="BUY",
+            reason="test_signal",
+            confidence=0.8,
             position_size_pct=0.1,
         )
         bid = bot.brain.decide
@@ -1511,9 +1530,7 @@ class TestEvaluateAndTrade:
                 return_value="UP",
             ),
         ):
-            result = asyncio.run(
-                bot._evaluate_and_trade("AAPL", "1d", single_ticker=True)
-            )
+            result = asyncio.run(bot._evaluate_and_trade("AAPL", "1d", single_ticker=True))
 
         assert result == 1500.0
         assert any("BUY" in m and "AAPL" in m for m in bot.logs)
@@ -1527,7 +1544,9 @@ class TestEvaluateAndTrade:
         bot.fetcher.get_data.return_value = sample_df
 
         decision = Decision(
-            action="BUY", reason="weak", confidence=0.3,
+            action="BUY",
+            reason="weak",
+            confidence=0.3,
             position_size_pct=0.05,
         )
         bot.brain.decide.return_value = decision
@@ -1548,9 +1567,7 @@ class TestEvaluateAndTrade:
                 return_value="UP",
             ),
         ):
-            result = asyncio.run(
-                bot._evaluate_and_trade("AAPL", "1d", single_ticker=True)
-            )
+            result = asyncio.run(bot._evaluate_and_trade("AAPL", "1d", single_ticker=True))
 
         assert result == 0.0
         assert any("CHECKLIST RECHAZA" in m for m in bot.logs)
@@ -1561,15 +1578,20 @@ class TestEvaluateAndTrade:
             "equity": 100000,
         }
         position = {
-            "symbol": "AAPL", "qty": 10, "current_price": 105.0,
-            "market_value": 1050.0, "unrealized_plpc": 0.05,
+            "symbol": "AAPL",
+            "qty": 10,
+            "current_price": 105.0,
+            "market_value": 1050.0,
+            "unrealized_plpc": 0.05,
         }
         bot.client.get_positions.return_value = [position]
 
         bot.fetcher.get_data.return_value = sample_df
 
         decision = Decision(
-            action="SELL", reason="take_profit", confidence=0.9,
+            action="SELL",
+            reason="take_profit",
+            confidence=0.9,
             position_size_pct=0.1,
         )
         bot.brain.decide.return_value = decision
@@ -1590,9 +1612,7 @@ class TestEvaluateAndTrade:
                 return_value="UP",
             ),
         ):
-            result = asyncio.run(
-                bot._evaluate_and_trade("AAPL", "1d", single_ticker=True)
-            )
+            result = asyncio.run(bot._evaluate_and_trade("AAPL", "1d", single_ticker=True))
 
         assert result == 0.0
         bot._executor.execute_sell.assert_called_once()
@@ -1607,8 +1627,11 @@ class TestEvaluateAndTrade:
         bot._executor.execute_short.return_value = 2000.0
 
         decision = Decision(
-            action="SHORT", reason="bearish", confidence=0.8,
-            position_size_pct=0.1, side="SHORT",
+            action="SHORT",
+            reason="bearish",
+            confidence=0.8,
+            position_size_pct=0.1,
+            side="SHORT",
         )
         bot.brain.decide.return_value = decision
 
@@ -1628,9 +1651,7 @@ class TestEvaluateAndTrade:
                 return_value="DOWN",
             ),
         ):
-            result = asyncio.run(
-                bot._evaluate_and_trade("AAPL", "1d", single_ticker=True)
-            )
+            result = asyncio.run(bot._evaluate_and_trade("AAPL", "1d", single_ticker=True))
 
         assert result == 2000.0
 
@@ -1647,9 +1668,7 @@ class TestEvaluateAndTrade:
         mtf_result.block_reason = "weekly trend bearish"
         bot.mtf_filter.evaluate.return_value = mtf_result
 
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.8, position_size_pct=0.1
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.1)
         bot.brain.decide.return_value = decision
 
         with (
@@ -1668,9 +1687,7 @@ class TestEvaluateAndTrade:
                 return_value="UP",
             ),
         ):
-            result = asyncio.run(
-                bot._evaluate_and_trade("AAPL", "1d", single_ticker=True)
-            )
+            result = asyncio.run(bot._evaluate_and_trade("AAPL", "1d", single_ticker=True))
 
         assert result == 0.0
         assert any("MTF BLOQUEA" in m for m in bot.logs)
@@ -1685,12 +1702,12 @@ class TestEvaluateAndTrade:
 
         bot.online_advisor = MagicMock()
         bot.online_advisor.advise.return_value = {
-            "action": "BLOCK", "confidence": 0.9, "reason": "volatility_high",
+            "action": "BLOCK",
+            "confidence": 0.9,
+            "reason": "volatility_high",
         }
 
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.8, position_size_pct=0.1
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.1)
         bot.brain.decide.return_value = decision
 
         with (
@@ -1709,9 +1726,7 @@ class TestEvaluateAndTrade:
                 return_value="UP",
             ),
         ):
-            result = asyncio.run(
-                bot._evaluate_and_trade("AAPL", "1d", single_ticker=True)
-            )
+            result = asyncio.run(bot._evaluate_and_trade("AAPL", "1d", single_ticker=True))
 
         assert result == 0.0
         assert any("BLOQUEA BUY" in m for m in bot.logs)
@@ -1727,12 +1742,12 @@ class TestEvaluateAndTrade:
 
         bot.online_advisor = MagicMock()
         bot.online_advisor.advise.return_value = {
-            "action": "REDUCE", "confidence": 0.6, "reason": "high_vol",
+            "action": "REDUCE",
+            "confidence": 0.6,
+            "reason": "high_vol",
         }
 
-        decision = Decision(
-            action="BUY", reason="test", confidence=0.8, position_size_pct=0.1
-        )
+        decision = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.1)
         bot.brain.decide.return_value = decision
 
         with (
@@ -1751,9 +1766,7 @@ class TestEvaluateAndTrade:
                 return_value="UP",
             ),
         ):
-            result = asyncio.run(
-                bot._evaluate_and_trade("AAPL", "1d", single_ticker=True)
-            )
+            result = asyncio.run(bot._evaluate_and_trade("AAPL", "1d", single_ticker=True))
 
         assert result == 750.0
 
@@ -1771,7 +1784,8 @@ class TestManageRotationHedge:
     def test_buys_sh_on_deteriorating(self, bot):
         bot.market_breadth = MagicMock()
         bot.market_breadth.to_dict.return_value = {
-            "level": "DETERIORATING", "can_trade": True,
+            "level": "DETERIORATING",
+            "can_trade": True,
         }
         sh_df = pd.DataFrame({"close": [50.0]})
         bot.fetcher.get_data.return_value = sh_df
@@ -1802,7 +1816,9 @@ class TestDailyTelemetrySnapshot:
     def test_computes_rolling_metrics(self, bot):
         bot.perf_tracker = MagicMock()
         bot.client.get_account_summary.return_value = {
-            "equity": 100000, "cash": 50000, "pnl_pct_today": 1.0,
+            "equity": 100000,
+            "cash": 50000,
+            "pnl_pct_today": 1.0,
         }
         bot.client.get_positions.return_value = [{"market_value": 25000}]
         bot.risk_manager._trade_history = []
@@ -1823,8 +1839,12 @@ class TestLogTradeTelemetry:
     def test_logs_trade(self, bot):
         bot.perf_tracker = MagicMock()
         bot._log_trade_telemetry(
-            "AAPL", "BUY", entry_date="2025-01-01",
-            exit_reason="take_profit", pnl_pct=0.05, pnl_usd=500,
+            "AAPL",
+            "BUY",
+            entry_date="2025-01-01",
+            exit_reason="take_profit",
+            pnl_pct=0.05,
+            pnl_usd=500,
         )
         bot.perf_tracker.log_trade.assert_called_once()
         _args, kwargs = bot.perf_tracker.log_trade.call_args
@@ -1909,7 +1929,8 @@ class TestIntradayBehavior:
         bot.intraday = True
         bot.fetcher.get_data.return_value = pd.DataFrame()
         bot.client.get_account_summary.return_value = {
-            "buying_power": 50000, "equity": 100000,
+            "buying_power": 50000,
+            "equity": 100000,
         }
         bot.client.get_positions.return_value = []
         asyncio.run(bot._evaluate_and_trade("AAPL", "5m", single_ticker=True))

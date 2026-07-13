@@ -97,7 +97,7 @@ app.add_middleware(
     ],
     allow_credentials=False,  # True + allow_origins=* es inválido según spec
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Incluir Routers
@@ -147,18 +147,31 @@ async def get_ensemble_status():
     return sanitize_for_json(ensemble.get_status())
 
 
-# Configurar Frontend Estático si la carpeta existe
-frontend_path = Path(_PROJECT_ROOT) / "frontend"
-frontend_path.mkdir(parents=True, exist_ok=True)
+# ── Frontend estático (build de React/Vite) ────────────────────────────
+# Vite compila frontend/ -> api/static/ (ver frontend/vite.config.ts).
+# En desarrollo se usa el dev server de Vite (puerto 3000) con proxy a /api.
+_STATIC_BUILD = Path(_PROJECT_ROOT) / "api" / "static"
+_FRONTEND_SRC = Path(_PROJECT_ROOT) / "frontend"
+_STATIC_BUILD.mkdir(parents=True, exist_ok=True)
 
 
-# Servir index.html en la raíz (sin cache para que los cambios JS se apliquen)
+def _resolve_static_dir() -> Path:
+    """Devuelve el directorio con el build de React si existe, si no, el source."""
+    if (_STATIC_BUILD / "index.html").exists():
+        return _STATIC_BUILD
+    return _FRONTEND_SRC
+
+
+_STATIC_DIR = _resolve_static_dir()
+
+
+# Servir index.html en la raíz (sin cache para que los cambios se apliquen)
 @app.get("/")
 async def serve_index():
-    index_file = frontend_path / "index.html"
+    index_file = _STATIC_DIR / "index.html"
     if index_file.exists():
         return FileResponse(index_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
-    return {"message": "Inversion Helper API is running. Place index.html in frontend/ to serve the UI."}
+    return {"message": "Inversion Helper API is running. Run `npm run build` in frontend/ to generate the UI."}
 
 
 @app.get("/favicon.ico")
@@ -168,14 +181,16 @@ async def favicon():
 
 @app.get("/performance", summary="Dashboard de performance")
 async def serve_performance():
-    perf_file = frontend_path / "performance.html"
+    perf_file = _FRONTEND_SRC / "performance.html"
     if perf_file.exists():
         return FileResponse(perf_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     return {"message": "Performance page not found"}
 
 
-# Montar resto de recursos estáticos en /static
-app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
+# Montar /assets (build de Vite con nombres hashed) y /static (otros recursos)
+if (_STATIC_BUILD / "index.html").exists():
+    app.mount("/assets", StaticFiles(directory=str(_STATIC_BUILD / "assets")), name="assets")
+app.mount("/static", StaticFiles(directory=str(_FRONTEND_SRC)), name="static")
 
 
 # Middleware para evitar cache del navegador en archivos JS/CSS (desarrollo)
@@ -297,3 +312,18 @@ async def prometheus_metrics():
     """Exposición de métricas Prometheus para scraping."""
     data, status, headers = metrics_endpoint()
     return Response(content=data, status_code=status, headers=headers)
+
+
+# ── SPA fallback (DEBE ir al final, después de todas las rutas de la API) ──
+@app.get("/{path:path}", include_in_schema=False)
+async def spa_fallback(path: str):
+    """Catch-all para SPA: rutas no-API devuelven index.html (client-side routing)."""
+    if path.startswith(("api/", "assets/", "static/", "docs", "redoc", "health", "metrics", "favicon")):
+        return Response(status_code=404, content=b"Not Found", media_type="text/plain")
+    candidate = _STATIC_DIR / path
+    if candidate.is_file():
+        return FileResponse(candidate)
+    index_file = _STATIC_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    return Response(status_code=404, content=b"Not Found", media_type="text/plain")

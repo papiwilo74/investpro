@@ -5,6 +5,7 @@ sector exposure, circuit breaker, and total exposure.
 
 Usa ``config.RiskConfig`` como fuente de verdad para evitar duplicación.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,35 +24,96 @@ from db.repositories import RiskRepository
 logger = logging.getLogger("inversion_helper.risk")
 
 SECTOR_MAP: dict[str, str] = {
-    "AAPL": "tech", "MSFT": "tech", "NVDA": "semiconductors", "AMD": "semiconductors",
-    "INTC": "semiconductors", "AVGO": "semiconductors", "QCOM": "semiconductors",
-    "AMZN": "consumer_cyclical", "META": "tech", "GOOGL": "tech", "GOOG": "tech",
-    "TSLA": "automotive", "NFLX": "communication", "COST": "consumer_defensive",
-    "PEP": "consumer_defensive", "ADBE": "tech", "LIN": "basic_materials",
-    "CSCO": "tech", "TMUS": "communication", "INTU": "tech",
-    "TXN": "semiconductors", "ISRG": "healthcare", "AMGN": "healthcare",
-    "BKNG": "consumer_cyclical", "HON": "industrials", "VRTX": "healthcare",
-    "PANW": "tech", "ADP": "industrials", "ADI": "semiconductors",
-    "SBUX": "consumer_cyclical", "GILD": "healthcare", "MU": "semiconductors",
-    "LRCX": "semiconductors", "MDLZ": "consumer_defensive", "KLAC": "semiconductors",
-    "REGN": "healthcare", "MELI": "tech", "SNPS": "tech", "CDNS": "tech",
-    "MAR": "consumer_cyclical", "PYPL": "tech", "CRWD": "tech",
-    "ORLY": "consumer_cyclical", "CSX": "industrials", "ABNB": "consumer_cyclical",
-    "NXPI": "semiconductors", "MRVL": "semiconductors", "WDAY": "tech",
-    "ROP": "tech", "PCAR": "industrials", "FTNT": "tech",
-    "MNST": "consumer_defensive", "CPRT": "industrials", "AEP": "utilities",
-    "BRK-B": "financial", "LLY": "healthcare", "JPM": "financial",
-    "UNH": "healthcare", "XOM": "energy", "V": "financial", "MA": "financial",
-    "PG": "consumer_defensive", "JNJ": "healthcare", "HD": "consumer_cyclical",
-    "WMT": "consumer_defensive", "ABBV": "healthcare", "BAC": "financial",
-    "KO": "consumer_defensive", "CVX": "energy", "CRM": "tech",
-    "TMO": "healthcare", "WFC": "financial", "MCD": "consumer_cyclical",
-    "ABT": "healthcare", "ACN": "tech", "DIS": "communication",
-    "IBM": "tech", "GE": "industrials", "VZ": "communication",
-    "CAT": "industrials", "DHR": "healthcare", "NOW": "tech",
-    "UBER": "tech", "PFE": "healthcare", "PM": "consumer_defensive",
-    "NEE": "utilities", "SPGI": "financial", "RTX": "industrials",
-    "LOW": "consumer_cyclical", "GS": "financial",
+    "AAPL": "tech",
+    "MSFT": "tech",
+    "NVDA": "semiconductors",
+    "AMD": "semiconductors",
+    "INTC": "semiconductors",
+    "AVGO": "semiconductors",
+    "QCOM": "semiconductors",
+    "AMZN": "consumer_cyclical",
+    "META": "tech",
+    "GOOGL": "tech",
+    "GOOG": "tech",
+    "TSLA": "automotive",
+    "NFLX": "communication",
+    "COST": "consumer_defensive",
+    "PEP": "consumer_defensive",
+    "ADBE": "tech",
+    "LIN": "basic_materials",
+    "CSCO": "tech",
+    "TMUS": "communication",
+    "INTU": "tech",
+    "TXN": "semiconductors",
+    "ISRG": "healthcare",
+    "AMGN": "healthcare",
+    "BKNG": "consumer_cyclical",
+    "HON": "industrials",
+    "VRTX": "healthcare",
+    "PANW": "tech",
+    "ADP": "industrials",
+    "ADI": "semiconductors",
+    "SBUX": "consumer_cyclical",
+    "GILD": "healthcare",
+    "MU": "semiconductors",
+    "LRCX": "semiconductors",
+    "MDLZ": "consumer_defensive",
+    "KLAC": "semiconductors",
+    "REGN": "healthcare",
+    "MELI": "tech",
+    "SNPS": "tech",
+    "CDNS": "tech",
+    "MAR": "consumer_cyclical",
+    "PYPL": "tech",
+    "CRWD": "tech",
+    "ORLY": "consumer_cyclical",
+    "CSX": "industrials",
+    "ABNB": "consumer_cyclical",
+    "NXPI": "semiconductors",
+    "MRVL": "semiconductors",
+    "WDAY": "tech",
+    "ROP": "tech",
+    "PCAR": "industrials",
+    "FTNT": "tech",
+    "MNST": "consumer_defensive",
+    "CPRT": "industrials",
+    "AEP": "utilities",
+    "BRK-B": "financial",
+    "LLY": "healthcare",
+    "JPM": "financial",
+    "UNH": "healthcare",
+    "XOM": "energy",
+    "V": "financial",
+    "MA": "financial",
+    "PG": "consumer_defensive",
+    "JNJ": "healthcare",
+    "HD": "consumer_cyclical",
+    "WMT": "consumer_defensive",
+    "ABBV": "healthcare",
+    "BAC": "financial",
+    "KO": "consumer_defensive",
+    "CVX": "energy",
+    "CRM": "tech",
+    "TMO": "healthcare",
+    "WFC": "financial",
+    "MCD": "consumer_cyclical",
+    "ABT": "healthcare",
+    "ACN": "tech",
+    "DIS": "communication",
+    "IBM": "tech",
+    "GE": "industrials",
+    "VZ": "communication",
+    "CAT": "industrials",
+    "DHR": "healthcare",
+    "NOW": "tech",
+    "UBER": "tech",
+    "PFE": "healthcare",
+    "PM": "consumer_defensive",
+    "NEE": "utilities",
+    "SPGI": "financial",
+    "RTX": "industrials",
+    "LOW": "consumer_cyclical",
+    "GS": "financial",
 }
 
 
@@ -63,8 +125,7 @@ class RiskCheck:
 
 
 class RiskManager:
-    def __init__(self, config: RiskConfig | None = None, session: Session | None = None,
-                 file_path: str | None = None):
+    def __init__(self, config: RiskConfig | None = None, session: Session | None = None, file_path: str | None = None):
         self.config = config or RISK_CONFIG
         self._trade_history: list[dict] = []
         self._daily_pnl: list[float] = []
@@ -77,7 +138,9 @@ class RiskManager:
         self._account_liquidated: bool = False
         self._price_history: pd.DataFrame | None = None
         self._correlation_matrix: pd.DataFrame | None = None
-        self._file_path = Path(file_path) if file_path else Path(__file__).resolve().parent.parent / "data" / "risk_state.json"
+        self._file_path = (
+            Path(file_path) if file_path else Path(__file__).resolve().parent.parent / "data" / "risk_state.json"
+        )
         self._alert_callback = None
         self._repo: RiskRepository | None = None
         self._use_db = session is not None
@@ -156,7 +219,9 @@ class RiskManager:
                 "daily_pnl": self._daily_pnl,
                 "consecutive_losses": self._consecutive_losses,
                 "initial_portfolio_value": self._initial_portfolio_value,
-                "circuit_breaker_until": self._circuit_breaker_until.isoformat() if self._circuit_breaker_until else None,
+                "circuit_breaker_until": (
+                    self._circuit_breaker_until.isoformat() if self._circuit_breaker_until else None
+                ),
                 "portfolio_value": self._portfolio_value,
                 "account_liquidated": self._account_liquidated,
             }
@@ -186,13 +251,15 @@ class RiskManager:
                 logger.warning("No se pudo calcular matriz de correlación: %s", exc)
 
     def record_trade(self, ticker: str, side: str, pnl_pct: float, pnl_usd: float) -> None:
-        self._trade_history.append({
-            "ticker": ticker,
-            "side": side,
-            "pnl_pct": pnl_pct,
-            "pnl_usd": pnl_usd,
-            "timestamp": datetime.now().isoformat(),
-        })
+        self._trade_history.append(
+            {
+                "ticker": ticker,
+                "side": side,
+                "pnl_pct": pnl_pct,
+                "pnl_usd": pnl_usd,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
         if pnl_pct < 0:
             self._consecutive_losses += 1
         else:
@@ -487,13 +554,19 @@ class RiskManager:
                 current_sector_value += float(pos.get("market_value", 0))
         new_exposure = (current_sector_value / self._portfolio_value) if self._portfolio_value > 0 else 0
         if new_exposure >= self.config.max_sector_exposure_pct:
-            return False, f"Exposición sectorial ({sector}) excedida: {new_exposure:.1%} ≥ {self.config.max_sector_exposure_pct:.0%}"
+            return (
+                False,
+                f"Exposición sectorial ({sector}) excedida: {new_exposure:.1%} ≥ {self.config.max_sector_exposure_pct:.0%}",
+            )
         return True, f"Exposición sector {sector}: {new_exposure:.1%}"
 
     def _check_concentration(self, ticker: str, amount: float) -> tuple[bool, str]:
         new_exposure = amount / self._portfolio_value if self._portfolio_value > 0 else 0
         if new_exposure > self.config.max_position_concentration_pct:
-            return False, f"Concentración excedida: {new_exposure:.1%} > {self.config.max_position_concentration_pct:.0%}"
+            return (
+                False,
+                f"Concentración excedida: {new_exposure:.1%} > {self.config.max_position_concentration_pct:.0%}",
+            )
         return True, f"Concentración OK ({new_exposure:.1%})"
 
     def _check_correlation(self, ticker: str) -> tuple[bool, str]:
@@ -588,7 +661,11 @@ class RiskManager:
             return 0.5  # fallback conservador
 
         corr = float(self._correlation_matrix.loc[ticker_upper, spy_col])
-        if self._price_history is not None and ticker_upper in self._price_history.columns and spy_col in self._price_history.columns:
+        if (
+            self._price_history is not None
+            and ticker_upper in self._price_history.columns
+            and spy_col in self._price_history.columns
+        ):
             vol_ticker = self._price_history[ticker_upper].pct_change().std() * np.sqrt(252)
             vol_spy = self._price_history[spy_col].pct_change().std() * np.sqrt(252)
             if vol_spy > 0:
@@ -618,7 +695,9 @@ class RiskManager:
             val = float(pos.get("market_value", 0))
             sector_exposures[sector] = sector_exposures.get(sector, 0) + val
         for sector in sector_exposures:
-            sector_exposures[sector] = round(sector_exposures[sector] / self._portfolio_value, 4) if self._portfolio_value > 0 else 0
+            sector_exposures[sector] = (
+                round(sector_exposures[sector] / self._portfolio_value, 4) if self._portfolio_value > 0 else 0
+            )
 
         kelly = self.kelly_suggestion()
 
@@ -637,9 +716,11 @@ class RiskManager:
             "var_daily_95pct": round(var, 4),
             "var_limit": self.config.max_var_daily_pct,
             "portfolio_value": round(self._portfolio_value, 2),
-            "total_exposure_pct": round(
-                sum(float(p.get("market_value", 0)) for p in self._positions_cache) / self._portfolio_value, 4
-            ) if self._portfolio_value > 0 else 0,
+            "total_exposure_pct": (
+                round(sum(float(p.get("market_value", 0)) for p in self._positions_cache) / self._portfolio_value, 4)
+                if self._portfolio_value > 0
+                else 0
+            ),
             "sector_exposures": sector_exposures,
             "kelly": kelly,
             "performance": self.performance_summary(),

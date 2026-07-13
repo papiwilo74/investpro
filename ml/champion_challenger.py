@@ -15,6 +15,7 @@ Flujo:
 El registry en data/champion_registry.json mantiene la historia de decisiones
 para auditoría y para que el engine sepa qué modelo está activo.
 """
+
 from __future__ import annotations
 
 import json
@@ -28,9 +29,9 @@ from config import PROJECT_ROOT
 
 logger = logging.getLogger("inversion_helper.champion_challenger")
 
-PROMO_MARGIN: float = 0.02      # challenger debe vencer al campeón por >= 2pp OOS
+PROMO_MARGIN: float = 0.02  # challenger debe vencer al campeón por >= 2pp OOS
 MIN_CHALLENGER_ACCURACY: float = 0.52  # piso mínimo absoluto para promover
-MAX_AGE_DAYS: int = 14          # re-entrenar si el campeón tiene más de N días
+MAX_AGE_DAYS: int = 14  # re-entrenar si el campeón tiene más de N días
 DRIFT_ACCURACY_FLOOR: float = 0.45  # re-entrenar si accuracy en vivo cae bajo esto
 
 REGISTRY_PATH = PROJECT_ROOT / "data" / "champion_registry.json"
@@ -72,9 +73,7 @@ class ChampionChallenger:
         try:
             self.registry_path.parent.mkdir(parents=True, exist_ok=True)
             payload = {"champions": self._registry, "updated_at": time.time()}
-            self.registry_path.write_text(
-                json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            self.registry_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         except Exception as exc:
             logger.warning("ChampionChallenger: error guardando registro: %s", exc)
 
@@ -172,10 +171,16 @@ class ChampionChallenger:
             "champion_accuracy": champion_acc,
             "challenger_accuracy": challenger_acc,
             "trained_at": time.time(),
-            "champion_meta_summary": {
-                "accuracy": champion_acc,
-                "precision": float(champion_meta.get("metrics", {}).get("precision", 0.0)) if champion_meta else 0.0,
-            } if champion_meta else None,
+            "champion_meta_summary": (
+                {
+                    "accuracy": champion_acc,
+                    "precision": (
+                        float(champion_meta.get("metrics", {}).get("precision", 0.0)) if champion_meta else 0.0
+                    ),
+                }
+                if champion_meta
+                else None
+            ),
         }
         if decision["action"] == "promote":
             entry["accuracy"] = challenger_acc
@@ -186,7 +191,11 @@ class ChampionChallenger:
 
         logger.info(
             "ChampionChallenger %s: %s (champ=%.3f vs chall=%.3f) — %s",
-            ticker, decision["action"], champion_acc, challenger_acc, reason,
+            ticker,
+            decision["action"],
+            champion_acc,
+            challenger_acc,
+            reason,
         )
         return entry
 
@@ -198,9 +207,7 @@ class ChampionChallenger:
 
     # ── Internos ───────────────────────────────────────────────────────
 
-    def _decide(
-        self, challenger_acc: float, champion_acc: float, had_champion: bool
-    ) -> dict[str, str]:
+    def _decide(self, challenger_acc: float, champion_acc: float, had_champion: bool) -> dict[str, str]:
         if not had_champion:
             return {"action": "promote", "reason": "first model (no prior champion)"}
         if challenger_acc < self.min_challenger_accuracy:
@@ -243,6 +250,7 @@ class ChampionChallenger:
             return
         try:
             from ml.model_gate import model_gate
+
             model_gate.evaluate_metadata(ticker, metadata)
         except Exception as exc:
             logger.warning("ChampionChallenger: re-eval gate falló para %s: %s", ticker, exc)

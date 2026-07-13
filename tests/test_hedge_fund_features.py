@@ -1,5 +1,6 @@
 """Tests para las mejoras del nivel hedge fund: ModelGate, Champion/Challenger,
 ShadowTrader, PortfolioAllocator y SmartOrderRouter."""
+
 from __future__ import annotations
 
 import sys
@@ -56,19 +57,25 @@ class TestModelGate:
     def test_persists_across_instances(self, tmp_path):
         path = tmp_path / "gate.json"
         gate1 = ModelGate(registry_path=path)
-        gate1.evaluate_metadata("TSLA", {
-            "metrics": {"accuracy": 0.60, "precision": 0.55, "test_size": 40},
-            "rel_vs_baseline": 0.08,
-        })
+        gate1.evaluate_metadata(
+            "TSLA",
+            {
+                "metrics": {"accuracy": 0.60, "precision": 0.55, "test_size": 40},
+                "rel_vs_baseline": 0.08,
+            },
+        )
         gate2 = ModelGate(registry_path=path)
         assert gate2.is_approved("TSLA") is True
 
     def test_revoke(self, tmp_path):
         gate = ModelGate(registry_path=tmp_path / "gate.json")
-        gate.evaluate_metadata("GOOG", {
-            "metrics": {"accuracy": 0.60, "precision": 0.55, "test_size": 40},
-            "rel_vs_baseline": 0.08,
-        })
+        gate.evaluate_metadata(
+            "GOOG",
+            {
+                "metrics": {"accuracy": 0.60, "precision": 0.55, "test_size": 40},
+                "rel_vs_baseline": 0.08,
+            },
+        )
         assert gate.is_approved("GOOG") is True
         gate.revoke("GOOG", "performance degraded")
         assert gate.is_approved("GOOG") is False
@@ -79,10 +86,13 @@ class TestModelGate:
 
     def test_get_status_returns_entry_for_known(self, tmp_path):
         gate = ModelGate(registry_path=tmp_path / "gate.json")
-        gate.evaluate_metadata("AAPL", {
-            "metrics": {"accuracy": 0.65, "precision": 0.60, "test_size": 50},
-            "rel_vs_baseline": 0.10,
-        })
+        gate.evaluate_metadata(
+            "AAPL",
+            {
+                "metrics": {"accuracy": 0.65, "precision": 0.60, "test_size": 50},
+                "rel_vs_baseline": 0.10,
+            },
+        )
         status = gate.get_status("AAPL")
         assert status is not None
         assert status["approved"] is True
@@ -90,14 +100,20 @@ class TestModelGate:
 
     def test_all_status_returns_all_entries(self, tmp_path):
         gate = ModelGate(registry_path=tmp_path / "gate.json")
-        gate.evaluate_metadata("AAPL", {
-            "metrics": {"accuracy": 0.65, "precision": 0.60, "test_size": 50},
-            "rel_vs_baseline": 0.10,
-        })
-        gate.evaluate_metadata("MSFT", {
-            "metrics": {"accuracy": 0.45, "precision": 0.50, "test_size": 50},
-            "rel_vs_baseline": 0.0,
-        })
+        gate.evaluate_metadata(
+            "AAPL",
+            {
+                "metrics": {"accuracy": 0.65, "precision": 0.60, "test_size": 50},
+                "rel_vs_baseline": 0.10,
+            },
+        )
+        gate.evaluate_metadata(
+            "MSFT",
+            {
+                "metrics": {"accuracy": 0.45, "precision": 0.50, "test_size": 50},
+                "rel_vs_baseline": 0.0,
+            },
+        )
         all_s = gate.all_status()
         assert "AAPL" in all_s
         assert "MSFT" in all_s
@@ -179,14 +195,17 @@ class TestChampionChallenger:
 class TestShadowTrader:
     def test_record_and_resolve(self, tmp_path):
         from ml.ensemble import EnsembleResult, ModelSignal
+
         fetcher = MagicMock()
         # Precio sube → actual BULLISH
         fetcher.get_data.return_value = pd.DataFrame(
             {"close": [100.0, 105.0]}, index=pd.date_range("2024-01-01", periods=2)
         )
         st = ShadowTrader(
-            fetcher=fetcher, db_path=tmp_path / "shadow.sqlite3",
-            horizon_days=0, drift_min_samples=1,
+            fetcher=fetcher,
+            db_path=tmp_path / "shadow.sqlite3",
+            horizon_days=0,
+            drift_min_samples=1,
         )
         result = EnsembleResult(
             consensus_direction="BULLISH",
@@ -205,14 +224,18 @@ class TestShadowTrader:
 
     def test_drift_detection(self, tmp_path):
         from ml.ensemble import EnsembleResult, ModelSignal
+
         fetcher = MagicMock()
         # Precio baja siempre → predicción BULLISH siempre incorrecta
         fetcher.get_data.return_value = pd.DataFrame(
             {"close": [100.0, 95.0]}, index=pd.date_range("2024-01-01", periods=2)
         )
         st = ShadowTrader(
-            fetcher=fetcher, db_path=tmp_path / "shadow.sqlite3",
-            horizon_days=0, drift_threshold=0.6, drift_min_samples=2,
+            fetcher=fetcher,
+            db_path=tmp_path / "shadow.sqlite3",
+            horizon_days=0,
+            drift_threshold=0.6,
+            drift_min_samples=2,
         )
         result = EnsembleResult(
             consensus_direction="BULLISH",
@@ -272,9 +295,7 @@ class TestPortfolioAllocator:
         nvda = 100 + np.cumsum(np.random.RandomState(2).randn(60) * 5.0)
 
         def get_data(ticker, **kwargs):
-            return pd.DataFrame(
-                {"close": {"AAPL": aapl, "NVDA": nvda}[ticker]}, index=dates
-            )
+            return pd.DataFrame({"close": {"AAPL": aapl, "NVDA": nvda}[ticker]}, index=dates)
 
         fetcher.get_data.side_effect = get_data
         alloc = PortfolioAllocator(fetcher=fetcher, max_weight=0.25)
@@ -317,9 +338,12 @@ class TestSmartOrderRouter:
         client = MagicMock()
         client.client = MagicMock()
         client.place_market_order.return_value = {
-            "status": "success", "order_id": "1", "filled_avg_price": 100.5,
+            "status": "success",
+            "order_id": "1",
+            "filled_avg_price": 100.5,
         }
         from broker.smart_router import SmartOrderRouter
+
         router = SmartOrderRouter(client, db_path=tmp_path / "sr.sqlite3")
         result = router.execute("AAPL", 5, "BUY", 100.0, strategy="auto", use_limit=False)
         assert result["status"] == "success"
@@ -330,9 +354,12 @@ class TestSmartOrderRouter:
         client.client = MagicMock()
         client.get_latest_quote.return_value = {"bid": 99.5, "ask": 100.5, "mid": 100.0}
         client.place_limit_order.return_value = {
-            "status": "success", "order_id": "1", "filled_avg_price": 100.5,
+            "status": "success",
+            "order_id": "1",
+            "filled_avg_price": 100.5,
         }
         from broker.smart_router import SmartOrderRouter
+
         router = SmartOrderRouter(client, db_path=tmp_path / "sr.sqlite3")
         result = router.execute("AAPL", 50, "BUY", 100.0, strategy="limit_retest")
         assert result["status"] == "success"
@@ -344,12 +371,18 @@ class TestSmartOrderRouter:
         client.get_latest_quote.return_value = {"bid": 99.5, "ask": 100.5, "mid": 100.0}
         client.get_latest_price.return_value = 100.0
         client.place_limit_order.return_value = {
-            "status": "success", "order_id": "1", "filled_avg_price": 100.5,
+            "status": "success",
+            "order_id": "1",
+            "filled_avg_price": 100.5,
         }
         from broker.smart_router import SmartOrderRouter
+
         router = SmartOrderRouter(
-            client, db_path=tmp_path / "sr.sqlite3",
-            twap_threshold=1000.0, twap_slices=3, twap_interval=0,
+            client,
+            db_path=tmp_path / "sr.sqlite3",
+            twap_threshold=1000.0,
+            twap_slices=3,
+            twap_interval=0,
         )
         # notional = 200 * 100 = 20000 > 1000 → TWAP
         result = router.execute("AAPL", 200, "BUY", 100.0, strategy="auto")
@@ -362,9 +395,12 @@ class TestSmartOrderRouter:
         client = MagicMock()
         client.client = MagicMock()
         client.place_market_order.return_value = {
-            "status": "success", "order_id": "1", "filled_avg_price": 100.5,
+            "status": "success",
+            "order_id": "1",
+            "filled_avg_price": 100.5,
         }
         from broker.smart_router import SmartOrderRouter
+
         router = SmartOrderRouter(client, db_path=tmp_path / "sr.sqlite3")
         router.execute("AAPL", 10, "BUY", 100.0, strategy="auto", use_limit=False)
         stats = router.slippage_stats("AAPL")
@@ -376,9 +412,12 @@ class TestSmartOrderRouter:
         client = MagicMock()
         client.client = MagicMock()
         client.place_market_order.return_value = {
-            "status": "success", "order_id": "1", "filled_avg_price": 100.5,
+            "status": "success",
+            "order_id": "1",
+            "filled_avg_price": 100.5,
         }
         from broker.smart_router import SmartOrderRouter
+
         router = SmartOrderRouter(client, db_path=tmp_path / "sr.sqlite3")
         router.execute("AAPL", 10, "BUY", 100.0, strategy="auto", use_limit=False)
         stats = router.slippage_stats()
@@ -386,6 +425,7 @@ class TestSmartOrderRouter:
 
     def test_slippage_stats_empty(self, tmp_path):
         from broker.smart_router import SmartOrderRouter
+
         router = SmartOrderRouter(MagicMock(), db_path=tmp_path / "sr.sqlite3")
         stats = router.slippage_stats("AAPL")
         assert stats["count"] == 0
@@ -393,12 +433,14 @@ class TestSmartOrderRouter:
 
     def test_execute_zero_qty(self, tmp_path):
         from broker.smart_router import SmartOrderRouter
+
         router = SmartOrderRouter(MagicMock(), db_path=tmp_path / "sr.sqlite3")
         result = router.execute("AAPL", 0, "BUY", 100.0)
         assert result["status"] == "error"
 
     def test_execute_no_client(self, tmp_path):
         from broker.smart_router import SmartOrderRouter
+
         router = SmartOrderRouter(MagicMock(), db_path=tmp_path / "sr.sqlite3")
         router.client = None
         result = router.execute("AAPL", 10, "BUY", 100.0)

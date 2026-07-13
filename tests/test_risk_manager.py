@@ -1,4 +1,5 @@
 """Tests for RiskManager (JSON and DB modes)."""
+
 from datetime import datetime, timedelta
 
 import pytest
@@ -108,6 +109,12 @@ class TestRiskManagerJson:
     def test_to_dict_contains_all_keys(self, tmp_path):
         rm = self._make_rm(tmp_path)
         d = rm.to_dict()
-        for key in ["daily_pnl_pct", "consecutive_losses", "circuit_breaker_active",
-                     "account_liquidated", "portfolio_value", "total_trades_risk_logged"]:
+        for key in [
+            "daily_pnl_pct",
+            "consecutive_losses",
+            "circuit_breaker_active",
+            "account_liquidated",
+            "portfolio_value",
+            "total_trades_risk_logged",
+        ]:
             assert key in d

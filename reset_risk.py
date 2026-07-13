@@ -1,4 +1,5 @@
 """Reset circuit breaker and clean up stale state."""
+
 import json
 from pathlib import Path
 
@@ -34,8 +35,9 @@ try:
     print("HOF OK")
 except json.JSONDecodeError:
     import re
+
     t = hp.read_text()
-    t = re.sub(r':\s*-?Infinity', ': null', t)
-    t = re.sub(r':\s*NaN', ': null', t)
+    t = re.sub(r":\s*-?Infinity", ": null", t)
+    t = re.sub(r":\s*NaN", ": null", t)
     hp.write_text(t)
     print("HOF reparado (Infinity/NaN reemplazado)")

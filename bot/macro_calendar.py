@@ -15,21 +15,16 @@ class MacroTracker:
         - VIX > 25: Miedo
         - VIX > 30: Pánico extremo (Crac potencial)
         """
-        status = {
-            "vix_level": 15.0,
-            "vix_change": 0.0,
-            "panic_mode": False,
-            "status": "OK"
-        }
+        status = {"vix_level": 15.0, "vix_change": 0.0, "panic_mode": False, "status": "OK"}
 
         try:
             # Obtener datos de los últimos 2 días para calcular el cambio
-            data = yf.download(self.tickers, period="5d", interval="1d", progress=False)['Close']
+            data = yf.download(self.tickers, period="5d", interval="1d", progress=False)["Close"]
 
-            if data.empty or '^VIX' not in data.columns:
+            if data.empty or "^VIX" not in data.columns:
                 return status
 
-            vix_series = data['^VIX'].dropna()
+            vix_series = data["^VIX"].dropna()
             if len(vix_series) < 2:
                 return status
 
@@ -52,6 +47,7 @@ class MacroTracker:
             # Fallback seguro
             status["status"] = "ERROR"
             return status
+
 
 if __name__ == "__main__":
     tracker = MacroTracker()

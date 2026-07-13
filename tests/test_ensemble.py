@@ -1,4 +1,5 @@
 """Tests for the AdaptiveEnsemble module."""
+
 from __future__ import annotations
 
 import sys
@@ -219,3 +220,100 @@ class TestAdaptiveEnsemble:
         rl = ModelSignal(direction="BEARISH", probability=0.7, score=-0.3)
         result = e.predict(regime="BEAR", rl_agent_signal=rl)
         assert "rl_agent" in result.model_signals
+
+    def test_lstm_signal(self):
+        e = AdaptiveEnsemble()
+        lstm = ModelSignal(direction="BULLISH", probability=0.8, score=0.6)
+        result = e.predict(regime="BULL", lstm_signal=lstm)
+        assert "lstm" in result.model_signals
+        assert result.blended_score > 0
+
+    def test_panel_signal_bullish(self):
+        e = AdaptiveEnsemble()
+        panel = ModelSignal(direction="BULLISH", probability=0.85, score=0.7)
+        result = e.predict(regime="BULL", panel_signal=panel)
+        assert "panel" in result.model_signals
+        assert result.blended_score > 0
+
+    def test_panel_signal_bearish(self):
+        e = AdaptiveEnsemble()
+        panel = ModelSignal(direction="BEARISH", probability=0.75, score=-0.5)
+        result = e.predict(regime="BULL", panel_signal=panel)
+        assert "panel" in result.model_signals
+        assert result.blended_score < 0
+
+    def test_ppo_signal(self):
+        e = AdaptiveEnsemble()
+        ppo = ModelSignal(direction="BEARISH", probability=0.6, score=-0.3)
+        result = e.predict(regime="BEAR", ppo_signal=ppo)
+        assert "ppo" in result.model_signals
+        assert result.blended_score < 0
+
+    def test_all_eight_signals_together(self):
+        e = AdaptiveEnsemble()
+        xgb = ModelSignal(direction="BULLISH", probability=0.9, score=0.8)
+        nn = ModelSignal(direction="BULLISH", probability=0.7, score=0.5)
+        rl = ModelSignal(direction="BULLISH", probability=0.6, score=0.3)
+        adv = ModelSignal(direction="BULLISH", probability=0.8, score=0.6)
+        lstm = ModelSignal(direction="BULLISH", probability=0.7, score=0.4)
+        panel = ModelSignal(direction="BULLISH", probability=0.9, score=0.8)
+        ppo = ModelSignal(direction="BULLISH", probability=0.6, score=0.2)
+        result = e.predict(
+            regime="BULL",
+            xgboost_signal=xgb,
+            neural_brain_signal=nn,
+            rl_agent_signal=rl,
+            online_advisor_signal=adv,
+            ta_score=0.5,
+            lstm_signal=lstm,
+            panel_signal=panel,
+            ppo_signal=ppo,
+        )
+        assert len(result.model_signals) == 8
+        assert len(result.model_weights) == 8
+        assert result.consensus_direction == "BULLISH"
+        assert result.blended_score > 0
+        assert result.confidence > 0.5
+
+    def test_all_eight_bearish(self):
+        e = AdaptiveEnsemble()
+        xgb = ModelSignal(direction="BEARISH", probability=0.9, score=-0.8)
+        nn = ModelSignal(direction="BEARISH", probability=0.7, score=-0.5)
+        rl = ModelSignal(direction="BEARISH", probability=0.6, score=-0.3)
+        adv = ModelSignal(direction="BEARISH", probability=0.8, score=-0.6)
+        lstm = ModelSignal(direction="BEARISH", probability=0.7, score=-0.4)
+        panel = ModelSignal(direction="BEARISH", probability=0.9, score=-0.8)
+        ppo = ModelSignal(direction="BEARISH", probability=0.6, score=-0.2)
+        result = e.predict(
+            regime="BEAR",
+            xgboost_signal=xgb,
+            neural_brain_signal=nn,
+            rl_agent_signal=rl,
+            online_advisor_signal=adv,
+            ta_score=-0.5,
+            lstm_signal=lstm,
+            panel_signal=panel,
+            ppo_signal=ppo,
+        )
+        assert len(result.model_signals) == 8
+        assert result.consensus_direction == "BEARISH"
+        assert result.blended_score < 0
+
+    def test_split_consensus_four_vs_four(self):
+        e = AdaptiveEnsemble()
+        bullish = ModelSignal(direction="BULLISH", probability=0.9, score=0.8)
+        bearish = ModelSignal(direction="BEARISH", probability=0.9, score=-0.8)
+        result = e.predict(
+            regime="BULL",
+            xgboost_signal=bullish,
+            neural_brain_signal=bullish,
+            rl_agent_signal=bullish,
+            online_advisor_signal=bullish,
+            ta_score=0.5,
+            lstm_signal=bearish,
+            panel_signal=bearish,
+            ppo_signal=bearish,
+        )
+        # 4 BULLISH + ta (0.5 → BULLISH) = 5 vs 3 BEARISH → consensus should be BULLISH
+        assert result.consensus_direction == "BULLISH"
+        assert len(result.model_signals) == 8

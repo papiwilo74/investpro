@@ -19,6 +19,7 @@ Rebalanceo:
   Solo se rebalancea si la desviación vs. target > REBALANCE_THRESHOLD
   (evita churn por costos de transacción).
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,9 +33,9 @@ from data.fetcher import DataFetcher
 
 logger = logging.getLogger("inversion_helper.portfolio_allocator")
 
-REBALANCE_THRESHOLD = 0.20      # rebalancear si desviación > 20% del target
-MAX_WEIGHT_PER_TICKER = 0.15    # cap duro (15%) incluso si risk-parity da más
-MIN_WEIGHT_TO_INCLUDE = 0.02    # no incluir tickers con target < 2%
+REBALANCE_THRESHOLD = 0.20  # rebalancear si desviación > 20% del target
+MAX_WEIGHT_PER_TICKER = 0.15  # cap duro (15%) incluso si risk-parity da más
+MIN_WEIGHT_TO_INCLUDE = 0.02  # no incluir tickers con target < 2%
 LOOKBACK_PERIOD = "1y"
 
 
@@ -150,21 +151,25 @@ class PortfolioAllocator:
                 continue
 
             if delta > 0:
-                plan.append({
-                    "ticker": ticker,
-                    "action": "BUY",
-                    "delta_usd": delta,
-                    "current_weight": round(current_w, 4),
-                    "target_weight": round(target_w, 4),
-                })
+                plan.append(
+                    {
+                        "ticker": ticker,
+                        "action": "BUY",
+                        "delta_usd": delta,
+                        "current_weight": round(current_w, 4),
+                        "target_weight": round(target_w, 4),
+                    }
+                )
             elif delta < 0 and current_value > 0:
-                plan.append({
-                    "ticker": ticker,
-                    "action": "SELL",
-                    "delta_usd": delta,
-                    "current_weight": round(current_w, 4),
-                    "target_weight": round(target_w, 4),
-                })
+                plan.append(
+                    {
+                        "ticker": ticker,
+                        "action": "SELL",
+                        "delta_usd": delta,
+                        "current_weight": round(current_w, 4),
+                        "target_weight": round(target_w, 4),
+                    }
+                )
         return plan
 
     # ── Métodos de weighting ───────────────────────────────────────────
@@ -199,6 +204,7 @@ class PortfolioAllocator:
         """Min-variance usando el PortfolioOptimizer existente."""
         try:
             from portfolio.optimizer import PortfolioOptimizer
+
             opt = PortfolioOptimizer(data_fetcher=self.fetcher)
             cov = returns.cov() * 252
             mean_ret = returns.mean() * 252

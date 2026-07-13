@@ -277,7 +277,7 @@ class PolygonProvider(DataProvider):
         multiplier, timespan = self._parse_interval(interval)
         start, end = self._parse_period(period)
 
-        url = f"{self._BASE}/v2/aggs/ticker/{ticker.upper()}/range/" f"{multiplier}/{timespan}/{start}/{end}"
+        url = f"{self._BASE}/v2/aggs/ticker/{ticker.upper()}/range/{multiplier}/{timespan}/{start}/{end}"
         params = {"apiKey": self.api_key, "limit": 50000, "adjusted": "true"}
 
         t0 = time.time()

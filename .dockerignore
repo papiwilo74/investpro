@@ -7,10 +7,16 @@ __pycache__/
 node_modules/
 frontend/node_modules/
 frontend/dist/
-frontend/src/
+api/static/
 *.log
 logs/
 .cache/
 data/cache/
 .env
+.env.*
+.agents/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
 .DS_Store

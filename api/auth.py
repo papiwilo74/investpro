@@ -2,6 +2,7 @@
 
 Single-user mode. Protege los endpoints del bot con token JWT (Bearer).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -69,10 +70,11 @@ async def get_current_user(
 
 
 # ── Endpoints de autenticación ────────────────────────────────────────
+from api.schemas import LoginRequest, LoginResponse
+
 
 def register_auth_routes(app) -> None:
     """Registra los endpoints de login en la app de FastAPI."""
-    from api.schemas import LoginRequest, LoginResponse
 
     @app.post("/api/auth/login", response_model=LoginResponse)
     async def login(body: LoginRequest):

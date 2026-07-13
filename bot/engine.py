@@ -479,6 +479,12 @@ class TradingBot:
         self._restore_state()
         self._task = asyncio.create_task(self._run_loop())
         self._log("Bot iniciado (async).")
+        try:
+            from api.metrics import bot_running as _br
+
+            _br.set(1)
+        except Exception:
+            pass
         notifier.bot_started(self.strategy_mode)
 
     def stop(self):
@@ -486,6 +492,12 @@ class TradingBot:
         BROKER_CONFIG.bot_active = False
         self.state.set_state("bot_status", "stopped")
         self._log("Bot detenido.")
+        try:
+            from api.metrics import bot_running as _br
+
+            _br.set(0)
+        except Exception:
+            pass
         self._save_position_states()
         notifier.bot_stopped("manual")
         if self._db_session is not None:
@@ -906,6 +918,14 @@ class TradingBot:
             # Filtro de mercado amplio (SPY/VIX)
             market_regime = self._check_market_regime()
 
+            # Consultar Online Learning Advisor antes de decide (para alimentar el ensemble)
+            advisor_action = None
+            advisor_decision = None
+            if not has_position:
+                advisor_decision = self._get_advisor_decision(ticker, df, score, market_regime)
+                if advisor_decision:
+                    advisor_action = advisor_decision.get("action")
+
             decision = self.brain.decide(
                 df=df,
                 score=score,
@@ -917,6 +937,7 @@ class TradingBot:
                 ticker=ticker,
                 weekly_trend=weekly_trend,
                 market_regime=ticker_regime,
+                advisor_action=advisor_action,
             )
 
             self._log(
@@ -961,8 +982,7 @@ class TradingBot:
                 self._log(f"CHECKLIST {ticker}: {' | '.join(checks)}")
                 if passed:
                     last = df.iloc[-1]
-                    # Consultar Online Learning Advisor (solo en modo web)
-                    advisor_decision = self._get_advisor_decision(ticker, df, score, market_regime)
+                    # Reutilizar la decisión del advisor ya computada antes de decide()
                     if advisor_decision:
                         self._log(
                             f"ONLINE ADVISOR {ticker}: accion={advisor_decision['action']} "
@@ -1225,6 +1245,18 @@ class TradingBot:
                 total_trades=total_trades,
             )
             self.perf_tracker.compute_rolling_metrics()
+
+            try:
+                from api.metrics import daily_pnl as _dp_g
+                from api.metrics import open_positions as _op_g
+                from api.metrics import portfolio_value as _pv_g
+
+                _pv_g.labels(account="main").set(equity)
+                _op_g.set(len(positions))
+                pnl_today = acc.get("pnl_pct_today", 0) / 100 if acc.get("pnl_pct_today") else 0
+                _dp_g.set(pnl_today)
+            except Exception:
+                pass
         except Exception as exc:
             logger.warning("Error en telemetría diaria: %s", exc)
 

@@ -1,4 +1,5 @@
 """Backtest engine for the live bot decision logic."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -53,7 +54,7 @@ class BotBacktestEngine:
         shares = 0.0
         entry_price = 0.0
         entry_date = None
-        current_side = "LONG"   # LONG, DIP, SHORT
+        current_side = "LONG"  # LONG, DIP, SHORT
         trades: list[Trade] = []
         equity_values: list[float] = []
         equity_dates: list = []
@@ -65,17 +66,21 @@ class BotBacktestEngine:
         if self.strategy_params.use_regime_filter:
             try:
                 import yfinance as yf
+
                 if BotBacktestEngine._spy_cache is None:
                     BotBacktestEngine._spy_cache = yf.download("SPY", period="5y", interval="1d", progress=False)
                     if not BotBacktestEngine._spy_cache.empty:
-                        close_col = BotBacktestEngine._spy_cache['Close']
+                        close_col = BotBacktestEngine._spy_cache["Close"]
                         if isinstance(close_col, pd.DataFrame):
                             close_col = close_col.iloc[:, 0]
-                        BotBacktestEngine._spy_cache['SMA50'] = close_col.rolling(50).mean()
-                        BotBacktestEngine._spy_cache['Regime'] = ["BULL" if pd.notna(sma) and c > sma else "BEAR" for c, sma in zip(close_col, BotBacktestEngine._spy_cache['SMA50'])]
+                        BotBacktestEngine._spy_cache["SMA50"] = close_col.rolling(50).mean()
+                        BotBacktestEngine._spy_cache["Regime"] = [
+                            "BULL" if pd.notna(sma) and c > sma else "BEAR"
+                            for c, sma in zip(close_col, BotBacktestEngine._spy_cache["SMA50"])
+                        ]
 
                 spy = BotBacktestEngine._spy_cache
-                if spy is not None and not spy.empty and 'Regime' in spy:
+                if spy is not None and not spy.empty and "Regime" in spy:
                     for j, date in enumerate(df.index):
                         # Evitar problemas de timezone
                         dt = pd.to_datetime(date)
@@ -86,7 +91,7 @@ class BotBacktestEngine:
                         valid_dates = [d.tz_localize(None) if d.tz is not None else d for d in spy.index]
                         diffs = [abs((d - dt).total_seconds()) for d in valid_dates]
                         best_idx = diffs.index(min(diffs))
-                        regimes[j] = spy['Regime'].iloc[best_idx]
+                        regimes[j] = spy["Regime"].iloc[best_idx]
             except Exception:
                 pass
         sma50 = df["close"].rolling(50).mean()
@@ -102,7 +107,7 @@ class BotBacktestEngine:
             date = df.index[i]
             close = float(df["close"].iloc[i])
             score = float(scores.iloc[i])
-            prev_score = float(scores.iloc[i-1]) if i > 0 else 0.0
+            prev_score = float(scores.iloc[i - 1]) if i > 0 else 0.0
             has_position = shares != 0.0
 
             decision = self.brain.decide(
@@ -118,7 +123,7 @@ class BotBacktestEngine:
                 prev_score=prev_score,
                 weekly_trend=weekly_trends[i],
                 market_regime=regimes[i],
-                earnings_blackout=False, # Yfinance no provee histórico de earnings fácil
+                earnings_blackout=False,  # Yfinance no provee histórico de earnings fácil
             )
 
             # ── Abrir LONG o DIP ───────────────────────────────────
@@ -137,7 +142,9 @@ class BotBacktestEngine:
                     entry_price = exec_price
                     entry_date = date
                     current_side = decision.side  # "LONG" o "DIP"
-                    self.brain.on_position_opened(ticker=ticker, entry_price=exec_price, df=df, current_index=i, side=current_side)
+                    self.brain.on_position_opened(
+                        ticker=ticker, entry_price=exec_price, df=df, current_index=i, side=current_side
+                    )
 
             # ── Cerrar LONG / DIP ──────────────────────────────────
             elif decision.action == "SELL" and has_position and shares > 0:
@@ -150,18 +157,20 @@ class BotBacktestEngine:
                 pnl = revenue - (entry_price * sell_qty) - comm
                 pnl_pct = pnl / (entry_price * sell_qty)
 
-                trades.append(Trade(
-                    entry_date=entry_date,
-                    exit_date=date,
-                    side=current_side,
-                    entry_price=entry_price,
-                    exit_price=exec_price,
-                    shares=sell_qty,
-                    pnl=pnl,
-                    pnl_pct=pnl_pct,
-                    commission=comm,
-                    reason=decision.reason,
-                ))
+                trades.append(
+                    Trade(
+                        entry_date=entry_date,
+                        exit_date=date,
+                        side=current_side,
+                        entry_price=entry_price,
+                        exit_price=exec_price,
+                        shares=sell_qty,
+                        pnl=pnl,
+                        pnl_pct=pnl_pct,
+                        commission=comm,
+                        reason=decision.reason,
+                    )
+                )
 
                 capital += revenue - comm
                 shares -= sell_qty
@@ -183,7 +192,9 @@ class BotBacktestEngine:
                     entry_price = exec_price
                     entry_date = date
                     current_side = "SHORT"
-                    self.brain.on_position_opened(ticker=ticker, entry_price=exec_price, df=df, current_index=i, side="SHORT")
+                    self.brain.on_position_opened(
+                        ticker=ticker, entry_price=exec_price, df=df, current_index=i, side="SHORT"
+                    )
 
             # ── Cubrir SHORT (COVER) ───────────────────────────────
             elif decision.action == "COVER" and has_position and shares < 0:
@@ -193,18 +204,20 @@ class BotBacktestEngine:
                 comm = self._commission(exec_price, short_qty)
                 pnl_pct = pnl / (entry_price * short_qty)
 
-                trades.append(Trade(
-                    entry_date=entry_date,
-                    exit_date=date,
-                    side="SHORT",
-                    entry_price=entry_price,
-                    exit_price=exec_price,
-                    shares=short_qty,
-                    pnl=pnl - comm,
-                    pnl_pct=pnl_pct,
-                    commission=comm,
-                    reason=decision.reason,
-                ))
+                trades.append(
+                    Trade(
+                        entry_date=entry_date,
+                        exit_date=date,
+                        side="SHORT",
+                        entry_price=entry_price,
+                        exit_price=exec_price,
+                        shares=short_qty,
+                        pnl=pnl - comm,
+                        pnl_pct=pnl_pct,
+                        commission=comm,
+                        reason=decision.reason,
+                    )
+                )
 
                 capital += pnl - comm
                 shares = 0.0
@@ -270,19 +283,21 @@ class StrategyOptimizer:
             score = -999.0
             if m["total_trades"] > 0:
                 score = m["sharpe_ratio"] + m["retorno_total"] + m["max_drawdown"]
-            rows.append({
-                "buy_score_threshold": buy,
-                "sell_score_threshold": sell,
-                "stop_loss_pct": stop,
-                "take_profit_pct": take,
-                "trailing_stop_atr_mult": trail,
-                "require_price_above_sma200": use_sma,
-                "retorno_total": m["retorno_total"],
-                "sharpe_ratio": m["sharpe_ratio"],
-                "max_drawdown": m["max_drawdown"],
-                "profit_factor": m["profit_factor"],
-                "total_trades": m["total_trades"],
-                "score": score,
-            })
+            rows.append(
+                {
+                    "buy_score_threshold": buy,
+                    "sell_score_threshold": sell,
+                    "stop_loss_pct": stop,
+                    "take_profit_pct": take,
+                    "trailing_stop_atr_mult": trail,
+                    "require_price_above_sma200": use_sma,
+                    "retorno_total": m["retorno_total"],
+                    "sharpe_ratio": m["sharpe_ratio"],
+                    "max_drawdown": m["max_drawdown"],
+                    "profit_factor": m["profit_factor"],
+                    "total_trades": m["total_trades"],
+                    "score": score,
+                }
+            )
 
         return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)

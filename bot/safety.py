@@ -1,4 +1,5 @@
 """Paper-trading safety journal and consistency checks."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -167,12 +168,8 @@ class SignalJournal:
             total = conn.execute("SELECT COUNT(*) FROM paper_signals").fetchone()[0]
             closed = conn.execute("SELECT COUNT(*) FROM paper_signals WHERE status = 'CLOSED'").fetchone()[0]
             wins = conn.execute("SELECT COUNT(*) FROM paper_signals WHERE outcome = 'WIN'").fetchone()[0]
-            avg_return = conn.execute(
-                "SELECT AVG(return_pct) FROM paper_signals WHERE status = 'CLOSED'"
-            ).fetchone()[0]
-            dates = conn.execute(
-                "SELECT MIN(created_at), MAX(created_at) FROM paper_signals"
-            ).fetchone()
+            avg_return = conn.execute("SELECT AVG(return_pct) FROM paper_signals WHERE status = 'CLOSED'").fetchone()[0]
+            dates = conn.execute("SELECT MIN(created_at), MAX(created_at) FROM paper_signals").fetchone()
 
         days_observed = 0
         if dates and dates[0] and dates[1]:
@@ -198,9 +195,15 @@ class SignalJournal:
         stats = self.summary()
         checks = [
             (stats["days_observed"] >= min_days, f"faltan dias de observacion ({stats['days_observed']}/{min_days})"),
-            (stats["closed_signals"] >= min_closed_signals, f"faltan senales cerradas ({stats['closed_signals']}/{min_closed_signals})"),
+            (
+                stats["closed_signals"] >= min_closed_signals,
+                f"faltan senales cerradas ({stats['closed_signals']}/{min_closed_signals})",
+            ),
             (stats["win_rate"] >= min_win_rate, f"win rate insuficiente ({stats['win_rate']:.1%}/{min_win_rate:.1%})"),
-            (stats["avg_return_pct"] >= min_avg_return_pct, f"retorno promedio insuficiente ({stats['avg_return_pct']:.2%}/{min_avg_return_pct:.2%})"),
+            (
+                stats["avg_return_pct"] >= min_avg_return_pct,
+                f"retorno promedio insuficiente ({stats['avg_return_pct']:.2%}/{min_avg_return_pct:.2%})",
+            ),
         ]
         failed = [reason for ok, reason in checks if not ok]
         return SafetyGate(

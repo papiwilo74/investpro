@@ -6,6 +6,7 @@ si el entorno es favorable para estrategias LONG.
 Principio de seguridad: si no podemos leer los datos, el default es
 UNFAVORABLE (no operar), no FAVORABLE (operar a ciegas).
 """
+
 from __future__ import annotations
 
 import logging

@@ -57,7 +57,11 @@ def generate_advisor_briefing(ticker: str, df: pd.DataFrame, trainer: ModelTrain
 
     # Indicadores específicos
     rsi = df["rsi"].iloc[-1] if "rsi" in df.columns else 50
-    rsi_status = "SOBRECOMPRA (Alto riesgo de corrección)" if rsi > 70 else ("SOBREVENTA (Atractivo para comprar)" if rsi < 30 else "Neutral")
+    rsi_status = (
+        "SOBRECOMPRA (Alto riesgo de corrección)"
+        if rsi > 70
+        else ("SOBREVENTA (Atractivo para comprar)" if rsi < 30 else "Neutral")
+    )
 
     macd_hist = df["macd_histogram"].iloc[-1] if "macd_histogram" in df.columns else 0
     macd_status = "Impulso Alcista" if macd_hist > 0 else "Impulso Bajista"
@@ -70,8 +74,9 @@ def generate_advisor_briefing(ticker: str, df: pd.DataFrame, trainer: ModelTrain
         "rsi_status": rsi_status,
         "macd_status": macd_status,
         "ml_direction": ml_direction,
-        "ml_prob": ml_prob
+        "ml_prob": ml_prob,
     }
+
 
 def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
     """Renderiza la pestaña de asesoría financiera interactiva."""
@@ -86,20 +91,20 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
     # Tarjeta Principal de Asesoría
     st.markdown(
         f"""
-        <div class="advisor-card" style="border: 2px solid {brief['color']}; border-radius: 12px; padding: 24px; margin-bottom: 25px;">
+        <div class="advisor-card" style="border: 2px solid {brief["color"]}; border-radius: 12px; padding: 24px; margin-bottom: 25px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-size: 16px; color: #57606a; font-weight: 600;">RECOMENDACIÓN ADVISOR</span>
-                <span style="background-color: {brief['color']}15; color: {brief['color']}; border: 1px solid {brief['color']}; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 14px;">
-                    {brief['verdict']}
+                <span style="background-color: {brief["color"]}15; color: {brief["color"]}; border: 1px solid {brief["color"]}; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 14px;">
+                    {brief["verdict"]}
                 </span>
             </div>
             <h3 style="margin-top: 15px; margin-bottom: 10px; font-size: 22px; color: #24292f;">Consejo de Acción Directa:</h3>
             <p style="font-size: 16px; line-height: 1.6; color: #24292f; margin-bottom: 0;">
-                {brief['advice']}
+                {brief["advice"]}
             </p>
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     # Columnas de variables de apoyo
@@ -110,11 +115,11 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
             f"""
             <div class="advisor-stat-card" style="border: 1px solid #e1e4e6; border-radius: 12px; padding: 16px; text-align: center; height: 100%;">
                 <h5 style="margin: 0; color: #57606a; font-size: 14px;">Fuerza del RSI (14)</h5>
-                <p style="font-size: 24px; font-weight: 700; margin: 10px 0; color: #0969da;">{brief['rsi']:.1f}</p>
-                <span style="font-size: 12px; color: #57606a;">{brief['rsi_status']}</span>
+                <p style="font-size: 24px; font-weight: 700; margin: 10px 0; color: #0969da;">{brief["rsi"]:.1f}</p>
+                <span style="font-size: 12px; color: #57606a;">{brief["rsi_status"]}</span>
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
     with c2:
@@ -122,19 +127,19 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
             f"""
             <div class="advisor-stat-card" style="border: 1px solid #e1e4e6; border-radius: 12px; padding: 16px; text-align: center; height: 100%;">
                 <h5 style="margin: 0; color: #57606a; font-size: 14px;">Impulso MACD</h5>
-                <p style="font-size: 20px; font-weight: 700; margin: 12px 0; color: #bc4c00;">{brief['macd_status']}</p>
+                <p style="font-size: 20px; font-weight: 700; margin: 12px 0; color: #bc4c00;">{brief["macd_status"]}</p>
                 <span style="font-size: 12px; color: #57606a;">Basado en histograma diario</span>
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
     with c3:
         ml_txt = "Sin modelo entrenado"
         ml_col = "#57606a"
-        if brief['ml_direction'] != "N/A":
+        if brief["ml_direction"] != "N/A":
             ml_txt = f"{brief['ml_direction']} ({brief['ml_prob']:.0%})"
-            ml_col = "#2ea043" if brief['ml_direction'] == "ALCISTA" else "#da3633"
+            ml_col = "#2ea043" if brief["ml_direction"] == "ALCISTA" else "#da3633"
 
         st.markdown(
             f"""
@@ -144,7 +149,7 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
                 <span style="font-size: 12px; color: #57606a;">Previsión a 5 días hábiles</span>
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
     st.markdown("---")
@@ -157,7 +162,7 @@ def render_advisor_tab(df: pd.DataFrame, ticker: str, trainer: ModelTrainer):
         "¿Cuáles son los niveles clave de soporte y resistencia?",
         "¿Cuáles son los principales factores de riesgo para esta inversión?",
         "¿Cómo influye la tendencia de largo plazo (SMA 200)?",
-        "¿Qué porcentaje de mi capital debería invertir en este activo?"
+        "¿Qué porcentaje de mi capital debería invertir en este activo?",
     ]
 
     selected_q = st.selectbox("Preguntas frecuentes de asesoría:", options=questions)

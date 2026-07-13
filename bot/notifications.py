@@ -11,6 +11,7 @@ Eventos notificables:
 - daily_summary: Resumen diario de performance
 - panic: Pánico de mercado detectado (hedging)
 """
+
 from __future__ import annotations
 
 import os
@@ -21,8 +22,14 @@ from pathlib import Path
 import requests
 
 DEFAULT_SUBSCRIBED_EVENTS: set[str] = {
-    "circuit_breaker", "account_floor", "panic", "bot_started", "bot_stopped",
-    "new_trade", "daily_summary", "model_drift",
+    "circuit_breaker",
+    "account_floor",
+    "panic",
+    "bot_started",
+    "bot_stopped",
+    "new_trade",
+    "daily_summary",
+    "model_drift",
 }
 
 
@@ -78,11 +85,15 @@ class NotificationService:
             emoji = {"info": "ℹ️", "warning": "⚠️", "critical": "🚨", "success": "✅"}.get(level, "ℹ️")
             text = f"{emoji} *{event.upper()}*\n{message}\n\n`{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
             url = f"https://api.telegram.org/bot{self._telegram_token}/sendMessage"
-            resp = requests.post(url, json={
-                "chat_id": self._telegram_chat_id,
-                "text": text,
-                "parse_mode": "Markdown",
-            }, timeout=10)
+            resp = requests.post(
+                url,
+                json={
+                    "chat_id": self._telegram_chat_id,
+                    "text": text,
+                    "parse_mode": "Markdown",
+                },
+                timeout=10,
+            )
             return resp.status_code == 200
         except Exception:
             return False
@@ -91,12 +102,14 @@ class NotificationService:
         try:
             color = {"info": 3447003, "warning": 16705372, "critical": 15158332, "success": 3066993}.get(level, 3447003)
             payload = {
-                "embeds": [{
-                    "title": event.upper(),
-                    "description": message,
-                    "color": color,
-                    "timestamp": datetime.now().isoformat(),
-                }]
+                "embeds": [
+                    {
+                        "title": event.upper(),
+                        "description": message,
+                        "color": color,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                ]
             }
             resp = requests.post(self._discord_webhook, json=payload, timeout=10)
             return resp.status_code in (200, 204)
@@ -118,22 +131,25 @@ class NotificationService:
         self.send("circuit_breaker", f"Circuit breaker ACTIVADO: {reason}", "critical")
 
     def account_floor(self, equity: float, floor: float) -> None:
-        self.send("account_floor", f"PISO DE CUENTA: equity ${equity:,.0f} <= ${floor:,.0f}. Bot liquidado.", "critical")
+        self.send(
+            "account_floor", f"PISO DE CUENTA: equity ${equity:,.0f} <= ${floor:,.0f}. Bot liquidado.", "critical"
+        )
 
     def new_buy(self, ticker: str, qty: int, price: float, amount: float) -> None:
         self.send("new_trade", f"BUY {ticker}: {qty} shares @ ${price:.2f} = ${amount:,.0f}", "success")
 
     def new_sell(self, ticker: str, qty: int, pnl_pct: float, reason: str) -> None:
         emoji = "🟢" if pnl_pct >= 0 else "🔴"
-        self.send("new_trade", f"{emoji} SELL {ticker}: {qty} shares | P&L {pnl_pct:+.2%} | {reason}", "success" if pnl_pct >= 0 else "warning")
-
-    def daily_summary(self, equity: float, pnl_pct: float, trades: int, positions: int, sharpe: float | None = None) -> None:
-        msg = (
-            f"Equity: ${equity:,.0f}\n"
-            f"P&L día: {pnl_pct:+.2%}\n"
-            f"Trades hoy: {trades}\n"
-            f"Posiciones abiertas: {positions}"
+        self.send(
+            "new_trade",
+            f"{emoji} SELL {ticker}: {qty} shares | P&L {pnl_pct:+.2%} | {reason}",
+            "success" if pnl_pct >= 0 else "warning",
         )
+
+    def daily_summary(
+        self, equity: float, pnl_pct: float, trades: int, positions: int, sharpe: float | None = None
+    ) -> None:
+        msg = f"Equity: ${equity:,.0f}\nP&L día: {pnl_pct:+.2%}\nTrades hoy: {trades}\nPosiciones abiertas: {positions}"
         if sharpe is not None:
             msg += f"\nSharpe 30d: {sharpe:.2f}"
         self.send("daily_summary", msg, "info")

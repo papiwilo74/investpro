@@ -1,6 +1,7 @@
 """
 Métricas de rendimiento para resultados de backtesting.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -13,20 +14,23 @@ from config import BACKTEST_PARAMS
 
 # ── Tipo de trade ─────────────────────────────────────────────────────
 
+
 @dataclass
 class Trade:
     entry_date: Any
     exit_date: Any
-    side: str               # "LONG"
+    side: str  # "LONG"
     entry_price: float
     exit_price: float
     shares: float
     pnl: float
     pnl_pct: float
     commission: float
-    reason: str = ""        # Razón de cierre (stop-loss, take-profit, trailing-stop, score)
+    reason: str = ""  # Razón de cierre (stop-loss, take-profit, trailing-stop, score)
+
 
 # ── Calculadora de métricas ───────────────────────────────────────────
+
 
 class PerformanceMetrics:
     """Calcula métricas estándar a partir de equity curve y lista de trades."""

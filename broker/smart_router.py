@@ -19,6 +19,7 @@ Auto mode: decide estrategia según tamaño.
   - small (< $10k)  → limit-retest (1 intento)
   - large (>= $10k) → TWAP en 3 slices con limit-retest cada uno
 """
+
 from __future__ import annotations
 
 import logging
@@ -38,11 +39,11 @@ TWAP_SLICES = 3
 TWAP_INTERVAL_SECONDS = 30
 LIMIT_RETEST_TIMEOUT = 15
 LIMIT_RETEST_MAX_ATTEMPTS = 2
-SLIPPAGE_ALERT_BPS = 50.0      # alertar si slippage > 50 bps
+SLIPPAGE_ALERT_BPS = 50.0  # alertar si slippage > 50 bps
 
-ICEBERG_MIN_SLICES = 4          # número mínimo de slices para iceberg
+ICEBERG_MIN_SLICES = 4  # número mínimo de slices para iceberg
 ICEBERG_MAX_VISIBLE_PCT = 0.30  # máximo visible como fracción del total
-ICEBERG_SLICE_INTERVAL = 45     # segundos entre slices iceberg
+ICEBERG_SLICE_INTERVAL = 45  # segundos entre slices iceberg
 
 
 class SmartOrderRouter:
@@ -72,7 +73,8 @@ class SmartOrderRouter:
         try:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(str(self.db_path))
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS execution_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     ts REAL NOT NULL,
@@ -87,18 +89,24 @@ class SmartOrderRouter:
                     status TEXT,
                     notional_usd REAL
                 )
-            """)
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_exec_symbol ON execution_log(symbol)"
+            """
             )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_symbol ON execution_log(symbol)")
             conn.commit()
             conn.close()
         except Exception as exc:
             logger.error("SmartOrderRouter: error inicializando DB: %s", exc)
 
     def _log_execution(
-        self, symbol: str, side: str, qty: float, decision_price: float,
-        fill_price: float | None, order_id: str | None, status: str, strategy: str,
+        self,
+        symbol: str,
+        side: str,
+        qty: float,
+        decision_price: float,
+        fill_price: float | None,
+        order_id: str | None,
+        status: str,
+        strategy: str,
     ) -> None:
         try:
             slippage_bps = None
@@ -115,15 +123,30 @@ class SmartOrderRouter:
                    (ts, symbol, side, qty, decision_price, fill_price,
                     slippage_bps, strategy, order_id, status, notional_usd)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (time.time(), symbol, side, qty, decision_price, fill_price,
-                 slippage_bps, strategy, order_id, status, notional),
+                (
+                    time.time(),
+                    symbol,
+                    side,
+                    qty,
+                    decision_price,
+                    fill_price,
+                    slippage_bps,
+                    strategy,
+                    order_id,
+                    status,
+                    notional,
+                ),
             )
             conn.commit()
             conn.close()
             if slippage_bps is not None and abs(slippage_bps) > SLIPPAGE_ALERT_BPS:
                 logger.warning(
                     "SLIPPAGE ALERT %s %s: %.1f bps (decision=%.2f fill=%.2f)",
-                    symbol, side, slippage_bps, decision_price, fill_price,
+                    symbol,
+                    side,
+                    slippage_bps,
+                    decision_price,
+                    fill_price,
                 )
         except Exception as exc:
             logger.debug("SmartOrderRouter: log execution falló: %s", exc)
@@ -167,9 +190,14 @@ class SmartOrderRouter:
         result = self.client.place_market_order(symbol, qty, side)
         fill = result.get("filled_avg_price") or decision_price
         self._log_execution(
-            symbol, side, qty, decision_price,
+            symbol,
+            side,
+            qty,
+            decision_price,
             float(fill) if fill else None,
-            result.get("order_id"), result.get("status", "unknown"), "market",
+            result.get("order_id"),
+            result.get("status", "unknown"),
+            "market",
         )
         return result
 
@@ -239,17 +267,28 @@ class SmartOrderRouter:
             else:
                 statuses.append(result.get("status", "failed"))
                 self._log_execution(
-                    symbol, side, slice_qty, decision_price, None,
-                    None, result.get("status", "failed"), "iceberg_slice_failed",
+                    symbol,
+                    side,
+                    slice_qty,
+                    decision_price,
+                    None,
+                    None,
+                    result.get("status", "failed"),
+                    "iceberg_slice_failed",
                 )
             if i < slices - 1:
                 time.sleep(self.iceberg_slice_interval)
 
         avg_fill = sum(fill_prices) / len(fill_prices) if fill_prices else decision_price
         self._log_execution(
-            symbol, side, total_filled, decision_price, avg_fill,
+            symbol,
+            side,
+            total_filled,
+            decision_price,
+            avg_fill,
             ",".join(order_ids) if order_ids else None,
-            "partial" if total_filled < total_qty else "filled", "iceberg",
+            "partial" if total_filled < total_qty else "filled",
+            "iceberg",
         )
         if all_failed:
             return {"status": "error", "msg": "all iceberg slices failed"}
@@ -300,8 +339,14 @@ class SmartOrderRouter:
             else:
                 statuses.append(result.get("status", "failed"))
                 self._log_execution(
-                    symbol, side, slice_qty, decision_price, None,
-                    None, result.get("status", "failed"), "twap_slice_failed",
+                    symbol,
+                    side,
+                    slice_qty,
+                    decision_price,
+                    None,
+                    None,
+                    result.get("status", "failed"),
+                    "twap_slice_failed",
                 )
 
             if i < slices - 1:
@@ -309,9 +354,14 @@ class SmartOrderRouter:
 
         avg_fill = sum(fill_prices) / len(fill_prices) if fill_prices else decision_price
         self._log_execution(
-            symbol, side, total_filled, decision_price, avg_fill,
+            symbol,
+            side,
+            total_filled,
+            decision_price,
+            avg_fill,
             ",".join(order_ids) if order_ids else None,
-            "partial" if total_filled < total_qty else "filled", "twap",
+            "partial" if total_filled < total_qty else "filled",
+            "twap",
         )
         if all_failed:
             return {"status": "error", "msg": "all TWAP slices failed"}
@@ -347,14 +397,23 @@ class SmartOrderRouter:
             if result.get("status") == "success":
                 fill = float(result.get("filled_avg_price", limit_price))
                 self._log_execution(
-                    symbol, side, qty, ref_price, fill,
-                    result.get("order_id"), "filled", f"limit_retest_a{attempt}",
+                    symbol,
+                    side,
+                    qty,
+                    ref_price,
+                    fill,
+                    result.get("order_id"),
+                    "filled",
+                    f"limit_retest_a{attempt}",
                 )
                 return {**result, "strategy": "limit_retest"}
 
             logger.debug(
                 "limit_retest %s %s attempt %d failed: %s",
-                symbol, side, attempt, result.get("msg"),
+                symbol,
+                side,
+                attempt,
+                result.get("msg"),
             )
 
         # Fallback a market después de N retests
@@ -362,8 +421,13 @@ class SmartOrderRouter:
         result = self.client.place_market_order(symbol, qty, side)
         fill = result.get("filled_avg_price") or ref_price
         self._log_execution(
-            symbol, side, qty, ref_price, float(fill) if fill else None,
-            result.get("order_id"), result.get("status", "market_fallback"),
+            symbol,
+            side,
+            qty,
+            ref_price,
+            float(fill) if fill else None,
+            result.get("order_id"),
+            result.get("status", "market_fallback"),
             "limit_retest_market_fallback",
         )
         return {**result, "strategy": "market_fallback"}

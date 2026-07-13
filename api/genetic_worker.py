@@ -3,6 +3,7 @@
 These functions MUST be at module level (not closures) to be picklable
 by multiprocessing.spawn on Windows.
 """
+
 from __future__ import annotations
 
 import multiprocessing as mp
@@ -45,14 +46,16 @@ def run_genetic_process(
         )
 
         def _progress_cb(gen, total, best_fit, metrics_dict):
-            queue.put({
-                "type": "progress",
-                "current_gen": gen,
-                "total_gens": total,
-                "pct": round(gen / total * 100, 1) if total > 0 else 0,
-                "best_fitness": best_fit,
-                "gen_metrics": metrics_dict,
-            })
+            queue.put(
+                {
+                    "type": "progress",
+                    "current_gen": gen,
+                    "total_gens": total,
+                    "pct": round(gen / total * 100, 1) if total > 0 else 0,
+                    "best_fitness": best_fit,
+                    "gen_metrics": metrics_dict,
+                }
+            )
 
         result = optimizer.run(
             generations=generations,

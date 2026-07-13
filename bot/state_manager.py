@@ -4,6 +4,7 @@ Persistencia del estado del bot en SQLite.
 Permite recuperar posiciones activas, contadores diarios y estado
 general después de un crash o reinicio.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,10 +24,7 @@ class BotStateManager:
 
     def __init__(self, db_path: str | Path | None = None) -> None:
         if db_path is None:
-            db_path = (
-                Path(__file__).resolve().parent.parent
-                / "data" / "bot_state.sqlite3"
-            )
+            db_path = Path(__file__).resolve().parent.parent / "data" / "bot_state.sqlite3"
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
@@ -36,7 +34,8 @@ class BotStateManager:
 
     def _init_db(self) -> None:
         with self._lock, sqlite3.connect(str(self._db_path)) as conn:
-            conn.executescript("""
+            conn.executescript(
+                """
                 CREATE TABLE IF NOT EXISTS bot_state (
                     key   TEXT PRIMARY KEY,
                     value TEXT NOT NULL,
@@ -67,7 +66,8 @@ class BotStateManager:
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     PRIMARY KEY (date, order_id)
                 );
-            """)
+            """
+            )
             # Migración: agregar columnas si faltan (compatible con DBs existentes)
             try:
                 conn.execute("ALTER TABLE open_positions ADD COLUMN breakeven_active INTEGER DEFAULT 0")
@@ -102,9 +102,7 @@ class BotStateManager:
 
     def get_state(self, key: str, default: Any = None) -> Any:
         with self._lock, sqlite3.connect(str(self._db_path)) as conn:
-            row = conn.execute(
-                "SELECT value FROM bot_state WHERE key = ?", (key,)
-            ).fetchone()
+            row = conn.execute("SELECT value FROM bot_state WHERE key = ?", (key,)).fetchone()
         if row is None:
             return default
         try:
@@ -142,9 +140,19 @@ class BotStateManager:
                        (SELECT opened_at FROM open_positions WHERE ticker = ?),
                        datetime('now')
                    ))""",
-                (ticker, side, entry_price, entry_atr,
-                 max_price or entry_price, min_price or entry_price,
-                 qty, int(breakeven_active), int(tp1_hit), int(tp2_hit), ticker),
+                (
+                    ticker,
+                    side,
+                    entry_price,
+                    entry_atr,
+                    max_price or entry_price,
+                    min_price or entry_price,
+                    qty,
+                    int(breakeven_active),
+                    int(tp1_hit),
+                    int(tp2_hit),
+                    ticker,
+                ),
             )
 
     def remove_position(self, ticker: str) -> None:
@@ -160,10 +168,17 @@ class BotStateManager:
             ).fetchall()
         return [
             {
-                "ticker": r[0], "side": r[1], "entry_price": r[2],
-                "entry_atr": r[3], "max_price": r[4], "min_price": r[5],
-                "qty": r[6], "opened_at": r[7],
-                "breakeven_active": bool(r[8]), "tp1_hit": bool(r[9]), "tp2_hit": bool(r[10]),
+                "ticker": r[0],
+                "side": r[1],
+                "entry_price": r[2],
+                "entry_atr": r[3],
+                "max_price": r[4],
+                "min_price": r[5],
+                "qty": r[6],
+                "opened_at": r[7],
+                "breakeven_active": bool(r[8]),
+                "tp1_hit": bool(r[9]),
+                "tp2_hit": bool(r[10]),
             }
             for r in rows
         ]
@@ -192,9 +207,7 @@ class BotStateManager:
     def get_daily_order_count(self, day: str | None = None) -> int:
         day = day or date.today().isoformat()
         with self._lock, sqlite3.connect(str(self._db_path)) as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM daily_orders WHERE date = ?", (day,)
-            ).fetchone()
+            row = conn.execute("SELECT COUNT(*) FROM daily_orders WHERE date = ?", (day,)).fetchone()
         return row[0] if row else 0
 
     def reset_daily_orders(self, day: str | None = None) -> None:

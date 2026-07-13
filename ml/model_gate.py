@@ -13,6 +13,7 @@ Criterios de aprobación (conservadores):
   - samples OOS >= MIN_TEST_SIZE (30)
   - rel_vs_baseline >= MIN_EDGE (0.03) — debe vencer al naive por >= 3pp
 """
+
 from __future__ import annotations
 
 import json
@@ -84,9 +85,7 @@ class ModelGate:
                     "min_edge": self.min_edge,
                 },
             }
-            self.registry_path.write_text(
-                json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            self.registry_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         except Exception as exc:
             logger.warning("ModelGate: error guardando registro: %s", exc)
 
@@ -107,23 +106,33 @@ class ModelGate:
         accuracy = float(metrics.get("accuracy", 0.0))
         precision = float(metrics.get("precision", 0.0))
         test_size = int(metrics.get("test_size", 0))
-        # rel_vs_baseline opcional (lo calcula el champion/challenger)
         rel_vs_baseline = float(metadata.get("rel_vs_baseline", accuracy - 0.5))
+        n_classes = int(metrics.get("n_classes", metadata.get("n_classes", 2)))
+
+        # Ajustar thresholds según n_classes
+        if n_classes == 3:
+            min_acc = 0.35  # 3-class accuracy es naturalmente más baja
+            min_prec = 0.40  # random = 1/3 = 0.333
+            min_edge = 0.02  # precision edge sobre random
+        else:
+            min_acc = self.min_accuracy
+            min_prec = self.min_precision
+            min_edge = self.min_edge
 
         reasons: list[str] = []
         approved = True
-        if accuracy < self.min_accuracy:
+        if accuracy < min_acc:
             approved = False
-            reasons.append(f"accuracy {accuracy:.3f} < {self.min_accuracy}")
-        if precision < self.min_precision:
+            reasons.append(f"accuracy {accuracy:.3f} < {min_acc}")
+        if precision < min_prec:
             approved = False
-            reasons.append(f"precision {precision:.3f} < {self.min_precision}")
+            reasons.append(f"precision {precision:.3f} < {min_prec}")
         if test_size < self.min_test_size:
             approved = False
             reasons.append(f"test_size {test_size} < {self.min_test_size}")
-        if rel_vs_baseline < self.min_edge:
+        if rel_vs_baseline < min_edge:
             approved = False
-            reasons.append(f"edge {rel_vs_baseline:.3f} < {self.min_edge}")
+            reasons.append(f"edge {rel_vs_baseline:.3f} < {min_edge}")
 
         self._cache[ticker] = {
             "approved": approved,

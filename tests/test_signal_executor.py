@@ -176,6 +176,7 @@ class TestExecuteBuy:
 
     def test_executes_buy_successfully(self, executor, mock_decision):
         from config import BROKER_CONFIG
+
         original_enabled = BROKER_CONFIG.leverage_enabled
         BROKER_CONFIG.leverage_enabled = False
         try:
@@ -189,6 +190,7 @@ class TestExecuteBuy:
 
     def test_buy_respects_target_usd(self, executor, mock_decision):
         from config import BROKER_CONFIG
+
         BROKER_CONFIG.leverage_enabled = False
         result = executor.execute_buy("AAPL", mock_decision, 150.0, 100000, 50000, {}, target_usd=500.0)
         assert result > 0
@@ -200,6 +202,7 @@ class TestExecuteBuy:
     def test_buy_rejects_when_exposure_cap_exceeded(self, executor, mock_decision, mock_client):
         positions = {"AAPL": {"market_value": 90000}}
         from config import BROKER_CONFIG
+
         BROKER_CONFIG.leverage_enabled = False
         result = executor.execute_buy("AAPL", mock_decision, 150.0, 100000, 50000, positions)
         assert result == 0.0
@@ -218,6 +221,7 @@ class TestExecuteShort:
 
     def test_executes_short_successfully(self, executor, mock_decision):
         from config import BROKER_CONFIG
+
         BROKER_CONFIG.leverage_enabled = False
         result = executor.execute_short("AAPL", mock_decision, 150.0, 100000, 50000, {})
         assert result > 0

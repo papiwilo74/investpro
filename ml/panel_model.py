@@ -123,19 +123,24 @@ class PanelFeatureGenerator:
     @staticmethod
     def add_cross_sectional_features(panel: pd.DataFrame) -> pd.DataFrame:
         """Añade features cross-sectionals: rango percentil del ticker en cada fecha."""
-        if "close" not in panel.columns or panel.index.name != "date":
-            pass
+        if "close" not in panel.columns:
+            return panel
+
+        # El índice es un DateTimeIndex; agrupar por fecha para el cross-section
+        date_group = panel.index
 
         # Para cada fecha, calcular el percentil del precio dentro del cross-section
-        panel["cs_close_rank"] = panel.groupby(level=0)["close"].rank(pct=True)
-        panel["cs_volume_rank"] = panel.groupby(level=0)["volume"].rank(pct=True)
-        panel["cs_rsi_rank"] = panel.groupby(level=0)["rsi"].rank(pct=True) if "rsi" in panel.columns else 0.5
-        panel["cs_adx_rank"] = panel.groupby(level=0)["adx"].rank(pct=True) if "adx" in panel.columns else 0.5
+        panel["cs_close_rank"] = panel.groupby(date_group)["close"].rank(pct=True)
+        panel["cs_volume_rank"] = (
+            panel.groupby(date_group)["volume"].rank(pct=True) if "volume" in panel.columns else 0.5
+        )
+        panel["cs_rsi_rank"] = panel.groupby(date_group)["rsi"].rank(pct=True) if "rsi" in panel.columns else 0.5
+        panel["cs_adx_rank"] = panel.groupby(date_group)["adx"].rank(pct=True) if "adx" in panel.columns else 0.5
 
         # Momentum relativo: retorno del ticker vs retorno promedio del cross-section
-        returns_1d = panel.groupby(level=0)["close"].transform(lambda g: g.pct_change())
+        returns_1d = panel.groupby(date_group)["close"].transform(lambda g: g.pct_change())
         panel["cs_return_1d"] = returns_1d
-        panel["cs_return_mean"] = panel.groupby(level=0)["cs_return_1d"].transform("mean")
+        panel["cs_return_mean"] = panel.groupby(date_group)["cs_return_1d"].transform("mean")
         panel["cs_return_rel"] = panel["cs_return_1d"] - panel["cs_return_mean"]
 
         return panel
@@ -192,6 +197,13 @@ class PanelFeatureGenerator:
             sub = sub.combine_first(df_tech)
             X_tech, _ = FeatureGenerator.build_features_and_target(sub, horizon=horizon, min_return=min_return)
             X_tech["ticker"] = ticker
+            # Preservar columnas raw para features cross-sectionales
+            X_tech["close"] = sub["close"].reindex(X_tech.index)
+            X_tech["volume"] = sub["volume"].reindex(X_tech.index)
+            if "rsi" in sub.columns:
+                X_tech["rsi"] = sub["rsi"].reindex(X_tech.index)
+            if "adx" in sub.columns:
+                X_tech["adx"] = sub["adx"].reindex(X_tech.index)
             X_list.append(X_tech)
 
         if not X_list:
@@ -430,7 +442,7 @@ class PanelModelTrainer:
     def _train_xgb(self, X_train, y_train, X_val, y_val, scale_pos):
         from xgboost import XGBClassifier
 
-        model = XGBClassifier(
+        common_params = dict(
             n_estimators=200,
             max_depth=7,
             learning_rate=0.05,
@@ -441,17 +453,15 @@ class PanelModelTrainer:
             eval_metric="logloss",
             scale_pos_weight=scale_pos,
             device="cuda" if _HAS_CUDA else "cpu",
-            early_stopping_rounds=20,
         )
+
         if X_val is not None and y_val is not None:
-            model.fit(
-                X_train,
-                y_train,
-                eval_set=[(X_val, y_val)],
-                verbose=False,
-            )
+            model = XGBClassifier(early_stopping_rounds=20, **common_params)
+            model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
         else:
-            model.fit(X_train, y_train)
+            # Modelo final: sin early stopping (no hay val set)
+            model = XGBClassifier(**common_params)
+            model.fit(X_train, y_train, verbose=False)
         return model
 
     def _save_model(self, model, metadata: dict) -> None:
@@ -549,7 +559,11 @@ class PanelModelTrainer:
 
     def predict_ticker(self, ticker: str, period: str = "3mo") -> dict[str, Any] | None:
         """Predice para un ticker específico usando el modelo panel."""
-        df = self.fetcher.get_data(ticker, period=period, interval="1d")
+        try:
+            df = self.fetcher.get_data(ticker, period=period, interval="1d")
+        except Exception as exc:
+            logger.debug("PanelModel: error descargando %s: %s", ticker, exc)
+            return None
         if df.empty:
             return None
         df["ticker"] = ticker.upper()

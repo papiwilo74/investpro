@@ -1,6 +1,7 @@
 """
 Indicadores técnicos acelerados por GPU (CuPy) con fallback a CPU (pandas/ta).
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -11,6 +12,7 @@ from config import INDICATOR_PARAMS, IndicatorParams, intraday_indicator_params
 HAS_CUPY = False
 try:
     import cupy as cp
+
     HAS_CUPY = cp.cuda.is_available()
     if HAS_CUPY:
         print("[GPU] CuPy detectado — indicadores acelerados por RTX 4060")
@@ -47,8 +49,8 @@ def _sma(arr, period):
     cnt_w = cum_cnt[period:] - cum_cnt[:-period]
     vals = xp.where(cnt_w >= period, sum_w / period, xp.nan)
     out = xp.empty(len(arr), dtype=xp.float64)
-    out[:period - 1] = xp.nan
-    out[period - 1:] = vals
+    out[: period - 1] = xp.nan
+    out[period - 1 :] = vals
     return out
 
 
@@ -70,14 +72,14 @@ class TechnicalIndicators:
 
     @staticmethod
     def add_sma(df: pd.DataFrame, periods: list[int] | None = None) -> pd.DataFrame:
-        for p in (periods or INDICATOR_PARAMS.sma_periods):
+        for p in periods or INDICATOR_PARAMS.sma_periods:
             arr = _gpu(df["close"].values)
             df[f"sma_{p}"] = _cpu(_sma(arr, p), df.index, f"sma_{p}")
         return df
 
     @staticmethod
     def add_ema(df: pd.DataFrame, periods: list[int] | None = None) -> pd.DataFrame:
-        for p in (periods or INDICATOR_PARAMS.ema_periods):
+        for p in periods or INDICATOR_PARAMS.ema_periods:
             arr = _gpu(df["close"].values)
             df[f"ema_{p}"] = _cpu(_ema(arr, p), df.index, f"ema_{p}")
         return df
@@ -104,15 +106,17 @@ class TechnicalIndicators:
         for i in range(1, n):
             avg_up[i] = up[i] * alpha + avg_up[i - 1] * (1.0 - alpha)
             avg_down[i] = down[i] * alpha + avg_down[i - 1] * (1.0 - alpha)
-        avg_up[:p - 1] = xp.nan
-        avg_down[:p - 1] = xp.nan
+        avg_up[: p - 1] = xp.nan
+        avg_down[: p - 1] = xp.nan
         rs = xp.where(avg_down != 0, avg_up / avg_down, 100.0)
         rsi = 100.0 - 100.0 / (1.0 + rs)
         df["rsi"] = _cpu(rsi, df.index, "rsi")
         return df
 
     @staticmethod
-    def add_macd(df: pd.DataFrame, fast: int | None = None, slow: int | None = None, signal: int | None = None) -> pd.DataFrame:
+    def add_macd(
+        df: pd.DataFrame, fast: int | None = None, slow: int | None = None, signal: int | None = None
+    ) -> pd.DataFrame:
         f = fast or INDICATOR_PARAMS.macd_fast
         s = slow or INDICATOR_PARAMS.macd_slow
         sig = signal or INDICATOR_PARAMS.macd_signal
@@ -134,9 +138,9 @@ class TechnicalIndicators:
         close = _gpu(df["close"].values)
         xp = cp if HAS_CUPY else np
         middle = _sma(close, p)
-        x2 = close ** 2
+        x2 = close**2
         mean_x2 = _sma(x2, p)
-        var = mean_x2 - middle ** 2
+        var = mean_x2 - middle**2
         var = xp.where(var > 0, var, 0.0)
         std = xp.sqrt(var)
         df["bb_upper"] = _cpu(middle + sd * std, df.index, "bb_upper")
@@ -161,7 +165,7 @@ class TechnicalIndicators:
         atr[0] = tr_raw[0]
         for i in range(1, n):
             atr[i] = tr_raw[i] * alpha + atr[i - 1] * (1.0 - alpha)
-        atr[:p - 1] = xp.nan
+        atr[: p - 1] = xp.nan
         df["atr"] = _cpu(atr, df.index, "atr")
         return df
 
@@ -247,7 +251,7 @@ class TechnicalIndicators:
         close = df["close"].values.astype(float)
         volume = df["volume"].values.astype(float)
         vwap = pd.Series(index=df.index, dtype=float)
-        if hasattr(df.index, 'date'):
+        if hasattr(df.index, "date"):
             for d in df.index.normalize().unique():
                 mask = df.index.normalize() == d
                 cum_pv = (close[mask] * volume[mask]).cumsum()

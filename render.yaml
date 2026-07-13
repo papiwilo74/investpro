@@ -2,11 +2,15 @@ services:
   - type: web
     name: investpro
     runtime: python
-    buildCommand: pip install -r requirements-cloud.txt
+    buildCommand: |
+      pip install -r requirements-cloud.txt &&
+      cd frontend && npm install && npm run build && cd ..
     startCommand: python main.py --web --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
+      - key: NODE_VERSION
+        value: "20.17.0"
       - key: ALPACA_API_KEY
         sync: false
       - key: ALPACA_SECRET_KEY

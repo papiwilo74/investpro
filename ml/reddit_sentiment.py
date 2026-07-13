@@ -4,6 +4,7 @@ Análisis de Sentimiento Social desde Reddit (r/WallStreetBets y otros).
 Escanea los posts más recientes sobre un ticker y calcula un score
 de sentimiento social usando VADER NLP.
 """
+
 from __future__ import annotations
 
 import re
@@ -47,9 +48,7 @@ class RedditSentimentAnalyzer:
                     "limit": limit,
                     "type": "link",
                 }
-                resp = requests.get(
-                    url, headers=self.headers, params=params, timeout=8
-                )
+                resp = requests.get(url, headers=self.headers, params=params, timeout=8)
 
                 # Si falla la búsqueda, intentar con el endpoint de hot posts
                 if resp.status_code != 200:
@@ -74,13 +73,15 @@ class RedditSentimentAnalyzer:
                     if ticker.upper() not in combined:
                         continue
 
-                    all_posts.append({
-                        "subreddit": sub,
-                        "title": title,
-                        "body": selftext,
-                        "upvotes": score,
-                        "comments": num_comments,
-                    })
+                    all_posts.append(
+                        {
+                            "subreddit": sub,
+                            "title": title,
+                            "body": selftext,
+                            "upvotes": score,
+                            "comments": num_comments,
+                        }
+                    )
             except Exception as e:
                 print(f"[Reddit] Error scraping r/{sub} para {ticker}: {e}")
                 continue
@@ -126,17 +127,19 @@ class RedditSentimentAnalyzer:
             total_engagement += engagement
             total_compound += compound
 
-            analyzed.append({
-                **post,
-                "sentiment": compound,
-                "engagement": engagement,
-            })
+            analyzed.append(
+                {
+                    **post,
+                    "sentiment": compound,
+                    "engagement": engagement,
+                }
+            )
 
         avg = total_compound / len(posts)
 
         # Clasificar con más granularidad para redes sociales
         if avg >= 0.35:
-            label = "EUFORIA"     # 🚀🚀🚀 "TO THE MOON"
+            label = "EUFORIA"  # 🚀🚀🚀 "TO THE MOON"
         elif avg >= 0.10:
             label = "ALCISTA"
         elif avg >= -0.10:
@@ -144,7 +147,7 @@ class RedditSentimentAnalyzer:
         elif avg >= -0.35:
             label = "BAJISTA"
         else:
-            label = "PANICO"      # 💀 FUD masivo
+            label = "PANICO"  # 💀 FUD masivo
 
         # Hype score: cuánto engagement hay (normalizado)
         max_possible = limit * 1000  # rough normalizer

@@ -18,6 +18,7 @@ class RLExitAgent:
     - 0: HOLD (Mantener)
     - 1: CLOSE (Cerrar)
     """
+
     def __init__(self, model_path="rl_qtable.pkl", alpha=0.1, gamma=0.9, epsilon=0.1):
         self.q_table = {}
         self.alpha = alpha
@@ -29,14 +30,14 @@ class RLExitAgent:
     def _load_model(self):
         if os.path.exists(self.model_path):
             try:
-                with open(self.model_path, 'rb') as f:
+                with open(self.model_path, "rb") as f:
                     self.q_table = pickle.load(f)
             except Exception as e:
                 print(f"Error cargando Q-Table: {e}")
                 self.q_table = {}
 
     def save_model(self):
-        with open(self.model_path, 'wb') as f:
+        with open(self.model_path, "wb") as f:
             pickle.dump(self.q_table, f)
 
     def _discretize_state(self, pnl_pct: float, rsi: float, regime: str) -> str:
@@ -77,7 +78,17 @@ class RLExitAgent:
         # Explotación: elegir la mejor acción
         return np.argmax(self.q_table[state])
 
-    def update(self, pnl_pct: float, rsi: float, regime: str, action: int, reward: float, next_pnl_pct: float, next_rsi: float, next_regime: str):
+    def update(
+        self,
+        pnl_pct: float,
+        rsi: float,
+        regime: str,
+        action: int,
+        reward: float,
+        next_pnl_pct: float,
+        next_rsi: float,
+        next_regime: str,
+    ):
         state = self._discretize_state(pnl_pct, rsi, regime)
         next_state = self._discretize_state(next_pnl_pct, next_rsi, next_regime)
 
@@ -97,3 +108,29 @@ class RLExitAgent:
             new_value = (1 - self.alpha) * old_value + self.alpha * (reward + self.gamma * next_max)
 
         self.q_table[state][action] = new_value
+
+    def get_entry_signal(self, rsi: float, regime: str) -> tuple[str, float] | None:
+        """Deriva una señal de entrada desde la Q-table.
+
+        Consulta el Q-value de una posición hipotética en breakeven (pnl=0).
+        Si Q[HOLD] > Q[CLOSE], el agente aprendió que las posiciones en este
+        estado conviene mantenerlas → entrada favorable → BULLISH.
+        Si Q[CLOSE] > Q[HOLD], las posiciones se cierran rápido → desfavorable → BEARISH.
+
+        Returns:
+            (direction, confidence) o None si no hay datos suficientes.
+        """
+        state = self._discretize_state(0.0, rsi, regime)
+        if state not in self.q_table:
+            return None
+
+        q_hold, q_close = self.q_table[state]
+        if abs(q_hold - q_close) < 1e-6:
+            return None
+
+        direction = "BULLISH" if q_hold > q_close else "BEARISH"
+        diff = abs(q_hold - q_close)
+        total = abs(q_hold) + abs(q_close) + 1e-6
+        # Confidence suavizado: max 0.75 para no saturar el ensemble
+        confidence = min(0.75, 0.5 + diff / (2 * total))
+        return direction, round(confidence, 4)

@@ -12,6 +12,7 @@ el breadth se deteriora — el bot debe detectarlo antes de la caída.
 
 Se actualiza una vez por sesión (cache de 60 minutos).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -67,9 +68,7 @@ class MarketBreadth:
 
         # Descargar SPY, RSP, QQQ en paralelo (3 peticiones simultáneas)
         try:
-            batch = self.fetcher.fetch_batch(
-                ["SPY", "RSP", "QQQ"], period="6mo", interval="1d", max_workers=3
-            )
+            batch = self.fetcher.fetch_batch(["SPY", "RSP", "QQQ"], period="6mo", interval="1d", max_workers=3)
             spy_df = batch.get("SPY")
             rsp_df = batch.get("RSP")
             qqq_df = batch.get("QQQ")
@@ -219,11 +218,21 @@ class MarketBreadth:
             reason=" | ".join(reasons),
             pct_above_sma50=details.get("spy_pct_above_sma50", 0),
             rsp_vs_spy_ratio=details.get("rsp_spy_ratio", 0),
-            rsp_vs_spy_trend="ABOVE_SMA20" if details.get("rsp_spy_ratio", 0) > details.get("rsp_spy_ratio_sma20", 0) else "BELOW_SMA20",
+            rsp_vs_spy_trend=(
+                "ABOVE_SMA20"
+                if details.get("rsp_spy_ratio", 0) > details.get("rsp_spy_ratio_sma20", 0)
+                else "BELOW_SMA20"
+            ),
             qqq_vs_spy_ratio=details.get("qqq_spy_ratio", 0),
-            qqq_vs_spy_trend="ABOVE_SMA20" if details.get("qqq_spy_ratio", 0) > details.get("qqq_spy_ratio_sma20", 0) else "BELOW_SMA20",
+            qqq_vs_spy_trend=(
+                "ABOVE_SMA20"
+                if details.get("qqq_spy_ratio", 0) > details.get("qqq_spy_ratio_sma20", 0)
+                else "BELOW_SMA20"
+            ),
             force_index_10d=details.get("force_index_10d", 0),
-            force_index_trend="RISING" if details.get("force_index_5d", 0) > details.get("force_index_10d", 0) else "FALLING",
+            force_index_trend=(
+                "RISING" if details.get("force_index_5d", 0) > details.get("force_index_10d", 0) else "FALLING"
+            ),
             details=details,
         )
 

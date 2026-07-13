@@ -16,6 +16,7 @@ Cómo funciona:
 
 Persistencia en SQLite (data/shadow_trader.sqlite3) para sobrevivir restarts.
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,9 +31,9 @@ logger = logging.getLogger("inversion_helper.shadow_trader")
 
 DB_PATH = PROJECT_ROOT / "data" / "shadow_trader.sqlite3"
 DEFAULT_HORIZON_DAYS = 5
-DRIFT_ACCURACY_THRESHOLD = 0.45    # alerta si live accuracy < 0.45
-DRIFT_MIN_SAMPLES = 10             # mínimo de samples para concluir drift
-DRIFT_WINDOW = 30                  # ventana rolling de samples para drift
+DRIFT_ACCURACY_THRESHOLD = 0.45  # alerta si live accuracy < 0.45
+DRIFT_MIN_SAMPLES = 10  # mínimo de samples para concluir drift
+DRIFT_WINDOW = 30  # ventana rolling de samples para drift
 
 
 class ShadowTrader:
@@ -59,7 +60,8 @@ class ShadowTrader:
         try:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(str(self.db_path))
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS shadow_signals (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     ticker TEXT NOT NULL,
@@ -76,13 +78,10 @@ class ShadowTrader:
                     correct INTEGER,
                     resolved_ts REAL
                 )
-            """)
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_shadow_resolved ON shadow_signals(resolved, signal_ts)"
+            """
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_shadow_ticker ON shadow_signals(ticker, resolved)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_shadow_resolved ON shadow_signals(resolved, signal_ts)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_shadow_ticker ON shadow_signals(ticker, resolved)")
             conn.commit()
             conn.close()
         except Exception as exc:
@@ -115,8 +114,7 @@ class ShadowTrader:
             # Registrar el ensemble como un modelo sintético "ensemble_blend"
             models = dict(ensemble_result.model_signals)
             models["ensemble_blend"] = type(
-                "M", (), {"direction": ensemble_result.consensus_direction,
-                          "probability": ensemble_result.confidence}
+                "M", (), {"direction": ensemble_result.consensus_direction, "probability": ensemble_result.confidence}
             )()
             for model_name, signal in models.items():
                 conn.execute(
@@ -219,12 +217,14 @@ class ShadowTrader:
             )
             for ticker, n, acc in cur.fetchall():
                 if n >= self.drift_min_samples and acc < self.drift_threshold:
-                    alerts.append({
-                        "ticker": ticker,
-                        "live_accuracy": round(acc, 3),
-                        "samples": n,
-                        "threshold": self.drift_threshold,
-                    })
+                    alerts.append(
+                        {
+                            "ticker": ticker,
+                            "live_accuracy": round(acc, 3),
+                            "samples": n,
+                            "threshold": self.drift_threshold,
+                        }
+                    )
             conn.close()
         except Exception as exc:
             logger.warning("ShadowTrader: error en check_drift: %s", exc)
@@ -278,6 +278,7 @@ class ShadowTrader:
         """Registra el outcome en el AdaptiveEnsemble global para que adapte pesos."""
         try:
             from ml.ensemble import ensemble
+
             confidence = 0.5  # no tenemos el confidence original aquí, usar neutro
             ensemble.record_outcome(model, regime or "BULL", actual_dir, predicted_dir, confidence)
         except Exception:
