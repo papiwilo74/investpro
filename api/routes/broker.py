@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
@@ -261,7 +262,8 @@ async def reset_advisor() -> dict[str, Any]:
 @router.get("/mtf/{ticker}")
 async def get_mtf_status(ticker: str) -> dict[str, Any]:
     """Filtro Multi-Timeframe para un ticker específico."""
-    try:
+
+    def _run():
         if bot.mtf_filter is None:
             return {"available": False, "reason": "Solo disponible en modo web"}
         df = bot.fetcher.get_data(ticker, period="3mo", interval="1d")
@@ -271,6 +273,9 @@ async def get_mtf_status(ticker: str) -> dict[str, Any]:
 
         df = TechnicalIndicators.add_all(df, intraday=False)
         return sanitize_for_json(bot.mtf_filter.to_dict(ticker, df))
+
+    try:
+        return await asyncio.to_thread(_run)
     except HTTPException:
         raise
     except Exception as e:
@@ -391,33 +396,34 @@ async def unsubscribe_notification(event: str = Query(...)) -> dict[str, Any]:
 @router.post("/validation/walk-forward")
 async def run_walk_forward(ticker: str = Query("AAPL"), period: str = Query("2y")) -> dict[str, Any]:
     """Ejecuta una validación Walk-Forward para evaluar la robustez de la estrategia en un ticker."""
-    try:
+
+    def _run():
         from backtesting.validation import run_validation
         from data.fetcher import DataFetcher
         from indicators.signals import SignalGenerator
         from indicators.technical import TechnicalIndicators
 
-        async def _run():
-            fetcher = DataFetcher()
-            df = fetcher.get_data(ticker, period=period, interval="1d")
-            if df.empty:
-                return {"status": "error", "msg": f"No data for {ticker}"}
-            df = TechnicalIndicators.add_all(df)
-            df = SignalGenerator.add_signal_columns(df)
-            report = run_validation(df, ticker, period=period)
-            return {
-                "status": "ok",
-                "ticker": ticker,
-                "verdict": report.verdict,
-                "flags": report.flags,
-                "oos_sharpe": (report.oos_metrics or {}).get("sharpe_ratio", 0),
-                "is_sharpe": (report.is_metrics or {}).get("sharpe_ratio", 0),
-                "mc_avg_return": report.monte_carlo.avg_return if report.monte_carlo else 0,
-                "mc_sharpe_p5": report.monte_carlo.sharpe_p5 if report.monte_carlo else 0,
-                "total_windows": len(report.walk_forward_results) if report.walk_forward_results else 0,
-            }
+        fetcher = DataFetcher()
+        df = fetcher.get_data(ticker, period=period, interval="1d")
+        if df.empty:
+            return {"status": "error", "msg": f"No data for {ticker}"}
+        df = TechnicalIndicators.add_all(df)
+        df = SignalGenerator.add_signal_columns(df)
+        report = run_validation(df, ticker, period=period)
+        return {
+            "status": "ok",
+            "ticker": ticker,
+            "verdict": report.verdict,
+            "flags": report.flags,
+            "oos_sharpe": (report.oos_metrics or {}).get("sharpe_ratio", 0),
+            "is_sharpe": (report.is_metrics or {}).get("sharpe_ratio", 0),
+            "mc_avg_return": report.monte_carlo.avg_return if report.monte_carlo else 0,
+            "mc_sharpe_p5": report.monte_carlo.sharpe_p5 if report.monte_carlo else 0,
+            "total_windows": len(report.walk_forward_results) if report.walk_forward_results else 0,
+        }
 
-        return await _run()
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

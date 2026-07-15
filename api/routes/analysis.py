@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -21,19 +22,18 @@ async def get_signals(
     interval: str = Query("1d", description="Intervalo de datos"),
 ) -> dict[str, Any]:
     """Obtiene señales de trading compuestas y puntuación para un ticker basado en indicadores técnicos."""
-    try:
-        ticker = ticker.upper().strip()
-        df = fetcher.get_data(ticker, period=period, interval=interval)
+
+    def _run():
+        t = ticker.upper().strip()
+        df = fetcher.get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
         df = SignalGenerator.add_signal_columns(df)
-
         composite = SignalGenerator.composite_score(df)
-        raw_signals = SignalGenerator.get_latest_signals(df, ticker)
+        raw_signals = SignalGenerator.get_latest_signals(df, t)
+        signals_list = [{"action": s.action.value, "strength": s.strength, "reason": s.reason} for s in raw_signals]
+        return sanitize_for_json({"ticker": t, "composite_score": composite, "signals": signals_list})
 
-        signals_list = []
-        for s in raw_signals:
-            signals_list.append({"action": s.action.value, "strength": s.strength, "reason": s.reason})
-
-        return sanitize_for_json({"ticker": ticker, "composite_score": composite, "signals": signals_list})
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

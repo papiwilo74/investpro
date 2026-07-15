@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pandas as pd
@@ -25,7 +26,8 @@ async def scan_opportunities(
     include_rejected: bool = Query(True, description="Incluir tickers rechazados con razones"),
 ) -> dict[str, Any]:
     """Escanea el mercado en busca de oportunidades de trading basadas en indicadores técnicos."""
-    try:
+
+    def _run():
         result = scanner.scan(
             universe=universe,
             period=period,
@@ -34,6 +36,9 @@ async def scan_opportunities(
             include_rejected=include_rejected,
         )
         return sanitize_for_json(result.to_dict())
+
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -45,12 +50,12 @@ async def get_market_data(
     interval: str = Query("1d", description="Intervalo de datos"),
 ) -> dict[str, Any]:
     """Obtiene velas históricas, indicadores técnicos y datos recientes para un ticker."""
-    try:
-        ticker = ticker.upper().strip()
-        df = fetcher.get_data(ticker, period=period, interval=interval)
+
+    def _run():
+        t = ticker.upper().strip()
+        df = fetcher.get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
 
-        # Generar lista de velas ordenadas por fecha
         candles = []
         sma_20 = []
         sma_50 = []
@@ -61,8 +66,6 @@ async def get_market_data(
 
         for idx, row in df.iterrows():
             time_str = idx.strftime("%Y-%m-%d")
-
-            # Vela
             candles.append(
                 {
                     "time": time_str,
@@ -73,20 +76,14 @@ async def get_market_data(
                     "volume": row["volume"],
                 }
             )
-
-            # SMA
             if "sma_20" in row and pd.notna(row["sma_20"]):
                 sma_20.append({"time": time_str, "value": row["sma_20"]})
             if "sma_50" in row and pd.notna(row["sma_50"]):
                 sma_50.append({"time": time_str, "value": row["sma_50"]})
             if "sma_200" in row and pd.notna(row["sma_200"]):
                 sma_200.append({"time": time_str, "value": row["sma_200"]})
-
-            # RSI
             if "rsi" in row and pd.notna(row["rsi"]):
                 rsi.append({"time": time_str, "value": row["rsi"]})
-
-            # MACD
             if "macd" in row and "macd_signal" in row and "macd_histogram" in row:
                 macd.append(
                     {
@@ -96,29 +93,34 @@ async def get_market_data(
                         "histogram": row["macd_histogram"],
                     }
                 )
-
-            # Bollinger Bands
             if "bb_upper" in row and "bb_middle" in row and "bb_lower" in row:
                 bb.append(
                     {"time": time_str, "upper": row["bb_upper"], "middle": row["bb_middle"], "lower": row["bb_lower"]}
                 )
 
-        # Datos recientes para el header
         last_close = float(df["close"].iloc[-1])
         prev_close = float(df["close"].iloc[-2]) if len(df) > 1 else last_close
         change_pct = float(((last_close / prev_close) - 1) * 100)
-
         latest = {"close": last_close, "change_pct": change_pct, "volume": int(df["volume"].iloc[-1])}
 
-        response_data = {
-            "ticker": ticker,
-            "candles": candles,
-            "indicators": {"sma_20": sma_20, "sma_50": sma_50, "sma_200": sma_200, "rsi": rsi, "macd": macd, "bb": bb},
-            "latest": latest,
-        }
+        return sanitize_for_json(
+            {
+                "ticker": t,
+                "candles": candles,
+                "indicators": {
+                    "sma_20": sma_20,
+                    "sma_50": sma_50,
+                    "sma_200": sma_200,
+                    "rsi": rsi,
+                    "macd": macd,
+                    "bb": bb,
+                },
+                "latest": latest,
+            }
+        )
 
-        return sanitize_for_json(response_data)
-
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -128,18 +130,19 @@ async def get_market_news(
     ticker: str, limit: int = Query(10, description="Número de noticias a recuperar")
 ) -> dict[str, Any]:
     """Obtiene noticias recientes de un ticker con análisis de sentimiento."""
-    try:
+
+    def _run():
         from data.news import NewsFetcher
         from ml.sentiment import SentimentAnalyzer
 
-        ticker = ticker.upper().strip()
-        news_list = NewsFetcher.get_latest_news(ticker, limit)
-
+        t = ticker.upper().strip()
+        news_list = NewsFetcher.get_latest_news(t, limit)
         analyzer = SentimentAnalyzer()
         result = analyzer.analyze_news_batch(news_list)
-        result["ticker"] = ticker
-
+        result["ticker"] = t
         return sanitize_for_json(result)
 
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

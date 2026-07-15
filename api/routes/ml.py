@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -34,18 +36,14 @@ async def get_ml_status(
     period: str = Query("1y", description="Periodo de datos"),
     interval: str = Query("1d", description="Intervalo de datos"),
 ):
-    try:
-        ticker = ticker.upper().strip()
-        model_data = trainer.load_model(ticker)
-
+    def _run():
+        t = ticker.upper().strip()
+        model_data = trainer.load_model(t)
         if model_data is None:
             return sanitize_for_json({"has_model": False})
-
-        df = fetcher.get_data(ticker, period=period, interval=interval)
+        df = fetcher.get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
-
-        prediction = trainer.predict_trend(ticker, df)
-
+        prediction = trainer.predict_trend(t, df)
         return sanitize_for_json(
             {
                 "has_model": True,
@@ -58,27 +56,26 @@ async def get_ml_status(
                 "min_return": model_data.get("min_return", 0.01),
             }
         )
+
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/{ticker}/train")
 async def train_ml_model(ticker: str, req: MLTrainRequest):
-    try:
-        ticker = ticker.upper().strip()
-        # Entrenar con el periodo histórico predeterminado (10 años)
+    def _run():
+        t = ticker.upper().strip()
         kwargs = {"period": "10y", "optimize": req.optimize}
         if req.horizon is not None:
             kwargs["horizon"] = req.horizon
         if req.min_return is not None:
             kwargs["min_return"] = req.min_return
-        model_data = trainer.train_and_save(ticker, **kwargs)
-
-        # Obtener predicción inmediata
-        df = fetcher.get_data(ticker, period="1y", interval="1d")
+        model_data = trainer.train_and_save(t, **kwargs)
+        df = fetcher.get_data(t, period="1y", interval="1d")
         df = TechnicalIndicators.add_all(df)
-        prediction = trainer.predict_trend(ticker, df)
-
+        prediction = trainer.predict_trend(t, df)
         return sanitize_for_json(
             {
                 "has_model": True,
@@ -91,6 +88,9 @@ async def train_ml_model(ticker: str, req: MLTrainRequest):
                 "min_return": model_data.get("min_return", 0.01),
             }
         )
+
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -103,27 +103,23 @@ async def simulate_ml_strategy(
     period: str = Query("1y", description="Periodo de datos"),
     interval: str = Query("1d", description="Intervalo de datos"),
 ):
-    try:
-        ticker = ticker.upper().strip()
-        df = fetcher.get_data(ticker, period=period, interval=interval)
+    def _run():
+        t = ticker.upper().strip()
+        df = fetcher.get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
-        df_test = trainer.get_test_predictions(ticker, df)
+        df_test = trainer.get_test_predictions(t, df)
 
-        # Estrategia ML
         df_test["sig_ml"] = 0
         df_test.loc[df_test["ml_probability"] >= buy_threshold, "sig_ml"] = 1
         df_test.loc[df_test["ml_probability"] < sell_threshold, "sig_ml"] = -1
 
-        # Estrategia Buy & Hold
         df_test["sig_bh"] = 0
         first_valid_index = df_test.index[0]
         df_test.loc[first_valid_index, "sig_bh"] = 1
 
-        # Estrategia Técnica Clásica
         df_test = TechnicalIndicators.add_all(df_test)
         df_test = SignalGenerator.add_signal_columns(df_test)
 
-        # Ejecutar backtests
         engine_ml = BacktestEngine()
         res_ml = engine_ml.run(df_test, signal_col="sig_ml")
 
@@ -133,7 +129,6 @@ async def simulate_ml_strategy(
         engine_bh = BacktestEngine()
         res_bh = engine_bh.run(df_test, signal_col="sig_bh")
 
-        # Formatear las curves de capital
         eq_ml = [{"time": idx.strftime("%Y-%m-%d"), "value": float(val)} for idx, val in res_ml.equity_curve.items()]
         eq_ta = [{"time": idx.strftime("%Y-%m-%d"), "value": float(val)} for idx, val in res_ta.equity_curve.items()]
         eq_bh = [{"time": idx.strftime("%Y-%m-%d"), "value": float(val)} for idx, val in res_bh.equity_curve.items()]
@@ -144,6 +139,9 @@ async def simulate_ml_strategy(
                 "equity_curves": {"ml": eq_ml, "ta": eq_ta, "bh": eq_bh},
             }
         )
+
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

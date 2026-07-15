@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 
 from api.genetic_worker import run_genetic_process
@@ -20,40 +22,37 @@ async def run_backtest(
     period: str = Query("1y", description="Periodo de datos"),
     interval: str = Query("1d", description="Intervalo de datos"),
 ):
-    try:
-        ticker = ticker.upper().strip()
-        df = fetcher.get_data(ticker, period=period, interval=interval)
+    def _run():
+        t = ticker.upper().strip()
+        df = fetcher.get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
         df = SignalGenerator.add_signal_columns(df)
-
         result = engine.run(df)
 
-        # Formatear la equity curve para lightweight charts
         equity_curve = []
         for idx, val in result.equity_curve.items():
             equity_curve.append({"time": idx.strftime("%Y-%m-%d"), "value": float(val)})
 
-        # Formatear el historial de trades
         trades_list = []
-        for t in result.trades:
+        for trade in result.trades:
             trades_list.append(
                 {
-                    "entry_date": t.entry_date.strftime("%Y-%m-%d"),
-                    "exit_date": t.exit_date.strftime("%Y-%m-%d"),
-                    "side": t.side,
-                    "entry_price": t.entry_price,
-                    "exit_price": t.exit_price,
-                    "shares": t.shares,
-                    "pnl": t.pnl,
-                    "pnl_pct": t.pnl_pct,
-                    "commission": t.commission,
-                    "reason": t.reason or "exit",
+                    "entry_date": trade.entry_date.strftime("%Y-%m-%d"),
+                    "exit_date": trade.exit_date.strftime("%Y-%m-%d"),
+                    "side": trade.side,
+                    "entry_price": trade.entry_price,
+                    "exit_price": trade.exit_price,
+                    "shares": trade.shares,
+                    "pnl": trade.pnl,
+                    "pnl_pct": trade.pnl_pct,
+                    "commission": trade.commission,
+                    "reason": trade.reason or "exit",
                 }
             )
 
         return sanitize_for_json(
             {
-                "ticker": ticker,
+                "ticker": t,
                 "period": period,
                 "interval": interval,
                 "metrics": result.metrics,
@@ -66,6 +65,9 @@ async def run_backtest(
                 },
             }
         )
+
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -79,22 +81,19 @@ async def validate_strategy(
     test_months: int = Query(6, ge=1, le=12, description="Meses de prueba WFO"),
     n_simulations: int = Query(1000, ge=100, le=10000, description="Simulaciones Monte Carlo"),
 ):
-    try:
-        ticker = ticker.upper().strip()
-        df = fetcher.get_data(ticker, period=period, interval=interval)
+    def _run():
+        t = ticker.upper().strip()
+        df = fetcher.get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
         df = SignalGenerator.add_signal_columns(df)
-
         report = run_validation(
             df=df,
-            ticker=ticker,
+            ticker=t,
             period=period,
             train_months=train_months,
             test_months=test_months,
             n_mc_simulations=n_simulations,
         )
-
-        # Convert to JSON-serializable
         return sanitize_for_json(
             {
                 "ticker": report.ticker,
@@ -134,6 +133,9 @@ async def validate_strategy(
                 "html_report": report.html_report,
             }
         )
+
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

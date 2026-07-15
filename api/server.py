@@ -138,13 +138,17 @@ async def get_feature_flags():
 @app.get("/api/data/info", summary="Estado de la capa de datos y caché")
 async def get_data_info():
     """Métricas de la capa de datos: provider, caché, calidad."""
-    from data.data_manager import data_manager
 
-    dm = data_manager.health()
-    from data.cache_manager import cache_manager
+    def _run():
+        from data.data_manager import data_manager
 
-    dm["cache_index"] = cache_manager.to_dict()
-    return dm
+        dm = data_manager.health()
+        from data.cache_manager import cache_manager
+
+        dm["cache_index"] = cache_manager.to_dict()
+        return dm
+
+    return await asyncio.to_thread(_run)
 
 
 # Estado del Ensemble Adaptativo
@@ -293,46 +297,48 @@ def _start_keepalive(base_url: str) -> None:
 # ── Health check para la plataforma (Render/Fly.io) ────────────────────
 @app.get("/health")
 async def platform_health():
-    """Health check real: verifica broker, bot, DB y data layer.
+    """Health check real: verifica broker, bot, DB y data layer."""
 
-    No basta con responder 200 — el servicio puede estar vivo
-    pero el bot colgado. Este endpoint verifica componentes críticos.
-    """
-    checks: dict[str, object] = {"api": "ok"}
-    status_code = 200
+    def _run_checks():
+        checks: dict[str, object] = {"api": "ok"}
+        status_code = 200
 
-    # Data layer health
-    try:
-        from data.data_manager import data_manager
+        # Data layer health
+        try:
+            from data.data_manager import data_manager
 
-        dm_health = data_manager.health()
-        checks["data"] = dm_health
-        if dm_health.get("quality_check", {}).get("status") != "ok":
+            dm_health = data_manager.health()
+            checks["data"] = dm_health
+            if dm_health.get("quality_check", {}).get("status") != "ok":
+                status_code = 503
+        except Exception as e:
+            checks["data"] = f"error: {e}"
             status_code = 503
-    except Exception as e:
-        checks["data"] = f"error: {e}"
-        status_code = 503
 
-    # Verificar broker
-    try:
-        from broker.alpaca_client import AlpacaClient
+        # Verificar broker
+        try:
+            from broker.alpaca_client import AlpacaClient
 
-        c = AlpacaClient()
-        connected = c.is_connected()
-        checks["broker"] = "ok" if connected else "disconnected"
-        if not connected:
+            c = AlpacaClient()
+            connected = c.is_connected()
+            checks["broker"] = "ok" if connected else "disconnected"
+            if not connected:
+                status_code = 503
+        except Exception as e:
+            checks["broker"] = f"error: {e}"
             status_code = 503
-    except Exception as e:
-        checks["broker"] = f"error: {e}"
-        status_code = 503
 
-    # Verificar bot
-    try:
-        from api.routes.broker import bot
+        # Verificar bot
+        try:
+            from api.routes.broker import bot
 
-        checks["bot"] = "running" if bot.is_running else "stopped"
-    except Exception:
-        checks["bot"] = "unknown"
+            checks["bot"] = "running" if bot.is_running else "stopped"
+        except Exception:
+            checks["bot"] = "unknown"
+
+        return checks, status_code
+
+    checks, status_code = await asyncio.to_thread(_run_checks)
 
     from fastapi.responses import JSONResponse
 
