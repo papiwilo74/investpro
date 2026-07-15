@@ -434,8 +434,8 @@ async def get_broker_dashboard() -> dict[str, Any]:
 
     Reemplaza 12 llamadas separadas por 1 sola → 10x más rápido en Render free.
     """
-    try:
-        # Datos básicos
+
+    def _run():
         bot_status = {
             "active": bot.is_running,
             "connected": client.is_connected(),
@@ -448,13 +448,11 @@ async def get_broker_dashboard() -> dict[str, Any]:
         positions = client.get_positions()
         orders = client.get_orders()
 
-        # Risk manager
         if acc:
             bot.risk_manager.set_portfolio_value(acc.get("equity", 0))
         bot.risk_manager.set_positions(positions)
         risk = bot.risk_manager.to_dict()
 
-        # Config
         params = bot._strategy_params
         config = {
             "strategy_mode": bot.strategy_mode,
@@ -480,10 +478,8 @@ async def get_broker_dashboard() -> dict[str, Any]:
             },
         }
 
-        # Kelly
         kelly = kelly_tracker.to_dict()
 
-        # ML status (ligero — solo lee archivos)
         from config import PROJECT_ROOT
 
         models_dir = PROJECT_ROOT / "ml" / "models"
@@ -507,7 +503,6 @@ async def get_broker_dashboard() -> dict[str, Any]:
                 except Exception:
                     continue
 
-        # Advisor (ligero)
         advisor = None
         if bot.online_advisor:
             try:
@@ -515,13 +510,13 @@ async def get_broker_dashboard() -> dict[str, Any]:
             except Exception:
                 advisor = {"status": "error"}
 
-        # Market regime (cacheado 30 min)
         try:
-            regime = bot.market_regime.to_dict()
+            regime = (
+                bot.market_regime.to_dict() if bot.market_regime else {"regime": "UNKNOWN", "reason": "No disponible"}
+            )
         except Exception:
             regime = {"regime": "UNKNOWN", "reason": "Error"}
 
-        # Market breadth (cacheado 60 min)
         breadth = None
         if bot.market_breadth:
             try:
@@ -544,6 +539,9 @@ async def get_broker_dashboard() -> dict[str, Any]:
                 "market_breadth": breadth,
             }
         )
+
+    try:
+        return await asyncio.to_thread(_run)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
