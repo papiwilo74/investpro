@@ -293,9 +293,9 @@ class AdvisorStatusResponse(BaseModel):
     active: bool = False
     accuracy: float = 0.0
     last_decision: str = "N/A"
-    trades_seen: int = 0
-    states_learned: int = 0
-    epsilon: float = 0.0
+    trades_seen: int | None = None
+    states_learned: int | None = None
+    epsilon: float | None = None
     value_added_pct: float | None = None
     performance: dict[str, Any] | None = None
     recent_trades: list[dict[str, Any]] = []
