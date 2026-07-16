@@ -5,15 +5,31 @@ from fastapi import APIRouter, HTTPException, Query
 from api.genetic_worker import run_genetic_process
 from api.job_manager import job_manager
 from api.utils import sanitize_for_json
-from backtesting.bot_engine import BotBacktestEngine
 from backtesting.validation import run_validation
-from data.fetcher import DataFetcher
 from indicators.signals import SignalGenerator
 from indicators.technical import TechnicalIndicators
 
 router = APIRouter()
-fetcher = DataFetcher()
-engine = BotBacktestEngine()
+_fetcher = None
+_engine = None
+
+
+def _get_fetcher():
+    global _fetcher
+    if _fetcher is None:
+        from data.fetcher import DataFetcher
+
+        _fetcher = DataFetcher()
+    return _fetcher
+
+
+def _get_engine():
+    global _engine
+    if _engine is None:
+        from backtesting.bot_engine import BotBacktestEngine
+
+        _engine = BotBacktestEngine()
+    return _engine
 
 
 @router.get("/{ticker}")
@@ -24,7 +40,8 @@ async def run_backtest(
 ):
     def _run():
         t = ticker.upper().strip()
-        df = fetcher.get_data(t, period=period, interval=interval)
+        engine = _get_engine()
+        df = _get_fetcher().get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
         df = SignalGenerator.add_signal_columns(df)
         result = engine.run(df)
@@ -83,7 +100,7 @@ async def validate_strategy(
 ):
     def _run():
         t = ticker.upper().strip()
-        df = fetcher.get_data(t, period=period, interval=interval)
+        df = _get_fetcher().get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
         df = SignalGenerator.add_signal_columns(df)
         report = run_validation(

@@ -4,17 +4,32 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from api.utils import sanitize_for_json
-from backtesting.engine import BacktestEngine
-from data.fetcher import DataFetcher
 from indicators.signals import SignalGenerator
 from indicators.technical import TechnicalIndicators
 from ml.champion_challenger import champion_challenger
 from ml.model_gate import model_gate
-from ml.train import ModelTrainer
 
 router = APIRouter()
-fetcher = DataFetcher()
-trainer = ModelTrainer()
+_fetcher = None
+_trainer = None
+
+
+def _get_fetcher():
+    global _fetcher
+    if _fetcher is None:
+        from data.fetcher import DataFetcher
+
+        _fetcher = DataFetcher()
+    return _fetcher
+
+
+def _get_trainer():
+    global _trainer
+    if _trainer is None:
+        from ml.train import ModelTrainer
+
+        _trainer = ModelTrainer()
+    return _trainer
 
 
 class MLTrainRequest(BaseModel):
@@ -37,11 +52,12 @@ async def get_ml_status(
     interval: str = Query("1d", description="Intervalo de datos"),
 ):
     def _run():
+        trainer = _get_trainer()
         t = ticker.upper().strip()
         model_data = trainer.load_model(t)
         if model_data is None:
             return sanitize_for_json({"has_model": False})
-        df = fetcher.get_data(t, period=period, interval=interval)
+        df = _get_fetcher().get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
         prediction = trainer.predict_trend(t, df)
         return sanitize_for_json(
@@ -66,6 +82,7 @@ async def get_ml_status(
 @router.post("/{ticker}/train")
 async def train_ml_model(ticker: str, req: MLTrainRequest):
     def _run():
+        trainer = _get_trainer()
         t = ticker.upper().strip()
         kwargs = {"period": "10y", "optimize": req.optimize}
         if req.horizon is not None:
@@ -73,7 +90,7 @@ async def train_ml_model(ticker: str, req: MLTrainRequest):
         if req.min_return is not None:
             kwargs["min_return"] = req.min_return
         model_data = trainer.train_and_save(t, **kwargs)
-        df = fetcher.get_data(t, period="1y", interval="1d")
+        df = _get_fetcher().get_data(t, period="1y", interval="1d")
         df = TechnicalIndicators.add_all(df)
         prediction = trainer.predict_trend(t, df)
         return sanitize_for_json(
@@ -104,8 +121,11 @@ async def simulate_ml_strategy(
     interval: str = Query("1d", description="Intervalo de datos"),
 ):
     def _run():
+        from backtesting.engine import BacktestEngine
+
+        trainer = _get_trainer()
         t = ticker.upper().strip()
-        df = fetcher.get_data(t, period=period, interval=interval)
+        df = _get_fetcher().get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
         df_test = trainer.get_test_predictions(t, df)
 

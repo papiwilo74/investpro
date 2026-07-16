@@ -6,12 +6,18 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from api.utils import sanitize_for_json
-from bot.portfolio_allocator import PortfolioAllocator
-from portfolio.optimizer import PortfolioOptimizer
 
 router = APIRouter()
-optimizer = PortfolioOptimizer()
-allocator = PortfolioAllocator()
+_optimizer = None
+
+
+def _get_optimizer():
+    global _optimizer
+    if _optimizer is None:
+        from portfolio.optimizer import PortfolioOptimizer
+
+        _optimizer = PortfolioOptimizer()
+    return _optimizer
 
 
 class PortfolioOptimizeRequest(BaseModel):
@@ -26,6 +32,7 @@ async def optimize_portfolio(req: PortfolioOptimizeRequest):
         raise HTTPException(status_code=400, detail="Se necesitan al menos 2 tickers para optimizar.")
 
     def _run():
+        optimizer = _get_optimizer()
         tickers = [t.upper().strip() for t in req.tickers]
         prices_df = optimizer.get_portfolio_prices(tickers, period=req.period, interval="1d")
         mean_returns, cov_matrix = optimizer.calculate_stats(prices_df)
@@ -83,6 +90,8 @@ class RebalanceRequest(BaseModel):
 @router.post("/allocate")
 async def compute_allocation(req: AllocateRequest):
     try:
+        from bot.portfolio_allocator import PortfolioAllocator
+
         tickers = [t.upper().strip() for t in req.tickers]
         alloc = PortfolioAllocator(
             method=req.method,
@@ -103,6 +112,8 @@ async def compute_allocation(req: AllocateRequest):
 @router.post("/rebalance")
 async def compute_rebalance(req: RebalanceRequest):
     try:
+        from bot.portfolio_allocator import PortfolioAllocator
+
         alloc = PortfolioAllocator()
         plan = alloc.rebalance_plan(req.target_weights, req.current_positions, req.equity)
         return sanitize_for_json({"plan": plan})
