@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pandas as pd
@@ -55,9 +56,12 @@ class DataManager:
                 return cached
 
         errors: list[str] = []
+        fetch_timeout = 15  # seconds per provider to avoid cumulative hangs
         for prov in self._all_providers():
             try:
-                df = prov.fetch(ticker, period=period, interval=interval)
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(prov.fetch, ticker, period=period, interval=interval)
+                    df = future.result(timeout=fetch_timeout)
                 if df.empty:
                     raise ValueError(f"empty data from {prov.name()}")
 

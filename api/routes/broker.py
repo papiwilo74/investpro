@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Any
 
@@ -444,9 +445,14 @@ async def get_broker_dashboard() -> dict[str, Any]:
             "last_scan": bot.last_scan or datetime.utcnow().isoformat(),
             "logs": bot.logs[-30:],
         }
-        acc = client.get_account_summary()
-        positions = client.get_positions()
-        orders = client.get_orders()
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            f_acc = pool.submit(client.get_account_summary)
+            f_pos = pool.submit(client.get_positions)
+            f_ord = pool.submit(client.get_orders)
+            acc = f_acc.result(timeout=12)
+            positions = f_pos.result(timeout=12)
+            orders = f_ord.result(timeout=12)
 
         if acc:
             bot.risk_manager.set_portfolio_value(acc.get("equity", 0))
@@ -541,7 +547,9 @@ async def get_broker_dashboard() -> dict[str, Any]:
         )
 
     try:
-        return await asyncio.to_thread(_run)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=25)
+    except TimeoutError:
+        raise HTTPException(status_code=504, detail="Tiempo de espera agotado: broker no responde")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

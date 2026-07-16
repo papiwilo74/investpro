@@ -118,16 +118,18 @@ class WalkForwardOptimizer:
             if len(train_df) < 30 or len(test_df) < 10:
                 break
 
-            # Grid search on training window
+            # Grid search on training window (reuse engine to avoid repeated object creation)
             best_params = None
             best_sharpe = -999
             best_train_metrics = {}
 
+            engine = BotBacktestEngine(StrategyParams())
             for combo in product(*self.param_grid.values()):
                 params_dict = dict(zip(self.param_grid.keys(), combo))
                 params = StrategyParams(**params_dict)
+                engine.strategy_params = params
+                engine.brain.params = params
                 try:
-                    engine = BotBacktestEngine(params)
                     result = engine.run(train_df, ticker=ticker)
                     if result.metrics["sharpe_ratio"] > best_sharpe:
                         best_sharpe = result.metrics["sharpe_ratio"]

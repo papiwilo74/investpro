@@ -121,14 +121,14 @@ def _evaluate_params(params_dict: dict) -> dict:
         "profit_factor": 0.0,
     }
     n = 0
+    params = StrategyParams(**params_dict)
+    engine = BotBacktestEngine(strategy_params=params)
     for ticker in DEFAULT_TICKERS:
         try:
             df = _DATA_CACHE.get(ticker)
             if df is None or df.empty:
                 continue
 
-            params = StrategyParams(**params_dict)
-            engine = BotBacktestEngine(strategy_params=params)
             result = engine.run(df, ticker=ticker)
             m = result.metrics
             for k in total_metrics:
@@ -138,8 +138,12 @@ def _evaluate_params(params_dict: dict) -> dict:
                 else:
                     total_metrics[k] += v
             n += 1
+            del result
         except Exception:
             continue
+
+    del engine
+    gc.collect()
 
     if n == 0:
         fitness = -99999.0
@@ -329,7 +333,7 @@ class GeneticOptimizer:
         """
         if workers is None:
             workers = max(1, os.cpu_count() // 4 if platform.system() == "Windows" else os.cpu_count() // 2)
-        workers = min(workers, 4)  # Cap seguro para evitar OOM en portátiles
+        workers = min(workers, 2)  # Cap seguro para evitar OOM en contenedores con RAM limitada
 
         # Precargar datos UNA SOLA VEZ ANTES de las evaluaciones
         _preload_data()
@@ -506,15 +510,27 @@ class GeneticOptimizer:
         }
 
     def _run_wfo(self, params: dict) -> dict | None:
-        """Walk-Forward Optimization sobre el mejor individuo encontrado."""
+        """Walk-Forward Optimization sobre el mejor individuo encontrado.
+
+        Ejecuta WFO por ticker individual (sin concatenar DataFrames en memoria)
+        y agrega los resultados para evitar duplicación masiva de datos.
+        """
         try:
             from backtesting.validation import WalkForwardOptimizer
             from data.fetcher import DataFetcher
             from indicators.signals import SignalGenerator
             from indicators.technical import TechnicalIndicators
 
-            # Usar cache global si está disponible, o cargar datos frescos
-            all_dfs = []
+            wfo = WalkForwardOptimizer(
+                train_months=self.wfo_train_months,
+                test_months=self.wfo_test_months,
+            )
+
+            all_sharpes: list[float] = []
+            all_ratios: list[float] = []
+            all_windows: list[dict] = []
+            tickers_evaluated = 0
+
             for t in self.tickers:
                 df = _DATA_CACHE.get(t)
                 if df is None or df.empty:
@@ -523,28 +539,34 @@ class GeneticOptimizer:
                     if not df.empty:
                         df = TechnicalIndicators.add_all(df)
                         df = SignalGenerator.add_signal_columns(df)
-                if df is not None and not df.empty:
-                    all_dfs.append(df)
+                if df is None or df.empty:
+                    continue
 
-            if not all_dfs:
-                return None
+                try:
+                    windows = wfo.run(df, ticker=t)
+                except Exception:
+                    continue
 
-            full_df = pd.concat(all_dfs, axis=0)
-            full_df = full_df[~full_df.index.duplicated(keep="first")].sort_index()
+                if windows:
+                    tickers_evaluated += 1
+                    for w in windows:
+                        all_sharpes.append(w.sharpe_oos)
+                        all_ratios.append(w.overfit_ratio)
+                        all_windows.append(
+                            {
+                                "idx": w.window_idx,
+                                "ticker": t,
+                                "sharpe_is": w.sharpe_is,
+                                "sharpe_oos": w.sharpe_oos,
+                                "ratio": w.overfit_ratio,
+                            }
+                        )
 
-            wfo = WalkForwardOptimizer(
-                train_months=self.wfo_train_months,
-                test_months=self.wfo_test_months,
-            )
-            windows = wfo.run(full_df, ticker="GA_WFO")
-
-            if not windows:
+            if not all_sharpes:
                 return {"verdict": "APROBADO", "windows": [], "note": "Sin ventanas WFO"}
 
-            oos_sharpes = [w.sharpe_oos for w in windows]
-            ratios = [w.overfit_ratio for w in windows]
-            avg_oos_sharpe = sum(oos_sharpes) / len(oos_sharpes)
-            avg_ratio = sum(ratios) / len(ratios)
+            avg_oos_sharpe = sum(all_sharpes) / len(all_sharpes)
+            avg_ratio = sum(all_ratios) / len(all_ratios)
 
             rejected = avg_oos_sharpe <= 0 or avg_ratio < 0.4
             conditional = avg_ratio < 0.6
@@ -553,18 +575,10 @@ class GeneticOptimizer:
 
             return {
                 "verdict": verdict,
-                "n_windows": len(windows),
+                "n_windows": len(all_windows),
                 "avg_oos_sharpe": round(avg_oos_sharpe, 4),
                 "avg_ratio_oos_is": round(avg_ratio, 4),
-                "windows": [
-                    {
-                        "idx": w.window_idx,
-                        "sharpe_is": w.sharpe_is,
-                        "sharpe_oos": w.sharpe_oos,
-                        "ratio": w.overfit_ratio,
-                    }
-                    for w in windows
-                ],
+                "windows": all_windows[:12],
             }
         except Exception as e:
             return {"verdict": "APROBADO", "error": str(e), "note": "WFO falló, se omitió validación"}

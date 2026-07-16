@@ -38,7 +38,9 @@ async def scan_opportunities(
         return sanitize_for_json(result.to_dict())
 
     try:
-        return await asyncio.to_thread(_run)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=25)
+    except TimeoutError:
+        raise HTTPException(status_code=504, detail="Tiempo de espera agotado al escanear mercado")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -64,11 +66,12 @@ async def get_market_data(
         macd = []
         bb = []
 
-        for idx, row in df.iterrows():
-            time_str = idx.strftime("%Y-%m-%d")
+        times = df.index.strftime("%Y-%m-%d").tolist()
+        for i, (idx, row) in enumerate(df.iterrows()):
+            ts = times[i]
             candles.append(
                 {
-                    "time": time_str,
+                    "time": ts,
                     "open": row["open"],
                     "high": row["high"],
                     "low": row["low"],
@@ -77,25 +80,25 @@ async def get_market_data(
                 }
             )
             if "sma_20" in row and pd.notna(row["sma_20"]):
-                sma_20.append({"time": time_str, "value": row["sma_20"]})
+                sma_20.append({"time": ts, "value": row["sma_20"]})
             if "sma_50" in row and pd.notna(row["sma_50"]):
-                sma_50.append({"time": time_str, "value": row["sma_50"]})
+                sma_50.append({"time": ts, "value": row["sma_50"]})
             if "sma_200" in row and pd.notna(row["sma_200"]):
-                sma_200.append({"time": time_str, "value": row["sma_200"]})
+                sma_200.append({"time": ts, "value": row["sma_200"]})
             if "rsi" in row and pd.notna(row["rsi"]):
-                rsi.append({"time": time_str, "value": row["rsi"]})
-            if "macd" in row and "macd_signal" in row and "macd_histogram" in row:
+                rsi.append({"time": ts, "value": row["rsi"]})
+            if "macd" in row and pd.notna(row.get("macd")):
                 macd.append(
                     {
-                        "time": time_str,
+                        "time": ts,
                         "macd": row["macd"],
-                        "signal": row["macd_signal"],
-                        "histogram": row["macd_histogram"],
+                        "signal": row.get("macd_signal"),
+                        "histogram": row.get("macd_histogram"),
                     }
                 )
-            if "bb_upper" in row and "bb_middle" in row and "bb_lower" in row:
+            if "bb_upper" in row and pd.notna(row.get("bb_upper")):
                 bb.append(
-                    {"time": time_str, "upper": row["bb_upper"], "middle": row["bb_middle"], "lower": row["bb_lower"]}
+                    {"time": ts, "upper": row["bb_upper"], "middle": row.get("bb_middle"), "lower": row.get("bb_lower")}
                 )
 
         last_close = float(df["close"].iloc[-1])
@@ -120,7 +123,9 @@ async def get_market_data(
         )
 
     try:
-        return await asyncio.to_thread(_run)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=25)
+    except TimeoutError:
+        raise HTTPException(status_code=504, detail="Tiempo de espera agotado al obtener datos de mercado")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -143,6 +148,8 @@ async def get_market_news(
         return sanitize_for_json(result)
 
     try:
-        return await asyncio.to_thread(_run)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=25)
+    except TimeoutError:
+        raise HTTPException(status_code=504, detail="Tiempo de espera agotado al cargar noticias")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
