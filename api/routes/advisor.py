@@ -8,13 +8,30 @@ from fastapi import APIRouter, HTTPException, Query
 from api.schemas import AdvisorEndpointResponse
 from api.utils import sanitize_for_json
 from app.components.advisor import generate_advisor_briefing
-from data.fetcher import DataFetcher
 from indicators.technical import TechnicalIndicators
-from ml.train import ModelTrainer
 
 router = APIRouter()
-fetcher = DataFetcher()
-trainer = ModelTrainer()
+
+_fetcher = None
+_trainer = None
+
+
+def _get_fetcher():
+    global _fetcher
+    if _fetcher is None:
+        from data.fetcher import DataFetcher
+
+        _fetcher = DataFetcher()
+    return _fetcher
+
+
+def _get_trainer():
+    global _trainer
+    if _trainer is None:
+        from ml.train import ModelTrainer
+
+        _trainer = ModelTrainer()
+    return _trainer
 
 
 @router.get("/{ticker}", response_model=AdvisorEndpointResponse)
@@ -27,9 +44,9 @@ async def get_advisor_briefing(
 
     def _run():
         t = ticker.upper().strip()
-        df = fetcher.get_data(t, period=period, interval=interval)
+        df = _get_fetcher().get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
-        brief = generate_advisor_briefing(t, df, trainer)
+        brief = generate_advisor_briefing(t, df, _get_trainer())
         return sanitize_for_json(brief)
 
     try:
@@ -51,7 +68,7 @@ async def ask_advisor_question(
 
     def _run():
         t = ticker.upper().strip()
-        df = fetcher.get_data(t, period=period, interval=interval)
+        df = _get_fetcher().get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
         last_price = float(df["close"].iloc[-1])
 

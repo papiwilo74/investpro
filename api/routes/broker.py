@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# ruff: noqa: F821  — bot/client/notifier/kelly_tracker/shadow_trader/smart_router
+# se definen vía __getattr__ a nivel de módulo para lazy-loading en Render free.
+# ruff no detecta asignaciones dentro de __getattr__ como definiciones válidas.
 import asyncio
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -21,11 +24,6 @@ from api.schemas import (
     MLStatusResponse,
 )
 from api.utils import sanitize_for_json
-from bot.engine import TradingBot
-from bot.notifications import notifier
-from bot.shadow_trader import ShadowTrader
-from bot.strategy import kelly_tracker
-from broker.smart_router import SmartOrderRouter
 from config import BROKER_CONFIG, WEB_RISK_CONFIG
 
 # Router público (sin JWT por ahora)
@@ -33,14 +31,75 @@ router = APIRouter()
 # Router público (health checks, etc.)
 public_router = APIRouter()
 
-# Bot web en modo conservador: LONG robusto, sin NN/RL/short/scalp.
-bot = TradingBot(strategy_mode="web")
-client = bot.client
-journal = bot.journal
 
-# Hedge-fund modules
-shadow_trader = ShadowTrader(fetcher=bot.fetcher)
-smart_router = SmartOrderRouter(client)
+# ── Lazy init: evitar cargar TradingBot (~300MB) al importar ─────────
+# Render free tier (512MB) no soporta import eager de todos los módulos.
+# Los objetos se crean en el primer request, no al arrancar.
+
+_lazy_bot = None
+_lazy_client = None
+_lazy_journal = None
+_lazy_shadow = None
+_lazy_router = None
+_lazy_notifier = None
+_lazy_kelly_tracker = None
+
+
+def _init_lazy():
+    global _lazy_bot, _lazy_client, _lazy_journal, _lazy_shadow, _lazy_router
+    global _lazy_notifier, _lazy_kelly_tracker
+    if _lazy_bot is not None:
+        return
+    from bot.engine import TradingBot
+    from bot.notifications import notifier as _notifier
+    from bot.shadow_trader import ShadowTrader
+    from bot.strategy import kelly_tracker as _kelly
+    from broker.smart_router import SmartOrderRouter
+
+    _lazy_bot = TradingBot(strategy_mode="web")
+    _lazy_client = _lazy_bot.client
+    _lazy_journal = _lazy_bot.journal
+    _lazy_shadow = ShadowTrader(fetcher=_lazy_bot.fetcher)
+    _lazy_router = SmartOrderRouter(_lazy_client)
+    _lazy_notifier = _notifier
+    _lazy_kelly_tracker = _kelly
+
+
+def _get_bot():
+    _init_lazy()
+    return _lazy_bot
+
+
+def _get_client():
+    _init_lazy()
+    return _lazy_client
+
+
+def __getattr__(name: str):
+    """Lazy loading: bot, client, journal, shadow_trader, smart_router se crean
+    al primer acceso, no al importar el módulo. Ahorra ~300MB en Render free."""
+    if name == "bot":
+        _init_lazy()
+        return _lazy_bot
+    if name == "client":
+        _init_lazy()
+        return _lazy_client
+    if name == "journal":
+        _init_lazy()
+        return _lazy_journal
+    if name == "shadow_trader":
+        _init_lazy()
+        return _lazy_shadow
+    if name == "smart_router":
+        _init_lazy()
+        return _lazy_router
+    if name == "notifier":
+        _init_lazy()
+        return _lazy_notifier
+    if name == "kelly_tracker":
+        _init_lazy()
+        return _lazy_kelly_tracker
+    raise AttributeError(name)
 
 
 @router.get("/account")

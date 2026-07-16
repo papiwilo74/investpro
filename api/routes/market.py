@@ -8,13 +8,30 @@ from fastapi import APIRouter, HTTPException, Query
 
 from api.schemas import NewsResponse
 from api.utils import sanitize_for_json
-from bot.scanner import MarketScanner
-from data.fetcher import DataFetcher
 from indicators.technical import TechnicalIndicators
 
 router = APIRouter()
-fetcher = DataFetcher()
-scanner = MarketScanner(fetcher=fetcher)
+
+_fetcher = None
+_scanner = None
+
+
+def _get_fetcher():
+    global _fetcher
+    if _fetcher is None:
+        from data.fetcher import DataFetcher
+
+        _fetcher = DataFetcher()
+    return _fetcher
+
+
+def _get_scanner():
+    global _scanner
+    if _scanner is None:
+        from bot.scanner import MarketScanner
+
+        _scanner = MarketScanner(fetcher=_get_fetcher())
+    return _scanner
 
 
 @router.get("/scanner/opportunities")
@@ -28,7 +45,7 @@ async def scan_opportunities(
     """Escanea el mercado en busca de oportunidades de trading basadas en indicadores técnicos."""
 
     def _run():
-        result = scanner.scan(
+        result = _get_scanner().scan(
             universe=universe,
             period=period,
             interval=interval,
@@ -55,7 +72,7 @@ async def get_market_data(
 
     def _run():
         t = ticker.upper().strip()
-        df = fetcher.get_data(t, period=period, interval=interval)
+        df = _get_fetcher().get_data(t, period=period, interval=interval)
         df = TechnicalIndicators.add_all(df)
 
         candles = []
