@@ -63,12 +63,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     if base_url:
         _start_keepalive(base_url)
 
+    # Auto-arrancar el bot 10s después del startup para no interferir con el health check
+    loop = asyncio.get_running_loop()
+    loop.call_later(10, lambda: asyncio.ensure_future(_auto_start_bot()))
+
     yield
 
     from api.routes.broker import bot
 
     if bot.is_running:
         await bot.stop_async()
+
+
+async def _auto_start_bot():
+    """Arranca el bot automáticamente después del startup."""
+    import logging as _logging
+
+    try:
+        from api.routes.broker import bot
+
+        if not bot.is_running:
+            _logging.info("Auto-arrancando bot...")
+            await bot.start_async()
+            _logging.info("Bot iniciado automáticamente en modo %s", bot.strategy_mode)
+    except Exception as e:
+        _logging.error("Error al auto-arrancar el bot: %s", e)
 
 
 app = FastAPI(
