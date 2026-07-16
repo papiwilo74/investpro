@@ -297,44 +297,33 @@ def _start_keepalive(base_url: str) -> None:
 # ── Health check para la plataforma (Render/Fly.io) ────────────────────
 @app.get("/health")
 async def platform_health():
-    """Health check real: verifica broker, bot, DB y data layer."""
+    """Health check ligero: no carga el bot ni módulos pesados para evitar OOM."""
 
     def _run_checks():
         checks: dict[str, object] = {"api": "ok"}
         status_code = 200
 
-        # Data layer health
+        # Data layer health (ligero: solo verifica que el módulo existe)
         try:
-            from data.data_manager import data_manager
+            import importlib
 
-            dm_health = data_manager.health()
-            checks["data"] = dm_health
-            if dm_health.get("quality_check", {}).get("status") != "ok":
-                status_code = 503
+            importlib.import_module("data.data_manager")
+            checks["data"] = "available"
         except Exception as e:
             checks["data"] = f"error: {e}"
             status_code = 503
 
-        # Verificar broker
+        # Verificar broker (ligero: solo verifica credenciales, no conecta)
         try:
-            from broker.alpaca_client import AlpacaClient
+            from config import BROKER_CONFIG
 
-            c = AlpacaClient()
-            connected = c.is_connected()
-            checks["broker"] = "ok" if connected else "disconnected"
-            if not connected:
+            has_key = bool(BROKER_CONFIG.api_key)
+            checks["broker"] = "configured" if has_key else "missing_credentials"
+            if not has_key:
                 status_code = 503
         except Exception as e:
             checks["broker"] = f"error: {e}"
             status_code = 503
-
-        # Verificar bot
-        try:
-            from api.routes.broker import bot
-
-            checks["bot"] = "running" if bot.is_running else "stopped"
-        except Exception:
-            checks["bot"] = "unknown"
 
         return checks, status_code
 
