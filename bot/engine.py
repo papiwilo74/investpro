@@ -35,7 +35,6 @@ from db import init_db as init_database
 from indicators.signals import SignalGenerator
 from indicators.technical import TechnicalIndicators
 from ml.sentiment import SentimentAnalyzer
-from ml.train import ModelTrainer
 
 
 class TradingBot:
@@ -62,7 +61,7 @@ class TradingBot:
         self.strategy_mode = strategy_mode
         self.client = create_broker_client()
         self.fetcher = DataFetcher()
-        self.trainer = ModelTrainer()
+        self._trainer = None  # lazy — XGBoost+sklearn (~200MB), solo al necesitar ML
         self.sentiment = SentimentAnalyzer() if use_sentiment else None
         self.journal = SignalJournal(fetcher=self.fetcher)
         self.scanner = MarketScanner(fetcher=self.fetcher, journal=self.journal)
@@ -190,6 +189,15 @@ class TradingBot:
         # ── Registrar signal handlers para graceful shutdown ──────────
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
+
+    @property
+    def trainer(self):
+        """Lazy-load ModelTrainer (~200MB: XGBoost + sklearn + ta)."""
+        if self._trainer is None:
+            from ml.train import ModelTrainer
+
+            self._trainer = ModelTrainer()
+        return self._trainer
 
     def _restore_state(self) -> int:
         """Recupera posiciones abiertas de Alpaca y restaura su estado (trailing stops, etc.)."""
