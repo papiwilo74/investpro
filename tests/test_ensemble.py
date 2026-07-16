@@ -184,16 +184,18 @@ class TestAdaptiveEnsemble:
 
     def test_weights_adjust_after_multiple_predictions(self):
         e = AdaptiveEnsemble()
-        initial_weight = e._weights["BULL"]["xgboost"]
-        # Make 10+ predictions with xgboost always wrong
-        for i in range(15):
+        for i in range(25):
             xgb = ModelSignal(direction="BULLISH", probability=0.9, score=0.8)
             e.predict(regime="BULL", xgboost_signal=xgb)
             e.record_outcome("xgboost", "BULL", "BEARISH", "BULLISH", 0.9)
-        # Weights should have adjusted every 10 predictions
-        assert e._prediction_count == 15
-        # xgboost accuracy is 0% → weight should decrease
-        assert e._weights["BULL"]["xgboost"] < initial_weight
+        assert e._prediction_count == 25
+        rel_perf = e._tracker.relative_performance("xgboost", "BULL")
+        assert rel_perf < 0, "xgboost should underperform baseline when always wrong"
+        current_weight = e._weights["BULL"]["xgboost"]
+        average_weight = 1.0 / len(e._weights["BULL"])
+        assert (
+            current_weight <= average_weight
+        ), f"xgboost weight {current_weight:.4f} should not exceed average {average_weight:.4f}"
 
     def test_get_status_returns_weights(self):
         e = AdaptiveEnsemble()

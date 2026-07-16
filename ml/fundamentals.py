@@ -72,5 +72,37 @@ class FundamentalFetcher:
         for s in SECTOR_LIST:
             features[f"sector_{s.lower().replace(' ', '_')}"] = 1.0 if sector == s else 0.0
 
-        self._cache[ticker] = features
-        return features.copy()
+    def get_signal(self, ticker: str) -> dict[str, str | float] | None:
+        fund = self.fetch(ticker)
+        if not fund or fund.get("market_cap", 0) <= 0:
+            return None
+        score = 0.0
+        pe = fund.get("pe_ratio", 0)
+        if 5 < pe < 30:
+            score += 0.15
+        elif pe <= 0:
+            score -= 0.10
+        rg = fund.get("revenue_growth", 0)
+        if rg > 0.10:
+            score += 0.20
+        elif rg < 0:
+            score -= 0.15
+        pm = fund.get("profit_margins", 0)
+        if pm > 0.10:
+            score += 0.15
+        elif pm < 0:
+            score -= 0.15
+        roe = fund.get("return_on_equity", 0)
+        if roe > 0.15:
+            score += 0.15
+        elif roe < 0:
+            score -= 0.10
+        de = fund.get("debt_to_equity", 0)
+        if de > 200:
+            score -= 0.15
+        beta = fund.get("beta", 0)
+        if 0.5 < beta < 1.5:
+            score += 0.10
+        direction = "BULLISH" if score >= 0 else "BEARISH"
+        probability = min(0.85, max(0.50, 0.50 + score))
+        return {"direction": direction, "probability": probability, "score": round(score, 3)}

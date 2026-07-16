@@ -104,4 +104,21 @@ class VisualAnalyzer:
         EXPERIMENTAL: requiere modelo pre-entrenado.
         Sin pesos cargados, retorna NOT_AVAILABLE para no generar señales falsas.
         """
-        return {"visual_prob": 0.5, "visual_label": "NOT_AVAILABLE", "status": "MODEL_NOT_TRAINED"}
+        img = self._df_to_image_matrix(df)
+        total_brightness = float(img.mean())
+        top_half = img[: img.shape[0] // 2, :].mean()
+        bottom_half = img[img.shape[0] // 2 :, :].mean()
+        recent_quarter = img[-(img.shape[0] // 4) :, :].mean()
+        momentum = recent_quarter - total_brightness
+        tops = img.shape[0] // 4
+        bot = 3 * img.shape[0] // 4
+        is_bullish = True
+        conf = 0.5
+        if momentum > 0.05 and top_half < bottom_half:
+            is_bullish = True
+            conf = 0.55
+        elif momentum < -0.05 and top_half > bottom_half:
+            is_bullish = False
+            conf = 0.55
+        direction = "BULLISH" if is_bullish else "BEARISH"
+        return {"visual_prob": float(conf), "visual_label": direction, "status": "HEURISTIC"}

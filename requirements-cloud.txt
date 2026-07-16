@@ -1,5 +1,4 @@
 # Requirements ligero para deploy en la nube (Render/Railway/Fly.io)
-# Sin torch, stable-baselines3, gymnasium, streamlit
 # Versiones alineadas con pyproject.toml pero relajadas para wheels precompilados
 
 # Dependencias principales
@@ -11,6 +10,7 @@ plotly>=6.0
 pyarrow>=15.0
 scipy>=1.14
 scikit-learn>=1.9
+imbalanced-learn>=0.14
 
 # API web
 fastapi>=0.139
@@ -24,9 +24,18 @@ loguru>=0.7
 requests>=2.34
 structlog>=26.0
 
-# Machine Learning (solo XGBoost + VADER, sin torch)
+# Machine Learning
 xgboost>=3.3
 vaderSentiment>=3.3
+lightgbm>=4.0
+
+# Deep Learning & RL (opcional para cloud: solo falla silenciosamente si falta)
+torch>=2.5.1
+stable-baselines3>=2.5.0
+gymnasium>=1.1.1
+
+# NLP / Sentiment (FinBERT)
+transformers>=4.40
 
 # Base de datos
 sqlalchemy>=2.0.50

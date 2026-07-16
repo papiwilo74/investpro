@@ -25,11 +25,15 @@ pytz>=2024.2
 xgboost>=3.3.0
 vaderSentiment>=3.3.2
 imbalanced-learn>=0.14
+lightgbm>=4.0
 
-# Reinforcement Learning (opcional - solo para entrenamiento local)
-# torch>=2.5.1
-# gymnasium>=1.1.1
-# stable-baselines3>=2.5.0
+# Deep Learning & RL
+torch>=2.5.1
+gymnasium>=1.1.1
+stable-baselines3>=2.5.0
+
+# NLP / Sentiment (FinBERT)
+transformers>=4.40
 
 # Base de datos
 sqlalchemy>=2.0.51

@@ -660,6 +660,93 @@ class TradingBrain:
             except Exception:
                 pass
 
+            # ── Vision (CNN): análisis visual de chart ──────────────────
+            vision_signal = None
+            try:
+                from ml.vision import VisualAnalyzer
+
+                va = VisualAnalyzer()
+                vis_result = va.analyze_chart(df)
+                if vis_result.get("status") == "HEURISTIC":
+                    vis_dir = vis_result.get("visual_label", "NEUTRAL")
+                    vis_conf = vis_result.get("visual_prob", 0.5)
+                    vision_signal = ModelSignal(
+                        direction=vis_dir,
+                        probability=vis_conf,
+                        score=vis_conf if vis_dir == "BULLISH" else -vis_conf,
+                    )
+            except Exception:
+                pass
+
+            # ── Reddit Sentiment: sentimiento social ────────────────────
+            reddit_signal = None
+            if ticker:
+                try:
+                    from ml.reddit_sentiment import RedditSentimentAnalyzer
+
+                    rsa = RedditSentimentAnalyzer()
+                    reddit_result = rsa.analyze_ticker(ticker, limit=5)
+                    if reddit_result.get("posts_analyzed", 0) > 0:
+                        reddit_label = reddit_result.get("label", "NEUTRAL")
+                        reddit_dir_map = {
+                            "EUFORIA": "BULLISH",
+                            "ALCISTA": "BULLISH",
+                            "NEUTRAL": "NEUTRAL",
+                            "BAJISTA": "BEARISH",
+                            "PANICO": "BEARISH",
+                        }
+                        reddit_dir = reddit_dir_map.get(reddit_label, "NEUTRAL")
+                        if reddit_dir != "NEUTRAL":
+                            reddit_sent = reddit_result.get("avg_sentiment", 0.0)
+                            reddit_conf = min(0.85, max(0.50, 0.50 + abs(reddit_sent) * 1.5))
+                            reddit_signal = ModelSignal(
+                                direction=reddit_dir,
+                                probability=reddit_conf,
+                                score=reddit_sent,
+                            )
+                except Exception:
+                    pass
+
+            # ── StockTwits Sentiment: pulso de la comunidad ─────────────
+            stocktwits_signal = None
+            if ticker:
+                try:
+                    from ml.stocktwits_sentiment import StockTwitsAnalyzer
+
+                    sta = StockTwitsAnalyzer()
+                    st_result = sta.get_sentiment(ticker, limit=20)
+                    if st_result.get("status") == "OK" and st_result.get("volume", 0) > 0:
+                        st_score = st_result.get("score", 0.0)
+                        st_dir = "BULLISH" if st_score > 0 else "BEARISH"
+                        st_conf = min(0.85, max(0.50, 0.50 + abs(st_score) * 1.5))
+                        stocktwits_signal = ModelSignal(
+                            direction=st_dir,
+                            probability=st_conf,
+                            score=st_score,
+                        )
+                except Exception:
+                    pass
+
+            # ── Fundamentals: datos fundamentalistas ────────────────────
+            fundamentals_signal = None
+            if ticker:
+                try:
+                    from ml.fundamentals import FundamentalFetcher
+
+                    ff = FundamentalFetcher()
+                    fund_result = ff.get_signal(ticker)
+                    if fund_result and fund_result.get("direction"):
+                        fund_dir = fund_result["direction"]
+                        fund_conf = fund_result.get("probability", 0.55)
+                        fund_score = fund_result.get("score", 0.0)
+                        fundamentals_signal = ModelSignal(
+                            direction=fund_dir,
+                            probability=fund_conf,
+                            score=fund_score,
+                        )
+                except Exception:
+                    pass
+
             ens_result = self._ensemble.predict(
                 regime=ensemble_regime,
                 xgboost_signal=xgb_signal,
@@ -670,6 +757,10 @@ class TradingBrain:
                 lstm_signal=lstm_signal,
                 panel_signal=panel_signal,
                 ppo_signal=ppo_signal,
+                vision_signal=vision_signal,
+                reddit_signal=reddit_signal,
+                stocktwits_signal=stocktwits_signal,
+                fundamentals_signal=fundamentals_signal,
             )
             # Exponer el resultado del ensemble para que el ShadowTrader pueda
             # registrar las señales por modelo y medir accuracy en vivo.

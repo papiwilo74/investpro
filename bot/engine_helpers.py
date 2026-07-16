@@ -35,4 +35,4 @@ def fmt_value(value, suffix: str = "", digits: int = 2) -> str:
     try:
         return f"{float(value):.{digits}f}{suffix}"
     except (TypeError, ValueError):
-        return str(value)
+        return "N/A"

@@ -20,49 +20,78 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-MODEL_NAMES = ["xgboost", "neural_brain", "rl_agent", "online_advisor", "ta_classic", "lstm", "panel", "ppo"]
+MODEL_NAMES = [
+    "xgboost",
+    "neural_brain",
+    "rl_agent",
+    "online_advisor",
+    "ta_classic",
+    "lstm",
+    "panel",
+    "ppo",
+    "vision",
+    "reddit",
+    "stocktwits",
+    "fundamentals",
+]
 REGIMES = ["BULL", "BEAR", "LATERAL", "HIGH_VOL"]
 
 DEFAULT_WEIGHTS: dict[str, dict[str, float]] = {
     "BULL": {
-        "xgboost": 0.20,
-        "neural_brain": 0.16,
-        "rl_agent": 0.08,
-        "online_advisor": 0.12,
-        "ta_classic": 0.16,
-        "lstm": 0.08,
-        "panel": 0.10,
-        "ppo": 0.10,
+        "xgboost": 0.18,
+        "neural_brain": 0.14,
+        "rl_agent": 0.06,
+        "online_advisor": 0.10,
+        "ta_classic": 0.14,
+        "lstm": 0.06,
+        "panel": 0.08,
+        "ppo": 0.08,
+        "vision": 0.04,
+        "reddit": 0.04,
+        "stocktwits": 0.04,
+        "fundamentals": 0.04,
     },
     "BEAR": {
         "xgboost": 0.12,
-        "neural_brain": 0.20,
-        "rl_agent": 0.16,
-        "online_advisor": 0.16,
-        "ta_classic": 0.08,
-        "lstm": 0.08,
-        "panel": 0.10,
-        "ppo": 0.10,
+        "neural_brain": 0.16,
+        "rl_agent": 0.14,
+        "online_advisor": 0.14,
+        "ta_classic": 0.06,
+        "lstm": 0.06,
+        "panel": 0.08,
+        "ppo": 0.08,
+        "vision": 0.04,
+        "reddit": 0.04,
+        "stocktwits": 0.04,
+        "fundamentals": 0.04,
     },
     "LATERAL": {
         "xgboost": 0.12,
-        "neural_brain": 0.12,
-        "rl_agent": 0.12,
-        "online_advisor": 0.16,
-        "ta_classic": 0.20,
-        "lstm": 0.08,
-        "panel": 0.10,
-        "ppo": 0.10,
-    },
-    "HIGH_VOL": {
-        "xgboost": 0.16,
-        "neural_brain": 0.20,
+        "neural_brain": 0.10,
         "rl_agent": 0.12,
         "online_advisor": 0.12,
-        "ta_classic": 0.08,
-        "lstm": 0.12,
-        "panel": 0.10,
-        "ppo": 0.10,
+        "ta_classic": 0.16,
+        "lstm": 0.06,
+        "panel": 0.08,
+        "ppo": 0.08,
+        "vision": 0.04,
+        "reddit": 0.04,
+        "stocktwits": 0.04,
+        "fundamentals": 0.04,
+    },
+    "HIGH_VOL": {
+        "xgboost": 0.14,
+        "neural_brain": 0.16,
+        "rl_agent": 0.10,
+        "online_advisor": 0.10,
+        "ta_classic": 0.06,
+        "lstm": 0.10,
+        "panel": 0.08,
+        "ppo": 0.08,
+        "vision": 0.06,
+        "reddit": 0.04,
+        "stocktwits": 0.04,
+        "fundamentals": 0.04,
     },
 }
 
@@ -300,6 +329,10 @@ class AdaptiveEnsemble:
         lstm_signal: ModelSignal | None = None,
         panel_signal: ModelSignal | None = None,
         ppo_signal: ModelSignal | None = None,
+        vision_signal: ModelSignal | None = None,
+        reddit_signal: ModelSignal | None = None,
+        stocktwits_signal: ModelSignal | None = None,
+        fundamentals_signal: ModelSignal | None = None,
     ) -> EnsembleResult:
         if regime not in self._weights:
             regime = "BULL"
@@ -322,6 +355,14 @@ class AdaptiveEnsemble:
             signals["panel"] = panel_signal
         if ppo_signal:
             signals["ppo"] = ppo_signal
+        if vision_signal:
+            signals["vision"] = vision_signal
+        if reddit_signal:
+            signals["reddit"] = reddit_signal
+        if stocktwits_signal:
+            signals["stocktwits"] = stocktwits_signal
+        if fundamentals_signal:
+            signals["fundamentals"] = fundamentals_signal
 
         if not signals:
             return EnsembleResult(regime=regime)
