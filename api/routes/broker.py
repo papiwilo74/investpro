@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-# ruff: noqa: F821  — bot/client/notifier/kelly_tracker/shadow_trader/smart_router
-# se definen vía __getattr__ a nivel de módulo para lazy-loading en Render free.
-# ruff no detecta asignaciones dentro de __getattr__ como definiciones válidas.
 import asyncio
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -35,71 +32,88 @@ public_router = APIRouter()
 # ── Lazy init: evitar cargar TradingBot (~300MB) al importar ─────────
 # Render free tier (512MB) no soporta import eager de todos los módulos.
 # Los objetos se crean en el primer request, no al arrancar.
+# Usamos proxies de objeto (no __getattr__ de módulo) porque los nombres
+# se usan como variables locales dentro de los route handlers.
 
-_lazy_bot = None
-_lazy_client = None
-_lazy_journal = None
-_lazy_shadow = None
-_lazy_router = None
-_lazy_notifier = None
-_lazy_kelly_tracker = None
+_bot_real = None
+_client_real = None
+_journal_real = None
+_shadow_real = None
+_router_real = None
+_notifier_real = None
+_kelly_real = None
 
 
-def _init_lazy():
-    global _lazy_bot, _lazy_client, _lazy_journal, _lazy_shadow, _lazy_router
-    global _lazy_notifier, _lazy_kelly_tracker
-    if _lazy_bot is not None:
+def _init_all():
+    global _bot_real, _client_real, _journal_real, _shadow_real
+    global _router_real, _notifier_real, _kelly_real
+    if _bot_real is not None:
         return
     from bot.engine import TradingBot
-    from bot.notifications import notifier as _notifier
+    from bot.notifications import notifier as _nf
     from bot.shadow_trader import ShadowTrader
-    from bot.strategy import kelly_tracker as _kelly
+    from bot.strategy import kelly_tracker as _kt
     from broker.smart_router import SmartOrderRouter
 
-    _lazy_bot = TradingBot(strategy_mode="web")
-    _lazy_client = _lazy_bot.client
-    _lazy_journal = _lazy_bot.journal
-    _lazy_shadow = ShadowTrader(fetcher=_lazy_bot.fetcher)
-    _lazy_router = SmartOrderRouter(_lazy_client)
-    _lazy_notifier = _notifier
-    _lazy_kelly_tracker = _kelly
+    _bot_real = TradingBot(strategy_mode="web")
+    _client_real = _bot_real.client
+    _journal_real = _bot_real.journal
+    _shadow_real = ShadowTrader(fetcher=_bot_real.fetcher)
+    _router_real = SmartOrderRouter(_client_real)
+    _notifier_real = _nf
+    _kelly_real = _kt
 
 
-def _get_bot():
-    _init_lazy()
-    return _lazy_bot
+class _BotProxy:
+    def __getattr__(self, name):
+        _init_all()
+        return getattr(_bot_real, name)
 
 
-def _get_client():
-    _init_lazy()
-    return _lazy_client
+class _ClientProxy:
+    def __getattr__(self, name):
+        _init_all()
+        return getattr(_client_real, name)
 
 
-def __getattr__(name: str):
-    """Lazy loading: bot, client, journal, shadow_trader, smart_router se crean
-    al primer acceso, no al importar el módulo. Ahorra ~300MB en Render free."""
-    if name == "bot":
-        _init_lazy()
-        return _lazy_bot
-    if name == "client":
-        _init_lazy()
-        return _lazy_client
-    if name == "journal":
-        _init_lazy()
-        return _lazy_journal
-    if name == "shadow_trader":
-        _init_lazy()
-        return _lazy_shadow
-    if name == "smart_router":
-        _init_lazy()
-        return _lazy_router
-    if name == "notifier":
-        _init_lazy()
-        return _lazy_notifier
-    if name == "kelly_tracker":
-        _init_lazy()
-        return _lazy_kelly_tracker
-    raise AttributeError(name)
+class _JournalProxy:
+    def __getattr__(self, name):
+        _init_all()
+        return getattr(_journal_real, name)
+
+
+class _ShadowProxy:
+    def __getattr__(self, name):
+        _init_all()
+        return getattr(_shadow_real, name)
+
+
+class _RouterProxy:
+    def __getattr__(self, name):
+        _init_all()
+        return getattr(_router_real, name)
+
+
+class _NotifierProxy:
+    def __getattr__(self, name):
+        _init_all()
+        return getattr(_notifier_real, name)
+
+
+class _KellyProxy:
+    def __getattr__(self, name):
+        _init_all()
+        return getattr(_kelly_real, name)
+
+
+# Variables a nivel de módulo: son proxies reales, no dependen de __getattr__
+bot = _BotProxy()
+client = _ClientProxy()
+journal = _JournalProxy()
+shadow_trader = _ShadowProxy()
+smart_router = _RouterProxy()
+notifier = _NotifierProxy()
+kelly_tracker = _KellyProxy()
 
 
 @router.get("/account")
