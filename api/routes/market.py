@@ -55,7 +55,7 @@ async def scan_opportunities(
         return sanitize_for_json(result.to_dict())
 
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=25)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=35)
     except TimeoutError:
         raise HTTPException(status_code=504, detail="Tiempo de espera agotado al escanear mercado")
     except Exception as e:
@@ -140,7 +140,7 @@ async def get_market_data(
         )
 
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=25)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=35)
     except TimeoutError:
         raise HTTPException(status_code=504, detail="Tiempo de espera agotado al obtener datos de mercado")
     except Exception as e:
@@ -165,7 +165,7 @@ async def get_market_news(
         return sanitize_for_json(result)
 
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=25)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=35)
     except TimeoutError:
         raise HTTPException(status_code=504, detail="Tiempo de espera agotado al cargar noticias")
     except Exception as e:

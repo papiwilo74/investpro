@@ -56,7 +56,7 @@ class DataManager:
                 return cached
 
         errors: list[str] = []
-        fetch_timeout = 15  # seconds per provider to avoid cumulative hangs
+        fetch_timeout = 8  # seconds per provider — rápido en failover, 3×8=24s total
         for prov in self._all_providers():
             try:
                 with ThreadPoolExecutor(max_workers=1) as pool:

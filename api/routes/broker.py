@@ -523,9 +523,9 @@ async def get_broker_dashboard() -> dict[str, Any]:
             f_acc = pool.submit(client.get_account_summary)
             f_pos = pool.submit(client.get_positions)
             f_ord = pool.submit(client.get_orders)
-            acc = f_acc.result(timeout=12)
-            positions = f_pos.result(timeout=12)
-            orders = f_ord.result(timeout=12)
+            acc = f_acc.result(timeout=15)
+            positions = f_pos.result(timeout=15)
+            orders = f_ord.result(timeout=15)
 
         if acc:
             bot.risk_manager.set_portfolio_value(acc.get("equity", 0))
@@ -620,7 +620,7 @@ async def get_broker_dashboard() -> dict[str, Any]:
         )
 
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=25)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=35)
     except TimeoutError:
         raise HTTPException(status_code=504, detail="Tiempo de espera agotado: broker no responde")
     except Exception as e:
