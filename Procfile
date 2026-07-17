@@ -1,1 +1,1 @@
-web: python main.py --web --port $PORT
+web: python main.py --daemon --port $PORT

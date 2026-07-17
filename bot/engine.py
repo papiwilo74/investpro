@@ -1475,11 +1475,20 @@ class TradingBot:
             interval = "5m"
             sleep_seconds = 300
             logger.info("Modo INTRADÍA activado — datos 5m, escaneo cada 5 min")
+        _tl = None
         try:
+            from bot.telegram_listener import TelegramListener
+
+            _tl = TelegramListener(self)
+            if _tl.is_enabled:
+                _tl.start()
             asyncio.run(self._run_forever_async(ticker, interval, sleep_seconds))
         except KeyboardInterrupt:
             self._log("Bot detenido por usuario (Ctrl+C).")
             self.stop()
+        finally:
+            if _tl is not None and _tl.is_enabled:
+                _tl.stop()
 
     async def _run_forever_async(self, ticker, interval, sleep_seconds):
         self.is_running = True

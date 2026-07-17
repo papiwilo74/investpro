@@ -219,8 +219,14 @@ async def toggle_bot() -> dict[str, Any]:
             raise HTTPException(status_code=400, detail="Bot bloqueado: broker no conectado.")
         if bot.is_running:
             await bot.stop_async()
+            from api.server import disable_auto_start
+
+            disable_auto_start()
         else:
             await bot.start_async()
+            from api.server import enable_auto_start
+
+            enable_auto_start()
         return {"active": bot.is_running, "strategy_mode": bot.strategy_mode}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

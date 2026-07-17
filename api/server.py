@@ -67,6 +67,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     loop = asyncio.get_running_loop()
     loop.call_later(10, lambda: asyncio.ensure_future(_auto_start_bot()))
 
+    # Watchdog: reintentar cada 2 min si el bot se detuvo solo (no por usuario)
+    asyncio.create_task(_watchdog_bot())
+
     yield
 
     from api.routes.broker import bot
@@ -75,19 +78,59 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         await bot.stop_async()
 
 
+_auto_start_enabled = True
+
+
+def disable_auto_start() -> None:
+    global _auto_start_enabled
+    _auto_start_enabled = False
+
+
+def enable_auto_start() -> None:
+    global _auto_start_enabled
+    _auto_start_enabled = True
+
+
 async def _auto_start_bot():
-    """Arranca el bot automáticamente después del startup."""
+    """Arranca el bot automáticamente después del startup o via watchdog."""
     import logging as _logging
 
     try:
         from api.routes.broker import bot
 
-        if not bot.is_running:
+        if not bot.is_running and _auto_start_enabled:
             _logging.info("Auto-arrancando bot...")
             await bot.start_async()
             _logging.info("Bot iniciado automáticamente en modo %s", bot.strategy_mode)
     except Exception as e:
         _logging.error("Error al auto-arrancar el bot: %s", e)
+
+
+async def _watchdog_bot():
+    """Watchdog: cada 2 min revisa si el bot debe reiniciarse solo."""
+    import logging as _logging
+
+    await asyncio.sleep(120)
+    while True:
+        try:
+            from api.routes.broker import bot, risk_manager as _rm
+
+            if not bot.is_running and _auto_start_enabled:
+                risk = _rm.to_dict() if _rm else {}
+                cb_active = risk.get("circuit_breaker_active", False)
+                liquidated = risk.get("account_liquidated", False)
+                if liquidated:
+                    _logging.info("Watchdog: cuenta liquidada, no se reinicia el bot")
+                elif cb_active:
+                    remaining = risk.get("circuit_breaker_remaining_min", "?")
+                    _logging.info("Watchdog: circuit breaker activo (%s min), esperando...", remaining)
+                else:
+                    _logging.info("Watchdog: bot detenido — reiniciando...")
+                    await bot.start_async()
+                    _logging.info("Watchdog: bot reiniciado")
+        except Exception as e:
+            _logging.warning("Watchdog: error %s", e)
+        await asyncio.sleep(120)
 
 
 app = FastAPI(

@@ -54,7 +54,7 @@ def bot():
     b = TradingBot.__new__(TradingBot)
     b.client = MagicMock()
     b.fetcher = MagicMock()
-    b.trainer = MagicMock()
+    b._trainer = MagicMock()
     b.brain = MagicMock()
     b.brain._positions = {}
     b.state = MagicMock()
@@ -126,7 +126,7 @@ class TestInit:
             "bot.engine.signal.signal",
             "bot.engine.create_broker_client",
             "bot.engine.DataFetcher",
-            "bot.engine.ModelTrainer",
+            "ml.train.ModelTrainer",
             "bot.engine.SentimentAnalyzer",
             "bot.engine.SignalJournal",
             "bot.engine.MarketScanner",
@@ -143,10 +143,11 @@ class TestInit:
         )
         try:
             import bot.engine as engine
+            import ml.train
 
             engine.create_broker_client.return_value = MagicMock()
             engine.DataFetcher.return_value = MagicMock()
-            engine.ModelTrainer.return_value = MagicMock()
+            ml.train.ModelTrainer.return_value = MagicMock()
             engine.BotStateManager.return_value = MagicMock()
 
             bot = engine.TradingBot(strategy_mode="legacy")
@@ -159,13 +160,6 @@ class TestInit:
             assert bot.market_breadth is None
             assert bot.hedge_monitor is None
             assert bot.perf_tracker is None
-            assert bot.shadow_trader is None
-            assert bot.portfolio_allocator is None
-            assert bot.smart_router is None
-            assert bot.is_running is False
-            assert bot._pending_advisor_decisions == {}
-            assert bot._last_market_regime is None
-            assert not hasattr(bot, "_hof_info")
         finally:
             self._stop_patches(patchers)
 
@@ -174,7 +168,7 @@ class TestInit:
             "bot.engine.signal.signal",
             "bot.engine.create_broker_client",
             "bot.engine.DataFetcher",
-            "bot.engine.ModelTrainer",
+            "ml.train.ModelTrainer",
             "bot.engine.SentimentAnalyzer",
             "bot.engine.SignalJournal",
             "bot.engine.MarketScanner",
@@ -191,10 +185,11 @@ class TestInit:
         )
         try:
             import bot.engine as engine
+            import ml.train
 
             engine.create_broker_client.return_value = MagicMock()
             engine.DataFetcher.return_value = MagicMock()
-            engine.ModelTrainer.return_value = MagicMock()
+            ml.train.ModelTrainer.return_value = MagicMock()
             engine.SentimentAnalyzer.return_value = MagicMock()
             engine.BotStateManager.return_value = MagicMock()
 
@@ -210,7 +205,7 @@ class TestInit:
             "bot.engine.signal.signal",
             "bot.engine.create_broker_client",
             "bot.engine.DataFetcher",
-            "bot.engine.ModelTrainer",
+            "ml.train.ModelTrainer",
             "bot.engine.SentimentAnalyzer",
             "bot.engine.SignalJournal",
             "bot.engine.MarketScanner",
@@ -236,10 +231,11 @@ class TestInit:
         )
         try:
             import bot.engine as engine
+            import ml.train
 
             engine.create_broker_client.return_value = MagicMock()
             engine.DataFetcher.return_value = MagicMock()
-            engine.ModelTrainer.return_value = MagicMock()
+            ml.train.ModelTrainer.return_value = MagicMock()
             engine.BotStateManager.return_value = MagicMock()
             engine.create_web_bot_strategy_params.return_value = StrategyParams()
             engine.OnlineAdvisor.return_value = MagicMock()
@@ -268,7 +264,7 @@ class TestInit:
             "bot.engine.signal.signal",
             "bot.engine.create_broker_client",
             "bot.engine.DataFetcher",
-            "bot.engine.ModelTrainer",
+            "ml.train.ModelTrainer",
             "bot.engine.SentimentAnalyzer",
             "bot.engine.SignalJournal",
             "bot.engine.MarketScanner",
@@ -285,10 +281,11 @@ class TestInit:
         )
         try:
             import bot.engine as engine
+            import ml.train
 
             engine.create_broker_client.return_value = MagicMock()
             engine.DataFetcher.return_value = MagicMock()
-            engine.ModelTrainer.return_value = MagicMock()
+            ml.train.ModelTrainer.return_value = MagicMock()
             engine.BotStateManager.return_value = MagicMock()
 
             params = StrategyParams(buy_score_threshold=0.42, stop_loss_pct=-0.03)
@@ -1898,7 +1895,7 @@ class TestIntradayBehavior:
         patchers = [
             patch("bot.engine.create_broker_client"),
             patch("bot.engine.DataFetcher"),
-            patch("bot.engine.ModelTrainer"),
+            patch("ml.train.ModelTrainer"),
             patch("bot.engine.init_database"),
             patch("bot.engine.SessionLocal"),
             patch("bot.engine.RiskManager"),

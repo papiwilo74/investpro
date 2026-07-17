@@ -14,10 +14,10 @@ class TestHealthEndpoint:
         data = response.json()
         assert "broker" in data["checks"]
 
-    async def test_health_has_bot_check(self, client):
+    async def test_health_has_data_check(self, client):
         response = await client.get("/health")
         data = response.json()
-        assert "bot" in data["checks"]
+        assert "data" in data["checks"]
 
 
 class TestRootEndpoint:

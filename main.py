@@ -888,6 +888,32 @@ def main() -> None:
 
         bot = TradingBot(intraday=args.intraday, use_neural_brain=args.nn)
         scan_ticker = args.ticker if args.ticker else None
+
+        # Servidor HTTP mínimo para health check de Render
+        port = args.port or int(os.environ.get("PORT", 0))
+        if port > 0:
+            import threading
+            from http.server import BaseHTTPRequestHandler, HTTPServer
+
+            class _HealthHandler(BaseHTTPRequestHandler):
+                def do_GET(self):  # noqa: N802
+                    if self.path in ("/health", "/api/_ping"):
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(b'{"status":"ok","checks":{"api":"ok"}}')
+                    else:
+                        self.send_response(404)
+                        self.end_headers()
+
+                def log_message(self, *args):
+                    pass
+
+            _server = HTTPServer(("0.0.0.0", port), _HealthHandler)
+            _thread = threading.Thread(target=_server.serve_forever, daemon=True)
+            _thread.start()
+            print(f"  Health check en puerto {port}")
+
         bot.run_forever(ticker=scan_ticker, interval=args.interval, sleep_seconds=3600)
     elif args.bot_backtest:
         run_bot_backtest(args.ticker or "AAPL", args.period, args.interval, args.leverage)
