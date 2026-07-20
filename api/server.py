@@ -2,6 +2,7 @@ import asyncio
 import mimetypes
 import os
 import sys
+import time
 from pathlib import Path
 
 mimetypes.add_type("application/javascript", ".js")
@@ -108,15 +109,14 @@ async def _auto_start_bot():
 
 async def _watchdog_bot():
     """Watchdog: cada 2 min revisa si el bot debe reiniciarse solo,
-    con backoff exponencial para evitar reinicios en ráfaga."""
+    con backoff exponencial + límite por hora para evitar reinicios en ráfaga."""
     import logging as _logging
     import time as _time
 
-    _restart_count = 0
-    _last_restart = 0.0
+    _restart_timestamps: list[float] = []
     _base_sleep = 120
-    _max_sleep = 1800
-    _reset_after = 600
+    _max_restarts_per_hour = 5
+    _window_seconds = 3600
 
     await asyncio.sleep(_base_sleep)
     while True:
@@ -126,15 +126,35 @@ async def _watchdog_bot():
 
             if not bot.is_running and _auto_start_enabled:
                 now = _time.time()
-                if _restart_count > 0 and (now - _last_restart) < _reset_after:
-                    backoff = min(_base_sleep * (2**_restart_count), _max_sleep)
+
+                # Limpiar timestamps fuera de la ventana
+                _restart_timestamps[:] = [ts for ts in _restart_timestamps if now - ts < _window_seconds]
+                recent_count = len(_restart_timestamps)
+
+                if recent_count >= _max_restarts_per_hour:
+                    oldest = min(_restart_timestamps)
+                    wait = _window_seconds - (now - oldest)
                     _logging.info(
-                        "Watchdog: backoff activo (%d reinicios previos), esperando %d s...",
-                        _restart_count,
-                        backoff,
+                        "Watchdog: límite alcanzado (%d reinicios en 1h), esperando %d s...",
+                        recent_count,
+                        int(wait),
                     )
-                    await asyncio.sleep(backoff)
+                    await asyncio.sleep(min(wait, _base_sleep))
                     continue
+
+                # Backoff exponencial según reinicios recientes
+                if recent_count > 0:
+                    backoff = min(_base_sleep * (2**recent_count), 1800)
+                    time_since_last = now - max(_restart_timestamps) if _restart_timestamps else _window_seconds
+                    if time_since_last < backoff:
+                        wait = backoff - time_since_last
+                        _logging.info(
+                            "Watchdog: backoff activo (%d reinicios recientes), esperando %d s...",
+                            recent_count,
+                            int(wait),
+                        )
+                        await asyncio.sleep(min(wait, backoff))
+                        continue
 
                 risk = _rm.to_dict() if _rm else {}
                 cb_active = risk.get("circuit_breaker_active", False)
@@ -145,15 +165,10 @@ async def _watchdog_bot():
                     remaining = risk.get("circuit_breaker_remaining_min", "?")
                     _logging.info("Watchdog: circuit breaker activo (%s min), esperando...", remaining)
                 else:
-                    _logging.info("Watchdog: bot detenido — reiniciando...")
+                    _logging.info("Watchdog: bot detenido (%d reinicios en 1h) — reiniciando...", recent_count)
                     await bot.start_async()
                     _logging.info("Watchdog: bot reiniciado")
-                    _restart_count += 1
-                    _last_restart = now
-            else:
-                if _restart_count > 0 and (_time.time() - _last_restart) > _reset_after:
-                    _logging.info("Watchdog: bot estable por %d s, reseteando contador de reinicios", _reset_after)
-                    _restart_count = 0
+                    _restart_timestamps.append(now)
         except Exception as e:
             _logging.warning("Watchdog: error %s", e)
         await asyncio.sleep(_base_sleep)
@@ -370,12 +385,13 @@ def _start_keepalive(base_url: str) -> None:
     """Lanza background task que se auto-pinga para evitar que Render duerma el servicio."""
 
     async def _ping_loop():
-        import urllib.request
+        import httpx
 
         while True:
             try:
                 await asyncio.sleep(600)  # 10 min
-                urllib.request.urlopen(f"{base_url}/api/_ping", timeout=10)
+                async with httpx.AsyncClient(timeout=10) as client:
+                    await client.get(f"{base_url}/api/_ping")
             except Exception:
                 pass
 
@@ -383,9 +399,22 @@ def _start_keepalive(base_url: str) -> None:
 
 
 # ── Health check para la plataforma (Render/Fly.io) ────────────────────
+_health_cache: dict = {"ts": 0.0, "status_code": 200, "data": None}
+
+
 @app.get("/health")
 async def platform_health():
-    """Health check ligero: no carga el bot ni módulos pesados para evitar OOM."""
+    """Health check ligero: no carga el bot ni módulos pesados para evitar OOM.
+    Cachea la respuesta por 30s para no recalcular en cada ping de Render."""
+
+    now = time.time()
+    if now - _health_cache["ts"] < 30 and _health_cache["data"] is not None:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            content=_health_cache["data"],
+            status_code=_health_cache["status_code"],
+        )
 
     def _run_checks():
         checks: dict[str, object] = {"api": "ok"}
@@ -419,8 +448,13 @@ async def platform_health():
 
     from fastapi.responses import JSONResponse
 
+    response_data = {"status": "ok" if status_code == 200 else "degraded", "checks": checks}
+    _health_cache["ts"] = now
+    _health_cache["status_code"] = status_code
+    _health_cache["data"] = response_data
+
     return JSONResponse(
-        content={"status": "ok" if status_code == 200 else "degraded", "checks": checks},
+        content=response_data,
         status_code=status_code,
     )
 

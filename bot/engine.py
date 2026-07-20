@@ -568,108 +568,127 @@ class TradingBot:
             logger.warning("Error en check_critical_alerts: %s", exc)
 
     async def _run_loop(self, ticker: str | None = None, interval: str = "1d", sleep_seconds: int = 600):
+        import gc
+
         retrain_day = -1
         consecutive_errors = 0
         self._last_critical_alerts: dict[str, float] = {}  # event → timestamp del último alert
-        while self.is_running:
-            try:
-                self.last_scan = datetime.utcnow().isoformat()
-                today = datetime.now().day
-                if today != retrain_day:
-                    retrain_day = today
-                    if self.strategy_mode != "web":
-                        self._log("Verificando modelos ML para re-entreno...")
-                        ml_tickers = [ticker] if ticker else WATCHLIST
-                        for t in ml_tickers:
-                            try:
-                                if self.trainer.retrain_if_stale(t, max_age_days=7):
-                                    self._log(f"ML re-entrenado para {t}")
-                            except Exception as e:
-                                self._log(f"Error re-entrenando {t}: {e}")
-                    else:
-                        # Modo web: champion/challenger basado en performance + drift
-                        await self._run_champion_challenger_cycle(ticker)
+        try:
+            while self.is_running:
+                try:
+                    self.last_scan = datetime.utcnow().isoformat()
+                    today = datetime.now().day
+                    if today != retrain_day:
+                        retrain_day = today
+                        if self.strategy_mode != "web":
+                            self._log("Verificando modelos ML para re-entreno...")
+                            ml_tickers = [ticker] if ticker else WATCHLIST
+                            for t in ml_tickers:
+                                try:
+                                    if self.trainer.retrain_if_stale(t, max_age_days=7):
+                                        self._log(f"ML re-entrenado para {t}")
+                                except Exception as e:
+                                    self._log(f"Error re-entrenando {t}: {e}")
+                        else:
+                            # Modo web: champion/challenger basado en performance + drift
+                            await self._run_champion_challenger_cycle(ticker)
 
-                if not self._check_connection():
-                    self._log("Broker no conectado. Reintentando en 60s...")
-                    consecutive_errors += 1
-                    await asyncio.sleep(60)
-                    continue
+                    if not self._check_connection():
+                        self._log("Broker no conectado. Reintentando en 60s...")
+                        consecutive_errors += 1
+                        await asyncio.sleep(60)
+                        continue
 
-                if not self.is_market_open():
-                    self._log("Mercado cerrado. Esperando...")
-                    consecutive_errors = 0
-                    await asyncio.sleep(300)
-                    continue
+                    if not self.is_market_open():
+                        self._log("Mercado cerrado. Esperando...")
+                        consecutive_errors = 0
+                        await asyncio.sleep(300)
+                        continue
 
-                # ── Production safeguards: drawdown + macro + hedge + telemetry ──
-                self._check_unrealized_drawdown()
-                self._check_critical_alerts()
+                    # ── Production safeguards: drawdown + macro + hedge + telemetry ──
+                    self._check_unrealized_drawdown()
+                    self._check_critical_alerts()
 
-                if self.strategy_mode == "web":
-                    macro = self._check_macro_panic()
-                    if macro and macro.get("panic_mode"):
-                        self._log(f"MACRO PANIC: VIX={macro.get('vix_level')} — suspendiendo nuevas entradas")
+                    if self.strategy_mode == "web":
+                        macro = self._check_macro_panic()
+                        if macro and macro.get("panic_mode"):
+                            self._log(f"MACRO PANIC: VIX={macro.get('vix_level')} — suspendiendo nuevas entradas")
 
-                    hedge = self._check_hedge()
-                    if hedge:
-                        status = hedge.get("status", "NORMAL")
-                        if status == "PANIC":
-                            self._log(f"HEDGE PANIC: {hedge.get('reason', '')} — vendiendo posiciones correlacionadas")
-                            notifier.panic(hedge.get("drop_pct", 0), hedge.get("reason", ""))
-                            await self._execute_hedge()
-                        elif status == "ALERT":
-                            self._log(f"HEDGE ALERT: {hedge.get('reason', '')} — cobertura parcial recomendada")
-                            notifier.send("hedge_alert", f"⚠️ {hedge.get('reason', '')}", "warning")
-
-                    # ── Regime Rotation: LONG/SHORT según mercado ────────
-                    await self._manage_rotation_hedge()
-
-                    # ── Shadow trader: resolver señales maduras + drift ──
-                    if self.shadow_trader is not None:
-                        try:
-                            resolved = self.shadow_trader.resolve_matured()
-                            if resolved > 0:
-                                self._log(f"SHADOW: {resolved} señales resueltas")
-                                await self._auto_evaluate_models()
-                            drifts = self.shadow_trader.check_drift()
-                            for d in drifts:
-                                msg = (
-                                    f"DRIFT {d['ticker']}: live acc={d['live_accuracy']:.1%} "
-                                    f"({d['samples']} samples) < {d['threshold']:.1%}"
+                        hedge = self._check_hedge()
+                        if hedge:
+                            status = hedge.get("status", "NORMAL")
+                            if status == "PANIC":
+                                self._log(
+                                    f"HEDGE PANIC: {hedge.get('reason', '')} — vendiendo posiciones correlacionadas"
                                 )
-                                self._log(msg)
-                                notifier.send("model_drift", msg, "warning")
-                        except Exception as exc:
-                            logger.warning("ShadowTrader loop error: %s", exc)
+                                notifier.panic(hedge.get("drop_pct", 0), hedge.get("reason", ""))
+                                await self._execute_hedge()
+                            elif status == "ALERT":
+                                self._log(f"HEDGE ALERT: {hedge.get('reason', '')} — cobertura parcial recomendada")
+                                notifier.send("hedge_alert", f"⚠️ {hedge.get('reason', '')}", "warning")
 
-                    self._daily_telemetry_snapshot()
+                        # ── Regime Rotation: LONG/SHORT según mercado ────────
+                        await self._manage_rotation_hedge()
 
-                    # Rebalancear portafolio si hay desviaciones
-                    await self._rebalance_portfolio()
+                        # ── Shadow trader: resolver señales maduras + drift ──
+                        if self.shadow_trader is not None:
+                            try:
+                                resolved = self.shadow_trader.resolve_matured()
+                                if resolved > 0:
+                                    self._log(f"SHADOW: {resolved} señales resueltas")
+                                    await self._auto_evaluate_models()
+                                drifts = self.shadow_trader.check_drift()
+                                for d in drifts:
+                                    msg = (
+                                        f"DRIFT {d['ticker']}: live acc={d['live_accuracy']:.1%} "
+                                        f"({d['samples']} samples) < {d['threshold']:.1%}"
+                                    )
+                                    self._log(msg)
+                                    notifier.send("model_drift", msg, "warning")
+                            except Exception as exc:
+                                logger.warning("ShadowTrader loop error: %s", exc)
 
-                self._save_position_states()
+                        self._daily_telemetry_snapshot()
 
-                # ── DCA escalonado: ejecutar 2ªs tranches pendientes ──
-                await self._process_pending_tranches()
+                        # Rebalancear portafolio si hay desviaciones
+                        await self._rebalance_portfolio()
 
-                self._log("Ejecutando escaneo de mercado...")
-                if ticker:
-                    await self._evaluate_and_trade(ticker, interval, single_ticker=True)
-                else:
-                    await self._scan_and_trade_universe(interval)
+                    self._save_position_states()
 
-                consecutive_errors = 0
+                    # ── DCA escalonado: ejecutar 2ªs tranches pendientes ──
+                    await self._process_pending_tranches()
 
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                consecutive_errors += 1
-                logger.exception("Error en loop principal: {}", e)
-                self._log(f"ERROR loop principal: {e}")
+                    self._log("Ejecutando escaneo de mercado...")
+                    if ticker:
+                        await self._evaluate_and_trade(ticker, interval, single_ticker=True)
+                    else:
+                        await self._scan_and_trade_universe(interval)
 
-            self._log(f"Escaneo finalizado. Durmiendo {sleep_seconds // 60} minutos.")
-            await asyncio.sleep(sleep_seconds)
+                    consecutive_errors = 0
+
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    consecutive_errors += 1
+                    logger.exception("Error en loop principal: {}", e)
+                    self._log(f"ERROR loop principal: {e}")
+
+                self._log(f"Escaneo finalizado. Durmiendo {sleep_seconds // 60} minutos.")
+                await asyncio.sleep(sleep_seconds)
+                gc.collect()
+        finally:
+            self.is_running = False
+            BROKER_CONFIG.bot_active = False
+            try:
+                self.state.set_state("bot_status", "stopped")
+            except Exception:
+                pass
+            try:
+                from api.metrics import bot_running as _br
+
+                _br.set(0)
+            except Exception:
+                pass
 
     async def _auto_evaluate_models(self) -> None:
         """Auto-evalúa modelos ML usando ShadowTrader live accuracy y actualiza ModelGate.
