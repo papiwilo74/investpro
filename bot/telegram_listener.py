@@ -64,6 +64,14 @@ class TelegramListener:
                         self._handle_stop()
                     elif text == "/status":
                         self._handle_status()
+                    elif text.startswith("/"):
+                        self._send(
+                            "<b>Comando no reconocido</b>\n\n"
+                            "Comandos disponibles:\n"
+                            "/start - Activar trading\n"
+                            "/stop - Detener trading\n"
+                            "/status - Ver estado"
+                        )
             except Exception as e:
                 logger.warning("TelegramListener: error en poll: %s", e)
             time.sleep(_POLL_SECONDS)

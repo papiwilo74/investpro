@@ -107,15 +107,35 @@ async def _auto_start_bot():
 
 
 async def _watchdog_bot():
-    """Watchdog: cada 2 min revisa si el bot debe reiniciarse solo."""
+    """Watchdog: cada 2 min revisa si el bot debe reiniciarse solo,
+    con backoff exponencial para evitar reinicios en ráfaga."""
     import logging as _logging
+    import time as _time
 
-    await asyncio.sleep(120)
+    _restart_count = 0
+    _last_restart = 0.0
+    _base_sleep = 120
+    _max_sleep = 1800
+    _reset_after = 600
+
+    await asyncio.sleep(_base_sleep)
     while True:
         try:
-            from api.routes.broker import bot, risk_manager as _rm
+            from api.routes.broker import bot
+            from api.routes.broker import risk_manager as _rm
 
             if not bot.is_running and _auto_start_enabled:
+                now = _time.time()
+                if _restart_count > 0 and (now - _last_restart) < _reset_after:
+                    backoff = min(_base_sleep * (2**_restart_count), _max_sleep)
+                    _logging.info(
+                        "Watchdog: backoff activo (%d reinicios previos), esperando %d s...",
+                        _restart_count,
+                        backoff,
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+
                 risk = _rm.to_dict() if _rm else {}
                 cb_active = risk.get("circuit_breaker_active", False)
                 liquidated = risk.get("account_liquidated", False)
@@ -128,9 +148,15 @@ async def _watchdog_bot():
                     _logging.info("Watchdog: bot detenido — reiniciando...")
                     await bot.start_async()
                     _logging.info("Watchdog: bot reiniciado")
+                    _restart_count += 1
+                    _last_restart = now
+            else:
+                if _restart_count > 0 and (_time.time() - _last_restart) > _reset_after:
+                    _logging.info("Watchdog: bot estable por %d s, reseteando contador de reinicios", _reset_after)
+                    _restart_count = 0
         except Exception as e:
             _logging.warning("Watchdog: error %s", e)
-        await asyncio.sleep(120)
+        await asyncio.sleep(_base_sleep)
 
 
 app = FastAPI(
