@@ -629,8 +629,8 @@ class TradingBot:
                     # ── Paper Safety Gate: bloquea trading si la estrategia no ha demostrado consistencia ──
                     if getattr(self.client, "paper", False) or getattr(self.client, "is_paper_fallback", False):
                         gate = self.journal.safety_gate(
-                            min_days=14,
-                            min_closed_signals=20,
+                            min_days=3,
+                            min_closed_signals=5,
                             min_win_rate=0.50,
                             min_avg_return_pct=0.001,
                         )

@@ -1002,7 +1002,7 @@ def create_web_bot_strategy_params() -> StrategyParams:
         short_take_profit_pct=-0.050,  # -5% price drop = cover
         short_position_size_pct=0.07,  # 7% max per short
         short_momentum_threshold=-0.30,
-        short_min_adx=22.0,  # Solo shorts si hay momentum bajista real
+        short_min_adx=18.0,  # Solo shorts si hay momentum bajista real
         use_partial_take_profit=True,
         use_dynamic_trailing=True,
         use_confirmation_filter=True,
