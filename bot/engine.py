@@ -59,8 +59,8 @@ class TradingBot:
     ):
         self.intraday = intraday
         self.strategy_mode = strategy_mode
-        self.client = create_broker_client()
         self.fetcher = DataFetcher()
+        self.client = create_broker_client(data_fetcher=self.fetcher)
         self._trainer = None  # lazy — XGBoost+sklearn (~200MB), solo al necesitar ML
         self.sentiment = SentimentAnalyzer() if use_sentiment else None
         self.journal = SignalJournal(fetcher=self.fetcher)
@@ -419,6 +419,19 @@ class TradingBot:
             self._log(f"Sentiment error para {ticker}: {e}")
             return None
 
+    def _warn_if_paper_fallback(self) -> None:
+        """Notifica si el broker se creó como fallback tras un error de Alpaca."""
+        try:
+            if getattr(self.client, "is_paper_fallback", False):
+                msg = (
+                    "PaperTradingClient activo como respaldo — Alpaca no está disponible. "
+                    "Los trades son simulados localmente sin conexión al broker real."
+                )
+                self._log(msg)
+                notifier.send("paper_fallback", msg, "warning")
+        except Exception as exc:
+            logger.warning("Error en _warn_if_paper_fallback: %s", exc)
+
     def _check_connection(self) -> bool:
         """Cachea el estado de conexión durante 30 segundos para no saturar Alpaca."""
         now = time.time()
@@ -430,10 +443,12 @@ class TradingBot:
     def is_market_open(self) -> bool:
         try:
             inner = getattr(self.client, "client", None)
-            if not inner:
-                return True  # Paper mode: always open
-            clock = inner.get_clock()
-            return clock.is_open
+            if inner:
+                clock = inner.get_clock()
+                return clock.is_open
+            if hasattr(self.client, "is_market_open"):
+                return self.client.is_market_open()
+            return True
         except Exception as e:
             self._log(f"Error verificando estado del mercado: {e}")
             return False
@@ -448,6 +463,7 @@ class TradingBot:
         self._thread = threading.Thread(target=self._run_loop_sync, daemon=True)
         self._thread.start()
         self._log("Bot iniciado.")
+        self._warn_if_paper_fallback()
         notifier.bot_started(self.strategy_mode)
 
     async def start_async(self) -> None:
@@ -461,6 +477,7 @@ class TradingBot:
         self._restore_state()
         self._task = asyncio.create_task(self._run_loop())
         self._log("Bot iniciado (async).")
+        self._warn_if_paper_fallback()
         try:
             from api.metrics import bot_running as _br
 
@@ -608,6 +625,20 @@ class TradingBot:
                     # ── Production safeguards: drawdown + macro + hedge + telemetry ──
                     self._check_unrealized_drawdown()
                     self._check_critical_alerts()
+
+                    # ── Paper Safety Gate: bloquea trading si la estrategia no ha demostrado consistencia ──
+                    if getattr(self.client, "paper", False) or getattr(self.client, "is_paper_fallback", False):
+                        gate = self.journal.safety_gate(
+                            min_days=14,
+                            min_closed_signals=20,
+                            min_win_rate=0.50,
+                            min_avg_return_pct=0.001,
+                        )
+                        if not gate.approved:
+                            self._log(f"SAFETY GATE bloquea ejecución paper: {gate.reason}")
+                            consecutive_errors = 0
+                            await asyncio.sleep(sleep_seconds)
+                            continue
 
                     if self.strategy_mode == "web":
                         macro = self._check_macro_panic()

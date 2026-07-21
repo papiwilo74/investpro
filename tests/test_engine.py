@@ -507,6 +507,7 @@ class TestIsMarketOpen:
 
     def test_returns_true_when_no_inner_client(self, bot):
         bot.client.client = None
+        bot.client.is_market_open.return_value = True
         assert bot.is_market_open() is True
 
 

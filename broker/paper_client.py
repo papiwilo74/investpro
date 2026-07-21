@@ -5,11 +5,14 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from datetime import time as dt_time
 from typing import Any
 
+import pytz
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from data.fetcher import DataFetcher
 from db import SessionLocal, init_db
 from db.models import PaperState
 
@@ -72,9 +75,23 @@ class PaperTrade:
 
 
 class PaperTradingClient:
-    """Broker simulado con fills realistas, slippage y tracking de P&L."""
+    """Broker simulado con fills realistas, slippage y tracking de P&L.
 
-    def __init__(self, initial_cash: float = 100_000.0, session: Callable[[], Session] | None = None):
+    Si ``data_fetcher`` está disponible, los precios se obtienen del mercado real
+    en lugar de ruido sintético, permitiendo métricas de riesgo realistas.
+    """
+
+    _NYSE_TZ = pytz.timezone("America/New_York")
+    _MARKET_OPEN = dt_time(9, 30)
+    _MARKET_CLOSE = dt_time(16, 0)
+
+    def __init__(
+        self,
+        initial_cash: float = 100_000.0,
+        session: Callable[[], Session] | None = None,
+        data_fetcher: DataFetcher | None = None,
+        paper_fallback: bool = False,
+    ):
         self._session_provider = session or SessionLocal
         self._cash = initial_cash
         self._initial_cash = initial_cash
@@ -85,6 +102,10 @@ class PaperTradingClient:
         self._equity_history: list[dict] = []
         self._slippage_pct = 0.001  # 0.1% slippage
         self._fill_probability = 0.95  # 95% fill rate
+        self._fetcher = data_fetcher
+        self._price_cache: dict[str, tuple[float, float]] = {}  # symbol -> (price, timestamp)
+        self._price_cache_ttl = 60  # 1 min cache for latest prices
+        self._paper_fallback = paper_fallback
         init_db()  # ensure paper_state table exists
         self._load()
         if not self._orders:
@@ -96,6 +117,11 @@ class PaperTradingClient:
                 len(self._positions),
                 len(self._trades),
             )
+
+    @property
+    def is_paper_fallback(self) -> bool:
+        """True si este cliente se creó como fallback tras un error de Alpaca."""
+        return self._paper_fallback
 
     # ── Persistence (SQLite local / PostgreSQL en Render) ─────────────────
 
@@ -184,8 +210,27 @@ class PaperTradingClient:
     def is_connected(self) -> bool:
         return True
 
+    def is_market_open(self) -> bool:
+        """Verifica si el mercado NYSE está abierto usando el calendario real."""
+        now_ny = datetime.now(self._NYSE_TZ)
+        if now_ny.weekday() >= 5:
+            return False
+        market_open = now_ny.replace(
+            hour=self._MARKET_OPEN.hour,
+            minute=self._MARKET_OPEN.minute,
+            second=0,
+            microsecond=0,
+        )
+        market_close = now_ny.replace(
+            hour=self._MARKET_CLOSE.hour,
+            minute=self._MARKET_CLOSE.minute,
+            second=0,
+            microsecond=0,
+        )
+        return market_open <= now_ny <= market_close
+
     def get_account_summary(self) -> dict[str, Any]:
-        equity = self._cash + sum(p.market_value for p in self._positions.values())
+        equity = self._cash + sum(p.qty * self._get_price(p.symbol) for p in self._positions.values())
         return {
             "equity": round(equity, 2),
             "cash": round(self._cash, 2),
@@ -202,7 +247,19 @@ class PaperTradingClient:
         return [p.to_dict(current_price=self._get_price(p.symbol)) for p in self._positions.values()]
 
     def _get_price(self, symbol: str) -> float:
-        """Simula precio actual basado en entry price + ruido."""
+        """Obtiene el precio actual del mercado real si hay fetcher; sino ruido sintético."""
+        if self._fetcher is not None:
+            cached = self._price_cache.get(symbol)
+            if cached and (time.time() - cached[1]) < self._price_cache_ttl:
+                return cached[0]
+            try:
+                df = self._fetcher.get_data(symbol, period="5d", interval="1d")
+                if not df.empty and "close" in df.columns:
+                    price = round(float(df["close"].iloc[-1]), 2)
+                    self._price_cache[symbol] = (price, time.time())
+                    return price
+            except Exception as e:
+                logger.debug("Paper price fetch falló para {}: {}", symbol, e)
         pos = self._positions.get(symbol)
         if pos:
             noise = random.gauss(0, 0.005)
