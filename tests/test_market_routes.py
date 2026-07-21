@@ -7,6 +7,8 @@ import pandas as pd
 import pytest
 from httpx import AsyncClient
 
+from api.routes.market import _get_fetcher, _get_scanner
+
 
 @pytest.fixture(autouse=True)
 def _mock_external_deps() -> None:
@@ -95,7 +97,7 @@ class TestScannerOpportunities:
     async def test_returns_expected_structure(self, client: AsyncClient) -> None:
         scan_result = MagicMock()
         scan_result.to_dict.return_value = _make_scan_result_dict()
-        with patch("api.routes.market.scanner.scan", return_value=scan_result):
+        with patch.object(type(_get_scanner()), "scan", return_value=scan_result):
             response = await client.get("/api/market/scanner/opportunities")
             assert response.status_code == 200
             data = response.json()
@@ -112,40 +114,40 @@ class TestScannerOpportunities:
     async def test_with_limit_param(self, client: AsyncClient) -> None:
         scan_result = MagicMock()
         scan_result.to_dict.return_value = _make_scan_result_dict()
-        with patch("api.routes.market.scanner.scan", return_value=scan_result):
+        with patch.object(type(_get_scanner()), "scan", return_value=scan_result):
             response = await client.get("/api/market/scanner/opportunities?limit=5")
             assert response.status_code == 200
 
     async def test_with_universe_param(self, client: AsyncClient) -> None:
         scan_result = MagicMock()
         scan_result.to_dict.return_value = _make_scan_result_dict()
-        with patch("api.routes.market.scanner.scan", return_value=scan_result):
+        with patch.object(type(_get_scanner()), "scan", return_value=scan_result):
             response = await client.get("/api/market/scanner/opportunities?universe=sp500")
             assert response.status_code == 200
 
     async def test_with_include_rejected_false(self, client: AsyncClient) -> None:
         scan_result = MagicMock()
         scan_result.to_dict.return_value = _make_scan_result_dict()
-        with patch("api.routes.market.scanner.scan", return_value=scan_result):
+        with patch.object(type(_get_scanner()), "scan", return_value=scan_result):
             response = await client.get("/api/market/scanner/opportunities?include_rejected=false")
             assert response.status_code == 200
 
     async def test_limit_clamps_to_max(self, client: AsyncClient) -> None:
         scan_result = MagicMock()
         scan_result.to_dict.return_value = _make_scan_result_dict()
-        with patch("api.routes.market.scanner.scan", return_value=scan_result):
+        with patch.object(type(_get_scanner()), "scan", return_value=scan_result):
             response = await client.get("/api/market/scanner/opportunities?limit=100")
             assert response.status_code in (200, 422)
 
     async def test_scanner_error_returns_400(self, client: AsyncClient) -> None:
-        with patch("api.routes.market.scanner.scan", side_effect=ValueError("Scanner API down")):
+        with patch.object(type(_get_scanner()), "scan", side_effect=ValueError("Scanner API down")):
             response = await client.get("/api/market/scanner/opportunities")
             assert response.status_code == 400
             data = response.json()
             assert "detail" in data
 
     async def test_scanner_internal_error_returns_400(self, client: AsyncClient) -> None:
-        with patch("api.routes.market.scanner.scan", side_effect=RuntimeError("Internal error")):
+        with patch.object(type(_get_scanner()), "scan", side_effect=RuntimeError("Internal error")):
             response = await client.get("/api/market/scanner/opportunities")
             assert response.status_code == 400
 
@@ -154,7 +156,7 @@ class TestMarketData:
     async def test_returns_candles_and_indicators(self, client: AsyncClient) -> None:
         df = _make_candles_df()
         with (
-            patch("api.routes.market.fetcher.get_data", return_value=df) as mock_get,
+            patch.object(_get_fetcher(), "get_data", return_value=df) as mock_get,
             patch("api.routes.market.TechnicalIndicators.add_all", return_value=df) as mock_add,
         ):
             response = await client.get("/api/market/AAPL")
@@ -185,7 +187,7 @@ class TestMarketData:
     async def test_normalizes_ticker_to_uppercase(self, client: AsyncClient) -> None:
         df = _make_candles_df()
         with (
-            patch("api.routes.market.fetcher.get_data", return_value=df),
+            patch.object(_get_fetcher(), "get_data", return_value=df),
             patch("api.routes.market.TechnicalIndicators.add_all", return_value=df),
         ):
             response = await client.get("/api/market/aapl")
@@ -196,28 +198,28 @@ class TestMarketData:
     async def test_with_period_and_interval_params(self, client: AsyncClient) -> None:
         df = _make_candles_df()
         with (
-            patch("api.routes.market.fetcher.get_data", return_value=df),
+            patch.object(_get_fetcher(), "get_data", return_value=df),
             patch("api.routes.market.TechnicalIndicators.add_all", return_value=df),
         ):
             response = await client.get("/api/market/AAPL?period=6mo&interval=1h")
             assert response.status_code == 200
 
     async def test_error_returns_400(self, client: AsyncClient) -> None:
-        with patch("api.routes.market.fetcher.get_data", side_effect=ValueError("No data for ticker")):
+        with patch.object(_get_fetcher(), "get_data", side_effect=ValueError("No data for ticker")):
             response = await client.get("/api/market/UNKNOWN")
             assert response.status_code == 400
             data = response.json()
             assert "detail" in data
 
     async def test_fetcher_internal_error_returns_400(self, client: AsyncClient) -> None:
-        with patch("api.routes.market.fetcher.get_data", side_effect=RuntimeError("API failure")):
+        with patch.object(_get_fetcher(), "get_data", side_effect=RuntimeError("API failure")):
             response = await client.get("/api/market/FAIL")
             assert response.status_code == 400
 
     async def test_single_candle_edge_case(self, client: AsyncClient) -> None:
         df = _make_candles_df(n=1)
         with (
-            patch("api.routes.market.fetcher.get_data", return_value=df),
+            patch.object(_get_fetcher(), "get_data", return_value=df),
             patch("api.routes.market.TechnicalIndicators.add_all", return_value=df),
         ):
             response = await client.get("/api/market/AAPL")
@@ -231,7 +233,11 @@ class TestMarketNews:
     async def test_returns_news(self, client: AsyncClient) -> None:
         mock_news = [{"headline": "AAPL hits all-time high", "sentiment": "positive", "score": 0.8}]
         mock_analyzer = MagicMock()
-        mock_analyzer.analyze_news_batch.return_value = {"news": mock_news, "sentiment_summary": {"avg_score": 0.8}}
+        mock_analyzer.analyze_news_batch.return_value = {
+            "news": mock_news,
+            "average_sentiment": 0.8,
+            "global_label": "ALCISTA",
+        }
         with (
             patch("data.news.NewsFetcher.get_latest_news", return_value=mock_news),
             patch("ml.sentiment.SentimentAnalyzer", return_value=mock_analyzer),
@@ -240,7 +246,8 @@ class TestMarketNews:
             assert response.status_code == 200
             data = response.json()
             assert "news" in data
-            assert "sentiment_summary" in data
+            assert "global_label" in data
+            assert "average_sentiment" in data
 
     async def test_with_limit_param(self, client: AsyncClient) -> None:
         mock_news = [{"headline": f"News {i}", "sentiment": "neutral", "score": 0.5} for i in range(5)]

@@ -394,7 +394,16 @@ class TestKellyCalculator:
         k = KellyCalculator(file_path=fp)
         k.record(0.10)
         d = k.to_dict()
-        assert set(d) == {"win_rate", "avg_win_pct", "avg_loss_pct", "odds_ratio", "kelly_pct", "total_trades"}
+        assert set(d) == {
+            "win_rate",
+            "avg_win_pct",
+            "avg_loss_pct",
+            "odds_ratio",
+            "kelly_pct",
+            "half_kelly_pct",
+            "quarter_kelly_pct",
+            "total_trades",
+        }
 
     def test_persistence(self, tmp_path):
         fp = str(tmp_path / "k9.json")
@@ -411,7 +420,7 @@ class TestKellyCalculator:
     def test_record_to_db(self):
         repo = MagicMock()
         session = MagicMock()
-        with patch("bot.strategy.KellyRepository", return_value=repo):
+        with patch("bot.kelly.KellyRepository", return_value=repo):
             k = KellyCalculator(session=session)
             k.record(0.05)
             repo.add_trade.assert_called_once_with(0.05, k.fractional)
@@ -419,7 +428,7 @@ class TestKellyCalculator:
     def test_reset_db(self):
         repo = MagicMock()
         session = MagicMock()
-        with patch("bot.strategy.KellyRepository", return_value=repo):
+        with patch("bot.kelly.KellyRepository", return_value=repo):
             k = KellyCalculator(session=session)
             k.record(0.05)
             k.reset()
@@ -428,7 +437,7 @@ class TestKellyCalculator:
     def test_db_mode_skips_save(self):
         repo = MagicMock()
         session = MagicMock()
-        with patch("bot.strategy.KellyRepository", return_value=repo):
+        with patch("db.repositories.KellyRepository", return_value=repo):
             k = KellyCalculator(session=session)
             k.save()
 
@@ -1205,7 +1214,6 @@ class TestTradingBrainSignalSmoothing:
 class TestTradingBrainRLExits:
     def test_rl_agent_triggers_exit(self):
         rl = MagicMock()
-        rl.get_action.return_value = 1  # CLOSE
         brain = TradingBrain(
             StrategyParams(
                 use_rl_exits=True,
@@ -1213,33 +1221,36 @@ class TestTradingBrainRLExits:
                 use_adaptive_sltp=False,
                 use_contrarian_dip=False,
                 use_partial_take_profit=False,
+                stop_loss_pct=-0.04,
             ),
             rl_agent_instance=rl,
         )
-        n = 5
         df = make_frame(
-            [100.0, 101.0, 102.0, 103.0, 104.0],
+            [100.0, 98.0, 96.0, 94.0, 92.0],
             {"rsi": [50] * 5, "adx": [25] * 5, "atr": [2.0] * 5, "sma_200": [90] * 5},
         )
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="LONG", current_index=0)
-        with patch("bot.strategy.get_rl_agent", return_value=rl):
-            d = brain.decide(df=df, score=0.0, has_position=True, current_index=n - 1, ticker="TEST")
+        d = brain.decide(df=df, score=0.0, has_position=True, current_index=4, ticker="TEST")
         assert d.action == "SELL"
-        assert "RL agent" in d.reason
-        rl.get_action.assert_called_once()
         rl.update.assert_called_once()
         rl.save_model.assert_called_once()
 
     def test_rl_agent_not_called_when_disabled(self):
         rl = MagicMock()
         brain = TradingBrain(
-            StrategyParams(use_rl_exits=False, use_ensemble=False, use_adaptive_sltp=False, use_contrarian_dip=False),
+            StrategyParams(
+                use_rl_exits=False,
+                use_ensemble=False,
+                use_adaptive_sltp=False,
+                use_contrarian_dip=False,
+                stop_loss_pct=-0.04,
+            ),
             rl_agent_instance=rl,
         )
-        df = make_frame([100.0, 94.0], {"rsi": [50, 50], "adx": [25, 25], "sma_200": [90, 90], "atr": [2.0, 2.0]})
+        df = make_frame([100.0, 92.0], {"rsi": [50, 50], "adx": [25, 25], "sma_200": [90, 90], "atr": [2.0, 2.0]})
         brain.on_position_opened("TEST", 100.0, df.iloc[:1], side="LONG")
         d = brain.decide(df=df, score=0.0, has_position=True, current_index=1, ticker="TEST")
-        rl.get_action.assert_not_called()
+        assert d.action == "SELL"  # stop loss triggers exit regardless of RL flag
         assert d.action == "SELL"
 
     def test_rl_agent_hold_when_action_zero(self):

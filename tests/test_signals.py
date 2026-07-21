@@ -1,7 +1,32 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from indicators.signals import Action, SignalGenerator
+
+
+@pytest.fixture
+def dummy_with_indicators():
+    dates = pd.date_range("2023-01-01", periods=50, freq="D")
+    df = pd.DataFrame(
+        {
+            "close": 100 + np.cumsum(np.random.default_rng(42).normal(0, 1, 50)),
+            "high": 100 + np.cumsum(np.random.default_rng(42).normal(0, 1, 50)) + 2,
+            "low": 100 + np.cumsum(np.random.default_rng(42).normal(0, 1, 50)) - 2,
+            "volume": np.random.default_rng(42).integers(1_000_000, 10_000_000, 50),
+            "rsi": np.random.default_rng(42).uniform(30, 70, 50),
+            "macd": np.random.default_rng(42).normal(0, 0.5, 50),
+            "macd_signal": np.random.default_rng(42).normal(0, 0.3, 50),
+            "bb_upper": 105 + np.cumsum(np.random.default_rng(42).normal(0, 0.2, 50)),
+            "bb_lower": 95 + np.cumsum(np.random.default_rng(42).normal(0, 0.2, 50)),
+            "sma_50": 100 + np.cumsum(np.random.default_rng(42).normal(0, 0.6, 50)),
+            "sma_200": 100 + np.cumsum(np.random.default_rng(42).normal(0, 0.4, 50)),
+            "atr": np.random.default_rng(42).uniform(1, 4, 50),
+            "adx": np.random.default_rng(42).uniform(15, 40, 50),
+        },
+        index=dates,
+    )
+    return df
 
 
 class TestSignalGenerator:
