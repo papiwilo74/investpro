@@ -42,6 +42,16 @@ _shadow_real = None
 _router_real = None
 _notifier_real = None
 _kelly_real = None
+_init_lock = None
+
+
+def _get_init_lock():
+    global _init_lock
+    if _init_lock is None:
+        import threading
+
+        _init_lock = threading.Lock()
+    return _init_lock
 
 
 def _init_all():
@@ -49,19 +59,22 @@ def _init_all():
     global _router_real, _notifier_real, _kelly_real
     if _bot_real is not None:
         return
-    from bot.engine import TradingBot
-    from bot.notifications import notifier as _nf
-    from bot.shadow_trader import ShadowTrader
-    from bot.strategy import kelly_tracker as _kt
-    from broker.smart_router import SmartOrderRouter
+    with _get_init_lock():
+        if _bot_real is not None:
+            return
+        from bot.engine import TradingBot
+        from bot.notifications import notifier as _nf
+        from bot.shadow_trader import ShadowTrader
+        from bot.strategy import kelly_tracker as _kt
+        from broker.smart_router import SmartOrderRouter
 
-    _bot_real = TradingBot(strategy_mode="web")
-    _client_real = _bot_real.client
-    _journal_real = _bot_real.journal
-    _shadow_real = ShadowTrader(fetcher=_bot_real.fetcher)
-    _router_real = SmartOrderRouter(_client_real)
-    _notifier_real = _nf
-    _kelly_real = _kt
+        _bot_real = TradingBot(strategy_mode="web")
+        _client_real = _bot_real.client
+        _journal_real = _bot_real.journal
+        _shadow_real = ShadowTrader(fetcher=_bot_real.fetcher)
+        _router_real = SmartOrderRouter(_client_real)
+        _notifier_real = _nf
+        _kelly_real = _kt
 
 
 class _BotProxy:
@@ -626,7 +639,7 @@ async def get_broker_dashboard() -> dict[str, Any]:
         )
 
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=35)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=28)
     except TimeoutError:
         raise HTTPException(status_code=504, detail="Tiempo de espera agotado: broker no responde")
     except Exception as e:

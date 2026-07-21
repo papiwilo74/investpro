@@ -50,7 +50,7 @@ async def get_advisor_briefing(
         return sanitize_for_json(brief)
 
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=35)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=28)
     except TimeoutError:
         raise HTTPException(status_code=504, detail="Tiempo de espera agotado al generar el análisis")
     except Exception as e:
@@ -112,7 +112,7 @@ async def ask_advisor_question(
         return sanitize_for_json({"question": q, "answer": a})
 
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=35)
+        return await asyncio.wait_for(asyncio.to_thread(_run), timeout=28)
     except TimeoutError:
         raise HTTPException(status_code=504, detail="Tiempo de espera agotado")
     except Exception as e:

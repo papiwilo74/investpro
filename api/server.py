@@ -71,6 +71,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Watchdog: reintentar cada 2 min si el bot se detuvo solo (no por usuario)
     asyncio.create_task(_watchdog_bot())
 
+    # Pre-calentar módulos pesados en background para que el primer request no OOM
+    loop.call_later(15, lambda: asyncio.ensure_future(_prewarm_modules()))
+
     yield
 
     from api.routes.broker import bot
@@ -172,6 +175,31 @@ async def _watchdog_bot():
         except Exception as e:
             _logging.warning("Watchdog: error %s", e)
         await asyncio.sleep(_base_sleep)
+
+
+async def _prewarm_modules():
+    """Carga en background DataFetcher + ModelTrainer para que el primer request
+    del usuario no los inicialice en paralelo y cause OOM en Render (512MB)."""
+    import logging as _logging
+
+    await asyncio.sleep(5)
+    try:
+        _logging.info("Prewarm: cargando DataFetcher...")
+        from data.fetcher import DataFetcher
+
+        DataFetcher()
+        _logging.info("Prewarm: DataFetcher listo")
+    except Exception as e:
+        _logging.warning("Prewarm: DataFetcher falló — %s", e)
+
+    try:
+        _logging.info("Prewarm: cargando ModelTrainer...")
+        from ml.train import ModelTrainer
+
+        ModelTrainer()
+        _logging.info("Prewarm: ModelTrainer listo")
+    except Exception as e:
+        _logging.warning("Prewarm: ModelTrainer falló — %s", e)
 
 
 app = FastAPI(
