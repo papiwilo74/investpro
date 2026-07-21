@@ -854,7 +854,7 @@ class TradingBot:
             universe="nasdaq100",
             period="1y",
             interval="1d",
-            limit=10,
+            limit=30,
             include_rejected=False,
         )
         scan_tickers = [c.ticker for c in scan_result.accepted]
