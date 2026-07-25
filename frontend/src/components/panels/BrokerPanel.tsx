@@ -268,16 +268,16 @@ export function BrokerPanel() {
           <div className="glass-card">
             <h3 className="text-base font-bold mb-4">Kelly Criterion</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-emerald-600">{ ((dashboard.risk.kelly.kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Kelly Completo</div></div>
-              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-blue-600">{ ((dashboard.risk.kelly.half_kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Half Kelly</div></div>
-              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-amber-600">{ ((dashboard.risk.kelly.quarter_kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Quarter Kelly</div></div>
-              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-slate-600">{dashboard.risk.kelly.total_trades ?? 0}</div><div className="text-[10px] text-slate-400">Total Trades</div></div>
+              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-emerald-600">{ ((dashboard.risk.kelly?.kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Kelly Completo</div></div>
+              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-blue-600">{ ((dashboard.risk.kelly?.half_kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Half Kelly</div></div>
+              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-amber-600">{ ((dashboard.risk.kelly?.quarter_kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Quarter Kelly</div></div>
+              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-slate-600">{dashboard.risk.kelly?.total_trades ?? 0}</div><div className="text-[10px] text-slate-400">Total Trades</div></div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-slate-600 dark:text-slate-400">
-              <div>Win Rate: <span className="font-bold">{ ((dashboard.risk.kelly.win_rate ?? 0) * 100).toFixed(1)}%</span></div>
-              <div>Avg Win: <span className="font-bold">{ ((dashboard.risk.kelly.avg_win_pct ?? 0) * 100).toFixed(2)}%</span></div>
-              <div>Avg Loss: <span className="font-bold">{ ((dashboard.risk.kelly.avg_loss_pct ?? 0) * 100).toFixed(2)}%</span></div>
-              <div>Odds Ratio: <span className="font-bold">{(dashboard.risk.kelly.odds_ratio ?? 0).toFixed(2)}</span></div>
+              <div>Win Rate: <span className="font-bold">{ ((dashboard.risk.kelly?.win_rate ?? 0) * 100).toFixed(1)}%</span></div>
+              <div>Avg Win: <span className="font-bold">{ ((dashboard.risk.kelly?.avg_win_pct ?? 0) * 100).toFixed(2)}%</span></div>
+              <div>Avg Loss: <span className="font-bold">{ ((dashboard.risk.kelly?.avg_loss_pct ?? 0) * 100).toFixed(2)}%</span></div>
+              <div>Odds Ratio: <span className="font-bold">{(dashboard.risk.kelly?.odds_ratio ?? 0).toFixed(2)}</span></div>
             </div>
           </div>
 

@@ -15,10 +15,10 @@ export function Header() {
     const fetchData = async () => {
       try {
         const market = await api.getMarketData(ticker, period, interval);
-        setPrice(market.latest.close);
-        setChange(market.latest.change_pct);
+        setPrice(market.latest.close ?? 0);
+        setChange(market.latest.change_pct ?? 0);
         const signals = await api.getSignals(ticker, period, interval);
-        setCompositeScore(signals.composite_score);
+        setCompositeScore(signals.composite_score ?? 0);
       } catch (e) {
         console.error('Error loading header data:', e);
       }
@@ -45,9 +45,9 @@ export function Header() {
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">NASDAQ</span>
         </div>
         <div className="flex items-center gap-3 mt-2">
-          <span id="header-price" className="text-2xl lg:text-3xl font-bold">${price.toFixed(2)}</span>
+          <span id="header-price" className="text-2xl lg:text-3xl font-bold">${(price ?? 0).toFixed(2)}</span>
           <span id="header-change" className={`text-xs font-bold px-2.5 py-1 rounded-md ${changeColor}`}>
-            {arrow} {Math.abs(change).toFixed(2)}%
+            {arrow} {Math.abs(change ?? 0).toFixed(2)}%
           </span>
         </div>
       </div>
@@ -60,7 +60,7 @@ export function Header() {
         <div className="w-[64px] h-[64px] relative">
           <div id="composite-gauge" className="w-full h-full rounded-full flex items-center justify-center transition-all duration-500 shadow-inner" style={gaugeStyle}>
             <div className="w-[50px] h-[50px] rounded-full bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm">
-              <span id="gauge-value" className="text-base font-extrabold text-slate-800 dark:text-white">{compositeScore.toFixed(2)}</span>
+              <span id="gauge-value" className="text-base font-extrabold text-slate-800 dark:text-white">{(compositeScore ?? 0).toFixed(2)}</span>
             </div>
           </div>
         </div>

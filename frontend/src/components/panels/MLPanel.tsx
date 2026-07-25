@@ -87,7 +87,7 @@ export function MLPanel() {
   const p = status.prediction;
   const m = status.metrics;
   const horizonTexto = status.horizon ? `${status.horizon} Días` : '5 Días';
-  const minReturnTexto = status.min_return ? `${(status.min_return * 100).toFixed(1)}%` : '1.5%';
+  const minReturnTexto = status.min_return ? `${((status.min_return ?? 0) * 100).toFixed(1)}%` : '1.5%';
   const thresholdTexto = p.best_threshold ? `${(p.best_threshold * 100).toFixed(0)}%` : '50%';
   const probDisplay = p.calibrated_prob ?? p.probability;
   const dirColor = p.direction === 'ALCISTA' ? '#10b981' : '#ef4444';

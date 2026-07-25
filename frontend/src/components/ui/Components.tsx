@@ -232,7 +232,7 @@ export const Components = {
                 />
               </div>
               <span className="text-[10px] font-bold text-slate-500 w-12 text-right">
-                {(value * 100).toFixed(1)}%
+                {((value ?? 0) * 100).toFixed(1)}%
               </span>
             </div>
           ))}
