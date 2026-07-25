@@ -171,14 +171,14 @@ export const Components = {
                     {t.side}
                   </span>
                 </td>
-                <td className="py-2.5 pr-4 text-slate-700 dark:text-slate-300">${t.entry_price.toFixed(2)}</td>
-                <td className="py-2.5 pr-4 text-slate-700 dark:text-slate-300">${t.exit_price.toFixed(2)}</td>
-                <td className="py-2.5 pr-4 text-slate-600 dark:text-slate-400">{t.shares.toLocaleString()}</td>
-                <td className="py-2.5 pr-4 font-bold" style={{ color: t.pnl >= 0 ? '#10b981' : '#ef4444' }}>
-                  ${t.pnl.toFixed(2)}
+                <td className="py-2.5 pr-4 text-slate-700 dark:text-slate-300">${(t.entry_price ?? 0).toFixed(2)}</td>
+                <td className="py-2.5 pr-4 text-slate-700 dark:text-slate-300">${(t.exit_price ?? 0).toFixed(2)}</td>
+                <td className="py-2.5 pr-4 text-slate-600 dark:text-slate-400">{(t.shares ?? 0).toLocaleString()}</td>
+                <td className="py-2.5 pr-4 font-bold" style={{ color: (t.pnl ?? 0) >= 0 ? '#10b981' : '#ef4444' }}>
+                  ${(t.pnl ?? 0).toFixed(2)}
                 </td>
-                <td className="py-2.5 pr-4 font-bold" style={{ color: t.pnl_pct >= 0 ? '#10b981' : '#ef4444' }}>
-                  {t.pnl_pct >= 0 ? '+' : ''}{t.pnl_pct.toFixed(2)}%
+                <td className="py-2.5 pr-4 font-bold" style={{ color: (t.pnl_pct ?? 0) >= 0 ? '#10b981' : '#ef4444' }}>
+                  {(t.pnl_pct ?? 0) >= 0 ? '+' : ''}{(t.pnl_pct ?? 0).toFixed(2)}%
                 </td>
                 <td className="py-2.5 text-xs text-slate-500 max-w-xs truncate">{t.reason}</td>
               </tr>
@@ -343,10 +343,10 @@ export const Components = {
       <div className="glass rounded-2xl p-6 shadow-premium space-y-6">
         <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Optimización Genética Completada</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-emerald-600">{result.best_fitness.toFixed(3)}</div><div className="text-[10px] text-slate-400 uppercase">Fitness</div></div>
-          <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-indigo-600">{result.best_sharpe.toFixed(2)}</div><div className="text-[10px] text-slate-400 uppercase">Sharpe</div></div>
-          <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-amber-600">{(result.best_return*100).toFixed(1)}%</div><div className="text-[10px] text-slate-400 uppercase">Retorno</div></div>
-          <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-rose-600">{(result.best_max_dd*100).toFixed(1)}%</div><div className="text-[10px] text-slate-400 uppercase">Max DD</div></div>
+          <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-emerald-600">{(result.best_fitness ?? 0).toFixed(3)}</div><div className="text-[10px] text-slate-400 uppercase">Fitness</div></div>
+          <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-indigo-600">{(result.best_sharpe ?? 0).toFixed(2)}</div><div className="text-[10px] text-slate-400 uppercase">Sharpe</div></div>
+          <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-amber-600">{((result.best_return ?? 0) * 100).toFixed(1)}%</div><div className="text-[10px] text-slate-400 uppercase">Retorno</div></div>
+          <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-rose-600">{((result.best_max_dd ?? 0) * 100).toFixed(1)}%</div><div className="text-[10px] text-slate-400 uppercase">Max DD</div></div>
         </div>
         <div className="glass rounded-xl p-4">
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Mejores Parámetros</h4>

@@ -77,18 +77,18 @@ export function PortfolioPanel() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-200 dark:border-emerald-500/20 rounded-xl p-4 text-center">
                 <h4 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-2">Máximo Sharpe</h4>
-                <div className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300">{results.max_sharpe.sharpe_ratio.toFixed(2)}</div>
-                <div className="text-[10px] text-slate-500 mt-1">Ret: {(results.max_sharpe.return*100).toFixed(1)}% | Vol: {(results.max_sharpe.volatility*100).toFixed(1)}%</div>
+                <div className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300">{(results.max_sharpe.sharpe_ratio ?? 0).toFixed(2)}</div>
+                <div className="text-[10px] text-slate-500 mt-1">Ret: {((results.max_sharpe.return ?? 0) * 100).toFixed(1)}% | Vol: {((results.max_sharpe.volatility ?? 0) * 100).toFixed(1)}%</div>
               </div>
               <div className="bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 rounded-xl p-4 text-center">
                 <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase mb-2">Mínima Volatilidad</h4>
-                <div className="text-2xl font-extrabold text-blue-700 dark:text-blue-300">{results.min_volatility.sharpe_ratio.toFixed(2)}</div>
-                <div className="text-[10px] text-slate-500 mt-1">Ret: {(results.min_volatility.return*100).toFixed(1)}% | Vol: {(results.min_volatility.volatility*100).toFixed(1)}%</div>
+                <div className="text-2xl font-extrabold text-blue-700 dark:text-blue-300">{(results.min_volatility.sharpe_ratio ?? 0).toFixed(2)}</div>
+                <div className="text-[10px] text-slate-500 mt-1">Ret: {((results.min_volatility.return ?? 0) * 100).toFixed(1)}% | Vol: {((results.min_volatility.volatility ?? 0) * 100).toFixed(1)}%</div>
               </div>
               <div className="bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-xl p-4 text-center">
                 <h4 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase mb-2">Equiponderado (1/N)</h4>
-                <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300">{results.equal_weight.sharpe_ratio.toFixed(2)}</div>
-                <div className="text-[10px] text-slate-500 mt-1">Ret: {(results.equal_weight.return*100).toFixed(1)}% | Vol: {(results.equal_weight.volatility*100).toFixed(1)}%</div>
+                <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300">{(results.equal_weight.sharpe_ratio ?? 0).toFixed(2)}</div>
+                <div className="text-[10px] text-slate-500 mt-1">Ret: {((results.equal_weight.return ?? 0) * 100).toFixed(1)}% | Vol: {((results.equal_weight.volatility ?? 0) * 100).toFixed(1)}%</div>
               </div>
             </div>
 

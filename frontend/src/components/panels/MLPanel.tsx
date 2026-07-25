@@ -119,19 +119,19 @@ export function MLPanel() {
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-center border border-slate-100 dark:border-slate-800">
                 <span className="block text-[9px] font-bold text-slate-400 uppercase">Accuracy</span>
-                <span className="text-lg font-extrabold">{(m.accuracy*100).toFixed(1)}%</span>
+                <span className="text-lg font-extrabold">{((m.accuracy ?? 0) * 100).toFixed(1)}%</span>
               </div>
               <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-center border border-slate-100 dark:border-slate-800">
                 <span className="block text-[9px] font-bold text-slate-400 uppercase">Precisión</span>
-                <span className="text-lg font-extrabold">{(m.precision*100).toFixed(1)}%</span>
+                <span className="text-lg font-extrabold">{((m.precision ?? 0) * 100).toFixed(1)}%</span>
               </div>
               <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-center border border-slate-100 dark:border-slate-800">
                 <span className="block text-[9px] font-bold text-slate-400 uppercase">Recall</span>
-                <span className="text-lg font-extrabold">{(m.recall*100).toFixed(1)}%</span>
+                <span className="text-lg font-extrabold">{((m.recall ?? 0) * 100).toFixed(1)}%</span>
               </div>
               <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-center border border-slate-100 dark:border-slate-800">
                 <span className="block text-[9px] font-bold text-slate-400 uppercase">F1-Score</span>
-                <span className="text-lg font-extrabold">{m.f1.toFixed(2)}</span>
+                <span className="text-lg font-extrabold">{(m.f1 ?? 0).toFixed(2)}</span>
               </div>
             </div>
           </div>

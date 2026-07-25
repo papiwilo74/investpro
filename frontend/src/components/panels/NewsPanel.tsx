@@ -48,7 +48,7 @@ export function NewsPanel() {
         <div className="flex items-center gap-3">
           <span className={`text-2xl font-extrabold ${globalColor}`}>{news.global_label}</span>
           <span className="text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
-            Score: {news.average_sentiment.toFixed(2)}
+            Score: {(news.average_sentiment ?? 0).toFixed(2)}
           </span>
         </div>
         <p className="text-xs text-slate-500 mt-2">Basado en el análisis de sentimiento VADER NLP aplicado a los últimos titulares financieros.</p>

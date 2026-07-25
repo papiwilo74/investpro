@@ -45,7 +45,9 @@ export function AdvisorPanel() {
 
   if (!data) return <div className="text-center text-slate-500 py-12">Error cargando asesor</div>;
 
-  const rsiColor = data.rsi > 70 ? '#ef4444' : data.rsi < 30 ? '#10b981' : '#3b82f6';
+  const rsi = data.rsi ?? 0;
+  const mlProb = data.ml_prob ?? 0;
+  const rsiColor = rsi > 70 ? '#ef4444' : rsi < 30 ? '#10b981' : '#3b82f6';
   const macdColor = data.macd_status === 'Impulso Alcista' ? '#10b981' : '#ef4444';
   const mlColor = data.ml_direction === 'ALCISTA' ? '#10b981' : '#ef4444';
 
@@ -54,9 +56,9 @@ export function AdvisorPanel() {
       {Components.verdictCard(data.verdict, data.color, data.advice)}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {Components.advisorStatCard('Fuerza del RSI (14)', data.rsi.toFixed(1), data.rsi_status, rsiColor)}
+        {Components.advisorStatCard('Fuerza del RSI (14)', rsi.toFixed(1), data.rsi_status, rsiColor)}
         {Components.advisorStatCard('Impulso MACD', data.macd_status, 'Basado en histograma diario', macdColor)}
-        {Components.advisorStatCard('Predicción ML', data.ml_direction !== 'N/A' ? `${data.ml_direction} (${(data.ml_prob * 100).toFixed(0)}%)` : 'Sin modelo', 'Previsión a 5 días hábiles', mlColor)}
+        {Components.advisorStatCard('Predicción ML', data.ml_direction !== 'N/A' ? `${data.ml_direction} (${(mlProb * 100).toFixed(0)}%)` : 'Sin modelo', 'Previsión a 5 días hábiles', mlColor)}
       </div>
 
       <div className="glass-card">

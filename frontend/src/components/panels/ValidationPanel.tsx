@@ -232,7 +232,7 @@ export function ValidationPanel() {
                       {gaStatus.progress?.current_gen != null
                         ? `Generación ${gaStatus.progress.current_gen} / ${gaStatus.progress.total_gens ?? gaGens}`
                         : gaStatus.elapsed_seconds != null
-                          ? `Ejecutándose... (${gaStatus.elapsed_seconds.toFixed(0)}s)`
+                          ? `Ejecutándose... (${(gaStatus.elapsed_seconds ?? 0).toFixed(0)}s)`
                           : 'Iniciando...'}
                     </p>
                   </div>

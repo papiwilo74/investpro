@@ -78,21 +78,21 @@ export function BrokerPanel() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="glass rounded-xl p-4 shadow-premium">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Equity</p>
-              <p className="text-2xl font-extrabold text-slate-900 dark:text-white">${dashboard.account.equity.toLocaleString()}</p>
+              <p className="text-2xl font-extrabold text-slate-900 dark:text-white">${(dashboard.account.equity ?? 0).toLocaleString()}</p>
             </div>
             <div className="glass rounded-xl p-4 shadow-premium">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Cash</p>
-              <p className="text-2xl font-extrabold text-slate-900 dark:text-white">${dashboard.account.cash.toLocaleString()}</p>
+              <p className="text-2xl font-extrabold text-slate-900 dark:text-white">${(dashboard.account.cash ?? 0).toLocaleString()}</p>
             </div>
             <div className="glass rounded-xl p-4 shadow-premium">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Buying Power</p>
-              <p className="text-2xl font-extrabold text-slate-900 dark:text-white">${dashboard.account.buying_power.toLocaleString()}</p>
+              <p className="text-2xl font-extrabold text-slate-900 dark:text-white">${(dashboard.account.buying_power ?? 0).toLocaleString()}</p>
             </div>
             <div className="glass rounded-xl p-4 shadow-premium">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">P&L Hoy</p>
-              <p className={`text-2xl font-extrabold ${dashboard.account.pnl_today >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {dashboard.account.pnl_today >= 0 ? '+' : ''}${dashboard.account.pnl_today.toLocaleString()}
-                <span className="text-base ml-2">({dashboard.account.pnl_pct_today >= 0 ? '+' : ''}{dashboard.account.pnl_pct_today.toFixed(2)}%)</span>
+              <p className={`text-2xl font-extrabold ${(dashboard.account.pnl_today ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {(dashboard.account.pnl_today ?? 0) >= 0 ? '+' : ''}${(dashboard.account.pnl_today ?? 0).toLocaleString()}
+                <span className="text-base ml-2">({(dashboard.account.pnl_pct_today ?? 0) >= 0 ? '+' : ''}{(dashboard.account.pnl_pct_today ?? 0).toFixed(2)}%)</span>
               </p>
             </div>
           </div>
@@ -155,13 +155,13 @@ export function BrokerPanel() {
                     <td className="py-2.5 pr-4 font-medium text-slate-700 dark:text-slate-300">{p.symbol}</td>
                     <td className="py-2.5 pr-4 text-slate-700 dark:text-slate-300">{p.qty}</td>
                     <td className="py-2.5 pr-4 text-slate-700 dark:text-slate-300">${p.market_value.toLocaleString()}</td>
-                    <td className="py-2.5 pr-4 text-slate-600 dark:text-slate-400">${p.avg_entry_price.toFixed(2)}</td>
-                    <td className="py-2.5 pr-4 text-slate-600 dark:text-slate-400">${p.current_price.toFixed(2)}</td>
-                    <td className="py-2.5 pr-4 font-bold" style={{ color: p.unrealized_pl >= 0 ? '#10b981' : '#ef4444' }}>
-                      ${p.unrealized_pl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <td className="py-2.5 pr-4 text-slate-600 dark:text-slate-400">${(p.avg_entry_price ?? 0).toFixed(2)}</td>
+                    <td className="py-2.5 pr-4 text-slate-600 dark:text-slate-400">${(p.current_price ?? 0).toFixed(2)}</td>
+                    <td className="py-2.5 pr-4 font-bold" style={{ color: (p.unrealized_pl ?? 0) >= 0 ? '#10b981' : '#ef4444' }}>
+                      ${(p.unrealized_pl ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td className="py-2.5 font-bold" style={{ color: p.unrealized_plpc >= 0 ? '#10b981' : '#ef4444' }}>
-                      {p.unrealized_plpc >= 0 ? '+' : ''}{(p.unrealized_plpc * 100).toFixed(2)}%
+                    <td className="py-2.5 font-bold" style={{ color: (p.unrealized_plpc ?? 0) >= 0 ? '#10b981' : '#ef4444' }}>
+                      {(p.unrealized_plpc ?? 0) >= 0 ? '+' : ''}{((p.unrealized_plpc ?? 0) * 100).toFixed(2)}%
                     </td>
                   </tr>
                 ))}
@@ -247,8 +247,8 @@ export function BrokerPanel() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="glass rounded-xl p-4 shadow-premium">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Daily P&L</p>
-              <p className={`text-2xl font-extrabold ${dashboard.risk.daily_pnl_pct <= -0.02 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                {(dashboard.risk.daily_pnl_pct * 100).toFixed(2)}%
+              <p className={`text-2xl font-extrabold ${(dashboard.risk.daily_pnl_pct ?? 0) <= -0.02 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {((dashboard.risk.daily_pnl_pct ?? 0) * 100).toFixed(2)}%
               </p>
             </div>
             <div className="glass rounded-xl p-4 shadow-premium">
@@ -268,16 +268,16 @@ export function BrokerPanel() {
           <div className="glass-card">
             <h3 className="text-base font-bold mb-4">Kelly Criterion</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-emerald-600">{ (dashboard.risk.kelly.kelly_pct * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Kelly Completo</div></div>
-              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-blue-600">{ (dashboard.risk.kelly.half_kelly_pct * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Half Kelly</div></div>
-              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-amber-600">{ (dashboard.risk.kelly.quarter_kelly_pct * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Quarter Kelly</div></div>
-              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-slate-600">{dashboard.risk.kelly.total_trades}</div><div className="text-[10px] text-slate-400">Total Trades</div></div>
+              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-emerald-600">{ ((dashboard.risk.kelly.kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Kelly Completo</div></div>
+              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-blue-600">{ ((dashboard.risk.kelly.half_kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Half Kelly</div></div>
+              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-amber-600">{ ((dashboard.risk.kelly.quarter_kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Quarter Kelly</div></div>
+              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-slate-600">{dashboard.risk.kelly.total_trades ?? 0}</div><div className="text-[10px] text-slate-400">Total Trades</div></div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-slate-600 dark:text-slate-400">
-              <div>Win Rate: <span className="font-bold">{ (dashboard.risk.kelly.win_rate * 100).toFixed(1)}%</span></div>
-              <div>Avg Win: <span className="font-bold">{ (dashboard.risk.kelly.avg_win_pct * 100).toFixed(2)}%</span></div>
-              <div>Avg Loss: <span className="font-bold">{ (dashboard.risk.kelly.avg_loss_pct * 100).toFixed(2)}%</span></div>
-              <div>Odds Ratio: <span className="font-bold">{dashboard.risk.kelly.odds_ratio.toFixed(2)}</span></div>
+              <div>Win Rate: <span className="font-bold">{ ((dashboard.risk.kelly.win_rate ?? 0) * 100).toFixed(1)}%</span></div>
+              <div>Avg Win: <span className="font-bold">{ ((dashboard.risk.kelly.avg_win_pct ?? 0) * 100).toFixed(2)}%</span></div>
+              <div>Avg Loss: <span className="font-bold">{ ((dashboard.risk.kelly.avg_loss_pct ?? 0) * 100).toFixed(2)}%</span></div>
+              <div>Odds Ratio: <span className="font-bold">{(dashboard.risk.kelly.odds_ratio ?? 0).toFixed(2)}</span></div>
             </div>
           </div>
 
@@ -286,7 +286,7 @@ export function BrokerPanel() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {Object.entries(dashboard.risk?.sector_exposures || {}).map(([sector, val]) => (
                 <div key={sector} className="glass rounded-xl p-3 text-center">
-                  <div className="text-sm font-bold text-slate-900 dark:text-white">{((val as number) * 100).toFixed(1)}%</div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white">{((val as number ?? 0) * 100).toFixed(1)}%</div>
                   <div className="text-[10px] text-slate-400 capitalize">{sector.replace('_', ' ')}</div>
                 </div>
               ))}
@@ -301,7 +301,7 @@ export function BrokerPanel() {
           <h3 className="text-lg font-bold mb-4">Estado del Asesor Online</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold">{dashboard.advisor.active ? 'ACTIVO' : 'INACTIVO'}</div><div className="text-[10px] text-slate-400">Estado</div></div>
-            <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold">{ (dashboard.advisor.accuracy * 100).toFixed(1)}%</div><div className="text-[10px] text-slate-400">Accuracy</div></div>
+            <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold">{ ((dashboard.advisor.accuracy ?? 0) * 100).toFixed(1)}%</div><div className="text-[10px] text-slate-400">Accuracy</div></div>
             <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold">{dashboard.advisor.last_decision}</div><div className="text-[10px] text-slate-400">Última Decisión</div></div>
           </div>
           <button onClick={async () => { try { await api.resetAdvisor(); fetchAll(); } catch (e: any) { Components.toast(e.message, 'error'); } }} disabled className="mt-4 w-full py-2.5 px-6 text-sm font-bold rounded-xl border-2 border-rose-500 text-rose-600 hover:bg-rose-50 transition-colors">Resetear Asesor</button>
@@ -324,8 +324,8 @@ export function BrokerPanel() {
               {(Array.isArray(dashboard.ml_models) ? dashboard.ml_models : []).map((m: any) => (
                 <tr key={m.ticker} className="border-b border-slate-100 dark:border-slate-800/50">
                   <td className="py-2.5 pr-4 font-bold">{m.ticker}</td>
-                  <td className="py-2.5 pr-4">{(m.accuracy * 100).toFixed(1)}%</td>
-                  <td className="py-2.5">{m.age_hours.toFixed(0)}h</td>
+                  <td className="py-2.5 pr-4">{((m.accuracy ?? 0) * 100).toFixed(1)}%</td>
+                  <td className="py-2.5">{(m.age_hours ?? 0).toFixed(0)}h</td>
                 </tr>
               ))}
             </tbody>
