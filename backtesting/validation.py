@@ -6,7 +6,6 @@ Professional-grade validation pipeline to ensure strategy edge is real.
 from __future__ import annotations
 
 import math
-import random
 from dataclasses import dataclass
 from itertools import product
 
@@ -69,11 +68,10 @@ class WalkForwardOptimizer:
     """
 
     DEFAULT_PARAM_GRID = {
-        "buy_score_threshold": [0.05, 0.10, 0.20, 0.30],
-        "sell_score_threshold": [-0.30, -0.40, -0.50],
-        "stop_loss_pct": [-0.05, -0.08, -0.12],
-        "take_profit_pct": [0.10, 0.15, 0.20],
-        "trailing_stop_atr_mult": [2.0, 2.5, 3.0],
+        "buy_score_threshold": [0.10, 0.25],
+        "sell_score_threshold": [-0.30, -0.45],
+        "stop_loss_pct": [-0.05, -0.09],
+        "take_profit_pct": [0.10, 0.18],
     }
 
     def __init__(
@@ -197,42 +195,41 @@ class MonteCarloSimulator:
                 prob_sharpe_above_1=0,
             )
 
+        import numpy as np
+
         trade_pnl_pcts = [t.pnl_pct for t in trades]
-        final_returns: list[float] = []
-        sharpe_ratios: list[float] = []
-        max_drawdowns: list[float] = []
+        k = len(trade_pnl_pcts)
+        np_pnl = np.array(trade_pnl_pcts, dtype=float)
 
-        for _ in range(self.n_simulations):
-            sampled = random.choices(trade_pnl_pcts, k=len(trade_pnl_pcts))
-            equity = self.initial_capital
-            equities = [equity]
-            peak = equity
+        # Generar simulaciones aleatorias en una sola matriz (N_sims, K)
+        sim_matrix = np.random.choice(np_pnl, size=(self.n_simulations, k))
 
-            for pnl in sampled:
-                equity *= 1 + pnl
-                equities.append(equity)
-                if equity > peak:
-                    peak = equity
+        # Curvas de capital (N_sims, K+1)
+        equity_matrix = np.zeros((self.n_simulations, k + 1), dtype=float)
+        equity_matrix[:, 0] = self.initial_capital
+        equity_matrix[:, 1:] = self.initial_capital * np.cumprod(1.0 + sim_matrix, axis=1)
 
-            total_return = (equity / self.initial_capital) - 1
-            dd = (equity - peak) / peak
-            final_returns.append(total_return)
+        # Retornos finales (N_sims,)
+        final_returns = (equity_matrix[:, -1] / self.initial_capital) - 1.0
 
-            returns_series = pd.Series(equities).pct_change().dropna()
-            if returns_series.std() > 0:
-                sharpe = float(returns_series.mean() / returns_series.std() * math.sqrt(252))
-            else:
-                sharpe = 0
-            sharpe_ratios.append(sharpe)
-            max_drawdowns.append(dd)
+        # Max Drawdown por simulación
+        peaks = np.maximum.accumulate(equity_matrix, axis=1)
+        drawdowns = (equity_matrix - peaks) / np.maximum(peaks, 1.0)
+        max_drawdowns = np.min(drawdowns, axis=1)
 
-        final_returns.sort()
-        sharpe_ratios.sort()
-        max_drawdowns.sort()
+        # Sharpe Ratio por simulación
+        means = np.mean(sim_matrix, axis=1)
+        stds = np.std(sim_matrix, axis=1, ddof=1)
+        stds[stds == 0] = 1e-9
+        sharpe_ratios = (means / stds) * math.sqrt(252)
+
+        final_returns = np.sort(final_returns)
+        sharpe_ratios = np.sort(sharpe_ratios)
+        max_drawdowns = np.sort(max_drawdowns)
 
         def percentile(arr, p):
             idx = int(len(arr) * p / 100)
-            return arr[max(0, min(idx, len(arr) - 1))]
+            return float(arr[max(0, min(idx, len(arr) - 1))])
 
         return MonteCarloResult(
             n_simulations=self.n_simulations,
