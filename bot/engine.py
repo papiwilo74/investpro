@@ -25,6 +25,7 @@ from bot.risk_controller import RiskController
 from bot.safety import SignalJournal
 from bot.scanner import MarketScanner
 from bot.state_manager import BotStateManager
+from bot.statistical_arbitrage import PairsTradingEngine
 from bot.strategy import Decision, TradingBrain, create_web_bot_strategy_params
 from bot.strategy_params import StrategyParams
 from broker import create_broker_client
@@ -123,6 +124,7 @@ class TradingBot:
             )
 
         self.brain = TradingBrain(params)
+        self.pairs_engine = PairsTradingEngine()
         self.market_regime = MarketRegimeFilter(fetcher=self.fetcher)
         use_db = getattr(self, "_db_session", None) is not None
         self.online_advisor = (
