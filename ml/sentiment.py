@@ -398,3 +398,29 @@ class SentimentAnalyzer:
             global_label = "NEUTRAL"
 
         return {"news": processed_news, "average_sentiment": avg, "global_label": global_label}
+
+    def fetch_ticker_news_sentiment(self, ticker: str) -> dict:
+        """Escanea los titulares más recientes del ticker vía yfinance y retorna el sentimiento promedio.
+
+        Permite actuar como Sentinel para bloquear compras ante noticias altamente negativas (< -0.4).
+        """
+        try:
+            import yfinance as yf
+
+            tk = yf.Ticker(ticker)
+            news = tk.news or []
+            if not news:
+                return {"average_sentiment": 0.0, "news_count": 0, "should_block_buy": False, "status": "NO_NEWS"}
+
+            res = self.analyze_news_batch(news[:5])
+            avg = res.get("average_sentiment", 0.0)
+
+            return {
+                "average_sentiment": float(avg),
+                "news_count": len(news[:5]),
+                "should_block_buy": float(avg) < -0.4,
+                "status": "OK",
+            }
+        except Exception as e:
+            logger.warning("Error buscando noticias para %s: %s", ticker, e)
+            return {"average_sentiment": 0.0, "news_count": 0, "should_block_buy": False, "status": "ERROR"}

@@ -71,16 +71,19 @@ class PositionState:
         p = self.params
         if not p.use_dynamic_trailing:
             return p.trailing_stop_atr_mult
-        # Si ya vendimos parcialmente, el trailing se pone mucho más agresivo
+        # Si ya vendimos parcialmente (TP1/TP2), el trailing es muy apretado para asegurar ganancias
         if self._tp2_hit:
-            return 1.0
+            return 0.8
         if self._tp1_hit:
-            return p.trail_atr_tight
+            return min(1.2, p.trail_atr_tight)
+
         pnl_pct = self.current_pnl_pct(self.max_price)
+        if pnl_pct >= 0.15:
+            return 0.9  # Aprieta fuerte al pasar 15% de beneficio
         if pnl_pct >= 0.10:
-            return p.trail_atr_tight
+            return 1.2  # Aprieta medio al pasar 10%
         if pnl_pct >= 0.05:
-            return (p.trail_atr_base + p.trail_atr_tight) / 2
+            return 1.8  # Aprieta suave al pasar 5%
         return p.trail_atr_base
 
     def check_partial_tp(self, current_price: float) -> float:
