@@ -124,9 +124,9 @@ export function ValidationPanel() {
               Error: {valResults.error}
             </div>
           ) : (
-            <div className={`glass-card dark:shadow-none border ${valResults.verdict === 'APROBADO' ? 'border-emerald-200 dark:border-emerald-500/20' : valResults.verdict === 'RECHAZADO' ? 'border-rose-200 dark:border-rose-500/20' : 'border-amber-200 dark:border-amber-500/20'}`}>
+            <div className={`glass-card dark:shadow-none border ${valResults.verdict === 'APROBADO' ? 'border-emerald-200 dark:border-emerald-500/20' : valResults.verdict === 'RECHAZADO' ? 'border-rose-200 dark:border-rose-500/20' : 'border-teal-200 dark:border-teal-500/20'}`}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Resultado: <span className={valResults.verdict === 'APROBADO' ? 'text-emerald-600' : valResults.verdict === 'RECHAZADO' ? 'text-rose-600' : 'text-amber-600'}>{valResults.verdict}</span></h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Resultado: <span className={valResults.verdict === 'APROBADO' ? 'text-emerald-600' : valResults.verdict === 'RECHAZADO' ? 'text-rose-600' : 'text-teal-600'}>{valResults.verdict}</span></h3>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   {[
@@ -167,9 +167,9 @@ export function ValidationPanel() {
               </div>
 
               {Array.isArray(valResults.overfit_flags) && valResults.overfit_flags.length > 0 && (
-                <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl p-4 mb-4">
-                  <h4 className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-2">⚠ Banderas de Overfitting</h4>
-                  <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
+                <div className="bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/20 rounded-xl p-4 mb-4">
+                  <h4 className="text-[10px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider mb-2">⚠ Banderas de Overfitting</h4>
+                  <ul className="text-sm text-teal-700 dark:text-teal-300 space-y-1">
                     {valResults.overfit_flags.map((f: string) => <li key={f} className="flex gap-2">• {f}</li>)}
                   </ul>
                 </div>
@@ -252,7 +252,7 @@ export function ValidationPanel() {
                     <div id="ga-metrics-row" className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl text-center text-xs">
                       <div><div className="text-base font-bold text-emerald-600">{gaStatus.progress.gen_metrics?.best_fitness?.toFixed(3) ?? '0.000'}</div><div className="text-slate-400">Fitness</div></div>
                       <div><div className="text-base font-bold text-indigo-600">{gaStatus.progress.gen_metrics?.sharpe?.toFixed(2) ?? '0.00'}</div><div className="text-slate-400">Sharpe</div></div>
-                      <div><div className="text-base font-bold text-amber-600">{((gaStatus.progress.gen_metrics?.retorno ?? 0) * 100).toFixed(1)}%</div><div className="text-slate-400">Retorno</div></div>
+                      <div><div className="text-base font-bold text-teal-600">{((gaStatus.progress.gen_metrics?.retorno ?? 0) * 100).toFixed(1)}%</div><div className="text-slate-400">Retorno</div></div>
                       <div><div className="text-base font-bold text-rose-600">{((gaStatus.progress.gen_metrics?.max_drawdown ?? 0) * 100).toFixed(1)}%</div><div className="text-slate-400">Max DD</div></div>
                     </div>
                   </>
@@ -278,9 +278,9 @@ export function ValidationPanel() {
                     <div className="text-2xl font-extrabold text-blue-700 dark:text-blue-300">{gaStatus.result.best_sharpe?.toFixed(2) ?? 'N/A'}</div>
                     <div className="text-[10px] text-slate-500 mt-1">Sharpe: {gaStatus.result.best_sharpe?.toFixed(2) ?? 'N/A'} | Ret: {(gaStatus.result.best_return != null ? (gaStatus.result.best_return*100).toFixed(1) : 'N/A')}% | DD: {(gaStatus.result.best_max_dd != null ? (gaStatus.result.best_max_dd*100).toFixed(1) : 'N/A')}%</div>
                   </div>
-                  <div className="bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-xl p-4 text-center">
-                    <h4 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase mb-2">Config</h4>
-                    <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300">{gaStatus.result.generations ?? '?'} gen</div>
+                  <div className="bg-teal-50 dark:bg-teal-500/5 border border-teal-200 dark:border-teal-500/20 rounded-xl p-4 text-center">
+                    <h4 className="text-xs font-bold text-teal-600 dark:text-teal-400 uppercase mb-2">Config</h4>
+                    <div className="text-2xl font-extrabold text-teal-700 dark:text-teal-300">{gaStatus.result.generations ?? '?'} gen</div>
                     <div className="text-[10px] text-slate-500 mt-1">Población: {gaStatus.result.population_size ?? '?'}</div>
                   </div>
                 </div>
@@ -290,7 +290,7 @@ export function ValidationPanel() {
               <div className="bg-rose-50 dark:bg-rose-500/10 border-l-4 border-l-rose-500 rounded-xl p-5 text-sm mt-4">Error: {gaStatus.error || 'Error desconocido'}</div>
             )}
             {gaStatus.status === 'cancelled' && (
-              <div className="bg-amber-50 dark:bg-amber-500/10 border-l-4 border-l-amber-500 rounded-xl p-5 text-sm mt-4">Optimización cancelada por el usuario.</div>
+              <div className="bg-teal-50 dark:bg-teal-500/10 border-l-4 border-l-teal-500 rounded-xl p-5 text-sm mt-4">Optimización cancelada por el usuario.</div>
             )}
           </div>
         )}

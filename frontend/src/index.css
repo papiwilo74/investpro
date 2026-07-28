@@ -4,13 +4,13 @@
 
 @layer base {
   * {
-    @apply border-amber-200/30 dark:border-amber-900/25;
+    @apply border-teal-200/30 dark:border-teal-900/25;
   }
   body {
-    @apply bg-gradient-to-br from-amber-50 via-white to-orange-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-amber-950/20 text-slate-700 dark:text-amber-50/90;
+    @apply bg-gradient-to-br from-teal-50 via-white to-cyan-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-teal-950/20 text-slate-700 dark:text-teal-50/90;
   }
   ::selection {
-    @apply bg-amber-400/30 dark:bg-amber-500/20;
+    @apply bg-teal-400/30 dark:bg-teal-500/20;
   }
   .font-outfit {
     font-family: 'Outfit', system-ui, sans-serif;
@@ -19,34 +19,34 @@
 
 @layer utilities {
   .glass {
-    @apply bg-white/50 dark:bg-slate-900/35 backdrop-blur-2xl border-2 border-amber-200/25 dark:border-amber-900/20 shadow-[0_8px_32px_-8px_rgba(251,191,36,0.06)] dark:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)];
+    @apply bg-white/50 dark:bg-slate-900/35 backdrop-blur-2xl border-2 border-teal-200/25 dark:border-teal-900/20 shadow-[0_8px_32px_-8px_rgba(20,184,166,0.06)] dark:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)];
   }
   .glass-card {
-    @apply glass rounded-2xl p-6 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:scale-[1.01] hover:shadow-[0_20px_56px_-12px_rgba(251,191,36,0.12)] dark:hover:shadow-[0_20px_56px_-12px_rgba(0,0,0,0.55)] hover:border-amber-400/40 dark:hover:border-amber-700/30;
+    @apply glass rounded-2xl p-6 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:scale-[1.01] hover:shadow-[0_20px_56px_-12px_rgba(20,184,166,0.12)] dark:hover:shadow-[0_20px_56px_-12px_rgba(0,0,0,0.55)] hover:border-teal-400/40 dark:hover:border-teal-700/30;
   }
   .glass-nav {
-    @apply bg-white/55 dark:bg-slate-900/45 backdrop-blur-2xl border-2 border-amber-200/20 dark:border-amber-900/10 shadow-sm;
+    @apply bg-white/55 dark:bg-slate-900/45 backdrop-blur-2xl border-2 border-teal-200/20 dark:border-teal-900/10 shadow-sm;
   }
   .panel-hover-neon {
-    @apply transition-all duration-500 ease-out hover:-translate-y-1.5 hover:scale-[1.005] hover:shadow-[0_0_50px_rgba(251,191,36,0.15)] hover:border-amber-400/40 hover:bg-white/55 dark:hover:bg-slate-900/45;
+    @apply transition-all duration-500 ease-out hover:-translate-y-1.5 hover:scale-[1.005] hover:shadow-[0_0_50px_rgba(20,184,166,0.15)] hover:border-teal-400/40 hover:bg-white/55 dark:hover:bg-slate-900/45;
   }
   .shadow-premium {
-    @apply shadow-[0_10px_40px_-10px_rgba(251,191,36,0.06)] dark:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)];
+    @apply shadow-[0_10px_40px_-10px_rgba(20,184,166,0.06)] dark:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)];
   }
   .shadow-premium-hover {
-    @apply shadow-[0_20px_60px_-15px_rgba(251,191,36,0.08)] dark:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.4)];
+    @apply shadow-[0_20px_60px_-15px_rgba(20,184,166,0.08)] dark:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.4)];
   }
   .input-glass {
-    @apply bg-white/40 dark:bg-slate-950/25 backdrop-blur-lg border-2 border-amber-200/25 dark:border-amber-800/20 text-slate-700 dark:text-amber-50/90 placeholder-amber-400/50 dark:placeholder-amber-600/40 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 transition-all shadow-inner;
+    @apply bg-white/40 dark:bg-slate-950/25 backdrop-blur-lg border-2 border-teal-200/25 dark:border-teal-800/20 text-slate-700 dark:text-teal-50/90 placeholder-teal-400/50 dark:placeholder-teal-600/40 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all shadow-inner;
   }
   .btn-primary {
-    @apply bg-gradient-to-tr from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold rounded-xl transition-all duration-200 ease-out shadow-md hover:shadow-lg hover:-translate-y-1 hover:scale-[1.02] active:translate-y-0 active:scale-100;
+    @apply bg-gradient-to-tr from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold rounded-xl transition-all duration-200 ease-out shadow-md hover:shadow-lg hover:-translate-y-1 hover:scale-[1.02] active:translate-y-0 active:scale-100;
   }
   .btn-ghost {
-    @apply bg-white/55 dark:bg-slate-800/50 hover:bg-amber-50 dark:hover:bg-amber-900/20 border-2 border-amber-200/25 dark:border-amber-800/20 text-amber-700 dark:text-amber-300/80 font-bold rounded-xl transition-all duration-200 ease-out shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer;
+    @apply bg-white/55 dark:bg-slate-800/50 hover:bg-teal-50 dark:hover:bg-teal-900/20 border-2 border-teal-200/25 dark:border-teal-800/20 text-teal-700 dark:text-teal-300/80 font-bold rounded-xl transition-all duration-200 ease-out shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer;
   }
   .skeleton {
-    @apply animate-pulse bg-amber-200/40 dark:bg-amber-900/20 rounded;
+    @apply animate-pulse bg-teal-200/40 dark:bg-teal-900/20 rounded;
   }
   .animate-fade-in-up {
     animation: fadeInUp 0.5s ease-out forwards;

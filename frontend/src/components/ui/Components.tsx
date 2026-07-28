@@ -41,12 +41,12 @@ export const Components = {
   },
 
   // Metric cards
-  metricCard(label: string, value: string, subtitle = '', color: 'green' | 'red' | 'blue' | 'amber' = 'green') {
+  metricCard(label: string, value: string, subtitle = '', color: 'green' | 'red' | 'blue' | 'teal' = 'green') {
     const colors = {
       green: 'border-l-emerald-500',
       red: 'border-l-rose-500',
       blue: 'border-l-blue-500',
-      amber: 'border-l-amber-500',
+      teal: 'border-l-teal-500',
     };
     return (
       <div className={`glass border-l-4 ${colors[color]} rounded-xl px-5 py-4 flex flex-col gap-1 shadow-premium hover:shadow-premium-hover transition-all duration-300 hover:-translate-y-1`}>
@@ -88,7 +88,7 @@ export const Components = {
     const actionMap: Record<string, { label: string; bg: string; text: string; icon: string }> = {
       BUY: { label: '[+]', bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', icon: '\u2191' },
       SELL: { label: '[-]', bg: 'bg-rose-50 dark:bg-rose-500/10', text: 'text-rose-600 dark:text-rose-400', icon: '\u2193' },
-      HOLD: { label: '[=]', bg: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400', icon: '\u2192' },
+      HOLD: { label: '[=]', bg: 'bg-teal-50 dark:bg-teal-500/10', text: 'text-teal-600 dark:text-teal-400', icon: '\u2192' },
     };
     const config = actionMap[action] || actionMap.HOLD;
     const strengthPct = Math.round(strength * 100);
@@ -271,7 +271,7 @@ export const Components = {
     const verdictColors: Record<string, { bg: string; text: string; border: string }> = {
       APROBADO: { bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-500/20' },
       RECHAZADO: { bg: 'bg-rose-50 dark:bg-rose-500/10', text: 'text-rose-600 dark:text-rose-400', border: 'border-rose-200 dark:border-rose-500/20' },
-      CONDICIONAL: { bg: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-500/20' },
+      CONDICIONAL: { bg: 'bg-teal-50 dark:bg-teal-500/10', text: 'text-teal-600 dark:text-teal-400', border: 'border-teal-200 dark:border-teal-500/20' },
     };
     const verdictConfig = verdictColors[report.verdict] || verdictColors.CONDICIONAL;
 
@@ -324,9 +324,9 @@ export const Components = {
           </div>
 
           {Array.isArray(report.overfit_flags) && report.overfit_flags.length > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl p-4">
-              <h4 className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-2">⚠ Banderas de Overfitting</h4>
-              <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
+            <div className="bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/20 rounded-xl p-4">
+              <h4 className="text-[10px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider mb-2">⚠ Banderas de Overfitting</h4>
+              <ul className="text-sm text-teal-700 dark:text-teal-300 space-y-1">
                 {report.overfit_flags.map(f => <li key={f} className="flex gap-2">• {f}</li>)}
               </ul>
             </div>
@@ -345,7 +345,7 @@ export const Components = {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-emerald-600">{(result.best_fitness ?? 0).toFixed(3)}</div><div className="text-[10px] text-slate-400 uppercase">Fitness</div></div>
           <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-indigo-600">{(result.best_sharpe ?? 0).toFixed(2)}</div><div className="text-[10px] text-slate-400 uppercase">Sharpe</div></div>
-          <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-amber-600">{((result.best_return ?? 0) * 100).toFixed(1)}%</div><div className="text-[10px] text-slate-400 uppercase">Retorno</div></div>
+          <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-teal-600">{((result.best_return ?? 0) * 100).toFixed(1)}%</div><div className="text-[10px] text-slate-400 uppercase">Retorno</div></div>
           <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-rose-600">{((result.best_max_dd ?? 0) * 100).toFixed(1)}%</div><div className="text-[10px] text-slate-400 uppercase">Max DD</div></div>
         </div>
         <div className="glass rounded-xl p-4">

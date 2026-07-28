@@ -134,7 +134,7 @@ export function CandlestickChart({ containerId, candles, indicators, showSMA = t
     // Add or update wanted
     const smaConfigs: Record<string, { data: LineData<Time>[]; color: string; title: string }> = {};
     if (wanted.includes('sma20')) smaConfigs.sma20 = { data: indicators.sma_20.filter(d => d.value != null) as LineData<Time>[], color: '#2f81f7', title: 'SMA 20' };
-    if (wanted.includes('sma50')) smaConfigs.sma50 = { data: indicators.sma_50.filter(d => d.value != null) as LineData<Time>[], color: '#f0883e', title: 'SMA 50' };
+    if (wanted.includes('sma50')) smaConfigs.sma50 = { data: indicators.sma_50.filter(d => d.value != null) as LineData<Time>[], color: '#0d9488', title: 'SMA 50' };
     if (wanted.includes('sma200')) smaConfigs.sma200 = { data: indicators.sma_200.filter(d => d.value != null) as LineData<Time>[], color: '#cf222e', title: 'SMA 200' };
 
     wanted.forEach(k => {
@@ -282,7 +282,7 @@ export function MACDChart({ containerId, macdData, height = 200 }: MACDChartProp
     chartRef.current = chart;
 
     macdSeriesRef.current = chart.addLineSeries({ color: '#2f81f7', lineWidth: 2 as any, title: 'MACD' });
-    signalSeriesRef.current = chart.addLineSeries({ color: '#f0883e', lineWidth: 2 as any, title: 'Señal' });
+    signalSeriesRef.current = chart.addLineSeries({ color: '#0d9488', lineWidth: 2 as any, title: 'Señal' });
     histSeriesRef.current = chart.addHistogramSeries({ color: '#8c95a0', priceFormat: { type: 'volume' } });
 
     const resizeObserver = new ResizeObserver(entries => {

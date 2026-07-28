@@ -71,7 +71,7 @@ export function App() {
       let borderColor = 'border-l-4 border-l-blue-500';
       if (type === 'success') borderColor = 'border-l-4 border-l-emerald-500';
       else if (type === 'error') borderColor = 'border-l-4 border-l-rose-500';
-      else if (type === 'warning') borderColor = 'border-l-4 border-l-amber-500';
+      else if (type === 'warning') borderColor = 'border-l-4 border-l-teal-500';
 
       toast.className += ` ${borderColor}`;
       toast.innerHTML = `

@@ -63,7 +63,7 @@ export function MLPanel() {
   if (!status?.has_model) {
     return (
       <section id="panel-ml" className="panel flex flex-col gap-6 animate-fade-in-up w-full">
-        <div className="glass border border-amber-200 dark:border-amber-500/20 border-l-4 border-l-amber-500 rounded-2xl p-6 shadow-premium dark:shadow-none">
+        <div className="glass border border-teal-200 dark:border-teal-500/20 border-l-4 border-l-teal-500 rounded-2xl p-6 shadow-premium dark:shadow-none">
           <h3 className="text-base font-bold mb-2">Sin modelo inteligente para {ticker}</h3>
           <p className="text-sm text-slate-500 mb-5 leading-relaxed">
             No existe un modelo entrenado localmente. El entrenamiento compilará un modelo Random Forest

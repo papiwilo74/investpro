@@ -49,7 +49,7 @@ export function BacktestPanel() {
           {Components.metricCard('Retorno Total', ((m.retorno_total ?? 0) * 100).toFixed(2) + '%', 'Anualizado: ' + ((m.retorno_anualizado ?? 0) * 100).toFixed(2) + '%', (m.retorno_total ?? 0) >= 0 ? 'green' : 'red')}
           {Components.metricCard('Sharpe Ratio', (m.sharpe_ratio ?? 0).toFixed(2), 'Volatilidad diaria', (m.sharpe_ratio ?? 0) >= 1.0 ? 'green' : ((m.sharpe_ratio ?? 0) >= 0 ? 'blue' : 'red'))}
           {Components.metricCard('Max Drawdown', ((m.max_drawdown ?? 0) * 100).toFixed(2) + '%', 'Caída máxima', 'red')}
-          {Components.metricCard('Win Rate', ((m.win_rate ?? 0) * 100).toFixed(0) + '%', (m.total_trades ?? 0) + ' transacciones', (m.win_rate ?? 0) >= 0.5 ? 'green' : 'amber')}
+          {Components.metricCard('Win Rate', ((m.win_rate ?? 0) * 100).toFixed(0) + '%', (m.total_trades ?? 0) + ' transacciones', (m.win_rate ?? 0) >= 0.5 ? 'green' : 'teal')}
         </div>
       </div>
 

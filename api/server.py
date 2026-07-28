@@ -125,7 +125,8 @@ async def _watchdog_bot():
     while True:
         try:
             from api.routes.broker import bot
-            from api.routes.broker import risk_manager as _rm
+
+            _rm = bot.risk_manager
 
             if not bot.is_running and _auto_start_enabled:
                 now = _time.time()

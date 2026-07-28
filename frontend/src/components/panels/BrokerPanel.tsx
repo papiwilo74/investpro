@@ -122,7 +122,7 @@ export function BrokerPanel() {
             <div className="glass rounded-xl p-4 shadow-premium">
               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Market Breadth</h4>
               <div className="text-sm">
-                <p>Level: <span className={`font-bold ${dashboard.market_breadth?.level === 'FAVORABLE' ? 'text-emerald-600' : 'text-amber-600'}`}>{dashboard.market_breadth?.level || 'N/A'}</span></p>
+                <p>Level: <span className={`font-bold ${dashboard.market_breadth?.level === 'FAVORABLE' ? 'text-emerald-600' : 'text-teal-600'}`}>{dashboard.market_breadth?.level || 'N/A'}</span></p>
                 <p className="text-xs text-slate-500 mt-1">{dashboard.market_breadth?.reason || ''}</p>
               </div>
             </div>
@@ -201,7 +201,7 @@ export function BrokerPanel() {
                     <td className="py-2.5 pr-4">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                         o.status === 'filled' ? 'bg-emerald-50 text-emerald-600' :
-                        o.status === 'pending_new' ? 'bg-amber-50 text-amber-600' :
+                        o.status === 'pending_new' ? 'bg-teal-50 text-teal-600' :
                         'bg-slate-50 text-slate-600'
                       }`}>{o.status}</span>
                     </td>
@@ -270,7 +270,7 @@ export function BrokerPanel() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-emerald-600">{ ((dashboard.risk.kelly?.kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Kelly Completo</div></div>
               <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-blue-600">{ ((dashboard.risk.kelly?.half_kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Half Kelly</div></div>
-              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-amber-600">{ ((dashboard.risk.kelly?.quarter_kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Quarter Kelly</div></div>
+              <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-teal-600">{ ((dashboard.risk.kelly?.quarter_kelly_pct ?? 0) * 100).toFixed(2)}%</div><div className="text-[10px] text-slate-400">Quarter Kelly</div></div>
               <div className="glass rounded-xl p-4 text-center"><div className="text-2xl font-extrabold text-slate-600">{dashboard.risk.kelly?.total_trades ?? 0}</div><div className="text-[10px] text-slate-400">Total Trades</div></div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-slate-600 dark:text-slate-400">
