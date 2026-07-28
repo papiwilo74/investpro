@@ -28,6 +28,9 @@ update_bot_engine.py
 update_strategy.py
 update_daemon.py
 temp.py
+run_tests.py
+.tmp/
+*.bak
 
 # ══════════════════════════════════════════════════════════
 #  DATOS Y MODELOS (PESADOS / GENERADOS EN RUNTIME)

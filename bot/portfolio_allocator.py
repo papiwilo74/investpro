@@ -248,3 +248,67 @@ class PortfolioAllocator:
         if len(frames) < 2:
             return None
         return pd.DataFrame(frames).ffill().dropna()
+
+
+class CorrelationRiskGuard:
+    """Evalúa la matriz de correlación móvil a 30 días para evitar sobreconcentración en activos altamente correlacionados (> 0.80)."""
+
+    def __init__(self, fetcher: DataFetcher | None = None, window: int = 30):
+        self.fetcher = fetcher or DataFetcher()
+        self.window = window
+
+    def calculate_correlation_matrix(self, tickers: list[str]) -> pd.DataFrame:
+        if not tickers:
+            return pd.DataFrame()
+
+        close_prices = {}
+        for t in tickers:
+            try:
+                df = self.fetcher.get_data(t, period="3mo", interval="1d")
+                if not df.empty and "close" in df.columns:
+                    close_prices[t] = df["close"]
+            except Exception as e:
+                logger.warning("Error fetching data for correlation matrix (%s): %s", t, e)
+
+        if not close_prices:
+            return pd.DataFrame()
+
+        prices_df = pd.DataFrame(close_prices).ffill().dropna().tail(self.window)
+        if prices_df.empty or len(prices_df) < 5:
+            return pd.DataFrame()
+
+        return prices_df.pct_change().corr()
+
+    def get_allocation_scale_factor(self, new_ticker: str, open_positions: list[str]) -> tuple[float, str]:
+        """
+        Retorna (scale_factor, reason).
+        Scale factor:
+          1.0 = normal
+          0.5 = correlación moderada-alta (0.70 - 0.85)
+          0.0 = correlación extrema (> 0.85), rechazar orden
+        """
+        if not open_positions:
+            return 1.0, "Sin posiciones abiertas"
+
+        tickers = list(set([*open_positions, new_ticker]))
+        corr_matrix = self.calculate_correlation_matrix(tickers)
+
+        if corr_matrix.empty or new_ticker not in corr_matrix.columns:
+            return 1.0, "Sin datos de correlación suficientes"
+
+        max_corr = 0.0
+        correlated_with = ""
+
+        for pos in open_positions:
+            if pos != new_ticker and pos in corr_matrix.index:
+                val = abs(float(corr_matrix.loc[new_ticker, pos]))
+                if val > max_corr:
+                    max_corr = val
+                    correlated_with = pos
+
+        if max_corr > 0.85:
+            return 0.0, f"Rechazado: Alta correlación ({max_corr:.2f}) con {correlated_with}"
+        elif max_corr >= 0.70:
+            return 0.5, f"Escalado al 50%: Correlación moderada ({max_corr:.2f}) con {correlated_with}"
+
+        return 1.0, f"Correlación baja ({max_corr:.2f})"
