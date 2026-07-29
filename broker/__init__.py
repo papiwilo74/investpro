@@ -24,3 +24,15 @@ def create_broker_client(data_fetcher=None):
     client = PaperTradingClient(data_fetcher=data_fetcher, paper_fallback=True)
     logger.info("Broker: PaperTradingClient activo (simulación local)")
     return client
+
+
+def create_crypto_client(paper: bool = True):
+    """Factory: retorna CryptoBrokerClient para trading 24/7 en criptomonedas."""
+    from broker.crypto_client import CryptoBrokerClient
+
+    client = CryptoBrokerClient(paper=paper)
+    if client.is_connected():
+        logger.info("CryptoBroker: conectado (paper={})", paper)
+    else:
+        logger.info("CryptoBroker: modo paper local (sin credenciales Alpaca)")
+    return client

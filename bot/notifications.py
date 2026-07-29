@@ -138,6 +138,17 @@ class NotificationService:
     def new_buy(self, ticker: str, qty: int, price: float, amount: float) -> None:
         self.send("new_trade", f"BUY {ticker}: {qty} shares @ ${price:.2f} = ${amount:,.0f}", "success")
 
+    def new_crypto_buy(self, symbol: str, qty: float, price: float, amount: float) -> None:
+        self.send("new_trade", f"🪙 BUY CRYPTO {symbol}: {qty} @ ${price:,.2f} = ${amount:,.0f}", "success")
+
+    def new_crypto_sell(self, symbol: str, qty: float, price: float, pnl_pct: float, reason: str) -> None:
+        emoji = "🟢" if pnl_pct >= 0 else "🔴"
+        self.send(
+            "new_trade",
+            f"{emoji} SELL CRYPTO {symbol}: {qty} @ ${price:,.2f} | P&L {pnl_pct:+.2%} | {reason}",
+            "success" if pnl_pct >= 0 else "warning",
+        )
+
     def new_sell(self, ticker: str, qty: int, pnl_pct: float, reason: str) -> None:
         emoji = "🟢" if pnl_pct >= 0 else "🔴"
         self.send(

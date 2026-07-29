@@ -28,7 +28,8 @@ from bot.state_manager import BotStateManager
 from bot.statistical_arbitrage import PairsTradingEngine
 from bot.strategy import Decision, TradingBrain, create_web_bot_strategy_params
 from bot.strategy_params import StrategyParams
-from broker import create_broker_client
+from broker import create_broker_client, create_crypto_client
+from broker.crypto_client import DEFAULT_CRYPTO_WATCHLIST
 from config import BROKER_CONFIG, WATCHLIST, WEB_RISK_CONFIG
 from data.fetcher import DataFetcher
 from db import SessionLocal
@@ -62,6 +63,7 @@ class TradingBot:
         self.strategy_mode = strategy_mode
         self.fetcher = DataFetcher()
         self.client = create_broker_client(data_fetcher=self.fetcher)
+        self.crypto_client = create_crypto_client(paper=True)
         self._trainer = None  # lazy — XGBoost+sklearn (~200MB), solo al necesitar ML
         self.sentiment = SentimentAnalyzer() if use_sentiment else None
         self.journal = SignalJournal(fetcher=self.fetcher)
@@ -697,6 +699,10 @@ class TradingBot:
                     else:
                         await self._scan_and_trade_universe(interval)
 
+                    # Escaneo de crypto (24/7)
+                    self._log("Ejecutando escaneo de crypto...")
+                    await self._scan_and_trade_crypto(interval)
+
                     consecutive_errors = 0
 
                 except asyncio.CancelledError:
@@ -897,6 +903,76 @@ class TradingBot:
             if invested and invested > 0:
                 buying_power -= invested
             await asyncio.sleep(2)
+
+    async def _scan_and_trade_crypto(self, interval: str = "1d"):
+        """Escanea y opera criptomonedas (BTC, ETH, SOL) 24/7."""
+        try:
+            acc = self.crypto_client.get_account_summary()
+            if not acc:
+                return
+
+            equity = acc.get("equity", 0.0)
+            buying_power = acc.get("buying_power", 0.0)
+            positions = {p["symbol"]: p for p in self.crypto_client.get_positions()}
+
+            for symbol in DEFAULT_CRYPTO_WATCHLIST:
+                if not self.is_running:
+                    break
+
+                ticker = symbol.replace("/", "")  # BTC/USD -> BTCUSD para fetcher
+                try:
+                    df = self.fetcher.get_data(ticker, period="3mo", interval=interval)
+                    if df.empty:
+                        continue
+
+                    df = TechnicalIndicators.add_all(df, intraday=False)
+                    df = SignalGenerator.add_signal_columns(df)
+                    score = SignalGenerator.composite_score(df)
+                    last_close = float(df["close"].iloc[-1])
+
+                    position = positions.get(symbol)
+                    has_position = position is not None
+                    pnl_pct = float(position.get("unrealized_plpc", 0.0)) if position else 0.0
+
+                    ml_direction, ml_probability = self._get_ml_prediction(ticker, df)
+                    ticker_regime = TradingBrain._infer_market_regime(df)
+                    weekly_trend = TradingBrain._infer_weekly_trend(df)
+
+                    decision = self.brain.decide(
+                        df=df,
+                        score=score,
+                        has_position=has_position,
+                        position_pnl_pct=pnl_pct,
+                        ml_direction=ml_direction,
+                        ml_probability=ml_probability,
+                        sentiment_label=None,
+                        ticker=ticker,
+                        weekly_trend=weekly_trend,
+                        market_regime=ticker_regime,
+                        advisor_action=None,
+                    )
+
+                    self._log(
+                        f"CRYPTO {symbol}: {decision.action} | score={score:.2f} | "
+                        f"conf={decision.confidence:.2f} | reason={decision.reason}"
+                    )
+
+                    if decision.action == "BUY" and not has_position:
+                        if decision.confidence >= 0.5 and score >= self._strategy_params.buy_score_threshold:
+                            invested = await self._execute_crypto_buy(
+                                symbol, decision, last_close, equity, buying_power
+                            )
+                            if invested > 0:
+                                buying_power -= invested
+
+                    elif decision.action == "SELL" and has_position:
+                        await self._execute_crypto_sell(symbol, decision, position, equity, pnl_pct)
+
+                except Exception as e:
+                    logger.warning("Error analizando crypto %s: %s", symbol, e)
+
+        except Exception as e:
+            logger.warning("Error en escaneo crypto: %s", e)
 
     async def _evaluate_and_trade(
         self,
@@ -1515,6 +1591,64 @@ class TradingBot:
     ) -> None:
         self._log(f"ORDEN {decision.action} {ticker}: pnl={pnl_pct:.2%} | razon={decision.reason}")
         await self._run_sync(self._executor.execute_sell, ticker, decision, position, equity, pnl_pct)
+
+    async def _execute_crypto_buy(
+        self,
+        symbol: str,
+        decision: Any,
+        last_close: float,
+        equity: float,
+        buying_power: float,
+    ) -> float:
+        """Ejecuta compra de criptomonedas via CryptoBrokerClient."""
+        try:
+            invest_amount = min(equity * decision.position_size_pct, buying_power)
+            if invest_amount <= last_close:
+                return 0.0
+
+            qty = invest_amount / last_close
+            if qty <= 0:
+                return 0.0
+
+            result = self.crypto_client.place_market_order(symbol, qty, "BUY")
+            if result.get("status") == "success":
+                fill_price = float(result.get("filled_avg_price", last_close))
+                invested = qty * fill_price
+                notifier.new_crypto_buy(symbol, qty, fill_price, invested)
+                self._log(f"CRYPTO BUY EXITOSO: {symbol} {qty} @ ${fill_price:,.2f} = ${invested:,.0f}")
+                return invested
+            else:
+                self._log(f"CRYPTO BUY FALLO: {symbol} - {result.get('msg', 'error desconocido')}")
+                return 0.0
+
+        except Exception as e:
+            logger.warning("Error en crypto buy %s: %s", symbol, e)
+            return 0.0
+
+    async def _execute_crypto_sell(
+        self,
+        symbol: str,
+        decision: Any,
+        position: dict,
+        equity: float,
+        pnl_pct: float,
+    ) -> None:
+        """Ejecuta venta de criptomonedas via CryptoBrokerClient."""
+        try:
+            qty = float(position.get("qty", 0))
+            if qty <= 0:
+                return
+
+            current_price = float(position.get("current_price", 0))
+            result = self.crypto_client.place_market_order(symbol, qty, "SELL")
+            if result.get("status") == "success":
+                notifier.new_crypto_sell(symbol, qty, current_price, pnl_pct, decision.reason)
+                self._log(f"CRYPTO SELL EXITOSO: {symbol} {qty} @ ${current_price:,.2f}")
+            else:
+                self._log(f"CRYPTO SELL FALLO: {symbol} - {result.get('msg', 'error desconocido')}")
+
+        except Exception as e:
+            logger.warning("Error en crypto sell %s: %s", symbol, e)
 
     # ── DCA escalonado: delega a SignalExecutor internamente ─────────────
 
