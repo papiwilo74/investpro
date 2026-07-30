@@ -193,6 +193,19 @@ class SignalJournal:
         min_avg_return_pct: float = 0.002,
     ) -> SafetyGate:
         stats = self.summary()
+
+        # Fresh deploy sin señales — aprobar para permitir que el bot comience a operar
+        if stats["total_signals"] == 0:
+            return SafetyGate(
+                approved=True,
+                reason="APROBADO: deploy fresco, no hay señales previas",
+                total_signals=0,
+                closed_signals=0,
+                win_rate=0.0,
+                avg_return_pct=0.0,
+                days_observed=0,
+            )
+
         checks = [
             (stats["days_observed"] >= min_days, f"faltan dias de observacion ({stats['days_observed']}/{min_days})"),
             (

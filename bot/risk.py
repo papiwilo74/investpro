@@ -231,9 +231,6 @@ class RiskManager:
 
     def set_portfolio_value(self, value: float) -> None:
         self._portfolio_value = value
-        if self._initial_portfolio_value <= 0 or self._initial_portfolio_value == 100_000.0:
-            self._initial_portfolio_value = value
-            self.save()
 
     def set_positions(self, positions: list[dict]) -> None:
         self._positions_cache = positions

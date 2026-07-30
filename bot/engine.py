@@ -316,6 +316,8 @@ class TradingBot:
         return await asyncio.to_thread(lambda: fn(*args, **kwargs))
 
     def _signal_handler(self, signum, frame):
+        if signum is None:
+            return
         logger.warning("Signal {} recibido — deteniendo bot...", signum)
         self.stop()
 
