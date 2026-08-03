@@ -593,16 +593,17 @@ class TradingBot:
     async def _run_loop(self, ticker: str | None = None, interval: str = "1d", sleep_seconds: int = 600):
         import gc
 
-        retrain_day = -1
+        retrain_interval_s = 12 * 3600  # re-evaluar modelos dos veces al día (~cada 12h)
+        last_retrain_check = 0.0
         consecutive_errors = 0
         self._last_critical_alerts: dict[str, float] = {}  # event → timestamp del último alert
         try:
             while self.is_running:
                 try:
                     self.last_scan = datetime.utcnow().isoformat()
-                    today = datetime.now().day
-                    if today != retrain_day:
-                        retrain_day = today
+                    now = time.time()
+                    if now - last_retrain_check >= retrain_interval_s:
+                        last_retrain_check = now
                         if self.strategy_mode != "web":
                             self._log("Verificando modelos ML para re-entreno...")
                             ml_tickers = [ticker] if ticker else WATCHLIST
