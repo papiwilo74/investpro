@@ -196,6 +196,19 @@ class TestYFinanceProvider:
         p = YFinanceProvider()
         assert p.name() == "yfinance"
 
+    def test_normalize_symbol_crypto(self):
+        p = YFinanceProvider()
+        assert p._normalize_symbol("BTCUSD") == "BTC-USD"
+        assert p._normalize_symbol("ETHUSD") == "ETH-USD"
+        assert p._normalize_symbol("SOLUSD") == "SOL-USD"
+
+    def test_normalize_symbol_stock_untouched(self):
+        p = YFinanceProvider()
+        assert p._normalize_symbol("AAPL") == "AAPL"
+        assert p._normalize_symbol("msft") == "msft"
+        assert p._normalize_symbol("BTC/USD") == "BTC/USD"
+        assert p._normalize_symbol("BRK-B") == "BRK-B"
+
     def test_quality_check(self, sample_df):
         p = YFinanceProvider()
         q = p.quality_check(sample_df, "AAPL")

@@ -81,6 +81,21 @@ class YFinanceProvider(DataProvider):
     def name(self) -> str:
         return "yfinance"
 
+    @staticmethod
+    def _normalize_symbol(symbol: str) -> str:
+        """Convierte tickers de cripto al formato de yfinance: BTCUSD -> BTC-USD.
+
+        yfinance no acepta 'BTCUSD'; requiere el guion 'BTC-USD'. Ningún ticker
+        de acciones termina en 'USD', así que la conversión es segura.
+        """
+        s = symbol.strip()
+        upper = s.upper()
+        if not upper.endswith("USD"):
+            return s
+        if "-" in s or "." in s or not s[:-3].isalnum():
+            return s
+        return f"{s[:-3]}-USD"
+
     def fetch(
         self,
         ticker: str,
@@ -89,6 +104,7 @@ class YFinanceProvider(DataProvider):
     ) -> pd.DataFrame:
         import yfinance as yf
 
+        ticker = self._normalize_symbol(ticker)
         last_err: Exception | None = None
         for attempt in range(3):
             elapsed = time.time() - YFinanceProvider._last_request

@@ -622,86 +622,86 @@ class TradingBot:
                         await asyncio.sleep(60)
                         continue
 
-                    if not self.is_market_open():
-                        self._log("Mercado cerrado. Esperando...")
+                    market_open = self.is_market_open()
+
+                    if not market_open:
+                        self._log("Mercado de acciones cerrado — operando solo crypto 24/7")
                         consecutive_errors = 0
-                        await asyncio.sleep(300)
-                        continue
-
-                    # ── Production safeguards: drawdown + macro + hedge + telemetry ──
-                    self._check_unrealized_drawdown()
-                    self._check_critical_alerts()
-
-                    # ── Paper Safety Gate: bloquea trading si la estrategia no ha demostrado consistencia ──
-                    if getattr(self.client, "paper", False) or getattr(self.client, "is_paper_fallback", False):
-                        gate = self.journal.safety_gate(
-                            min_days=3,
-                            min_closed_signals=5,
-                            min_win_rate=0.50,
-                            min_avg_return_pct=0.001,
-                        )
-                        if not gate.approved:
-                            self._log(f"SAFETY GATE bloquea ejecución paper: {gate.reason}")
-                            consecutive_errors = 0
-                            await asyncio.sleep(sleep_seconds)
-                            continue
-
-                    if self.strategy_mode == "web":
-                        macro = self._check_macro_panic()
-                        if macro and macro.get("panic_mode"):
-                            self._log(f"MACRO PANIC: VIX={macro.get('vix_level')} — suspendiendo nuevas entradas")
-
-                        hedge = self._check_hedge()
-                        if hedge:
-                            status = hedge.get("status", "NORMAL")
-                            if status == "PANIC":
-                                self._log(
-                                    f"HEDGE PANIC: {hedge.get('reason', '')} — vendiendo posiciones correlacionadas"
-                                )
-                                notifier.panic(hedge.get("drop_pct", 0), hedge.get("reason", ""))
-                                await self._execute_hedge()
-                            elif status == "ALERT":
-                                self._log(f"HEDGE ALERT: {hedge.get('reason', '')} — cobertura parcial recomendada")
-                                notifier.send("hedge_alert", f"⚠️ {hedge.get('reason', '')}", "warning")
-
-                        # ── Regime Rotation: LONG/SHORT según mercado ────────
-                        await self._manage_rotation_hedge()
-
-                        # ── Shadow trader: resolver señales maduras + drift ──
-                        if self.shadow_trader is not None:
-                            try:
-                                resolved = self.shadow_trader.resolve_matured()
-                                if resolved > 0:
-                                    self._log(f"SHADOW: {resolved} señales resueltas")
-                                    await self._auto_evaluate_models()
-                                drifts = self.shadow_trader.check_drift()
-                                for d in drifts:
-                                    msg = (
-                                        f"DRIFT {d['ticker']}: live acc={d['live_accuracy']:.1%} "
-                                        f"({d['samples']} samples) < {d['threshold']:.1%}"
-                                    )
-                                    self._log(msg)
-                                    notifier.send("model_drift", msg, "warning")
-                            except Exception as exc:
-                                logger.warning("ShadowTrader loop error: %s", exc)
-
-                        self._daily_telemetry_snapshot()
-
-                        # Rebalancear portafolio si hay desviaciones
-                        await self._rebalance_portfolio()
-
-                    self._save_position_states()
-
-                    # ── DCA escalonado: ejecutar 2ªs tranches pendientes ──
-                    await self._process_pending_tranches()
-
-                    self._log("Ejecutando escaneo de mercado...")
-                    if ticker:
-                        await self._evaluate_and_trade(ticker, interval, single_ticker=True)
                     else:
-                        await self._scan_and_trade_universe(interval)
+                        # ── Production safeguards: drawdown + macro + hedge + telemetry ──
+                        self._check_unrealized_drawdown()
+                        self._check_critical_alerts()
 
-                    # Escaneo de crypto (24/7)
+                        # ── Paper Safety Gate: bloquea trading de ACCIONES si la estrategia no ha demostrado consistencia ──
+                        if getattr(self.client, "paper", False) or getattr(self.client, "is_paper_fallback", False):
+                            gate = self.journal.safety_gate(
+                                min_days=3,
+                                min_closed_signals=5,
+                                min_win_rate=0.50,
+                                min_avg_return_pct=0.001,
+                            )
+                            if not gate.approved:
+                                self._log(f"SAFETY GATE bloquea ejecución paper: {gate.reason}")
+                                consecutive_errors = 0
+                                await asyncio.sleep(sleep_seconds)
+                                continue
+
+                        if self.strategy_mode == "web":
+                            macro = self._check_macro_panic()
+                            if macro and macro.get("panic_mode"):
+                                self._log(f"MACRO PANIC: VIX={macro.get('vix_level')} — suspendiendo nuevas entradas")
+
+                            hedge = self._check_hedge()
+                            if hedge:
+                                status = hedge.get("status", "NORMAL")
+                                if status == "PANIC":
+                                    self._log(
+                                        f"HEDGE PANIC: {hedge.get('reason', '')} — vendiendo posiciones correlacionadas"
+                                    )
+                                    notifier.panic(hedge.get("drop_pct", 0), hedge.get("reason", ""))
+                                    await self._execute_hedge()
+                                elif status == "ALERT":
+                                    self._log(f"HEDGE ALERT: {hedge.get('reason', '')} — cobertura parcial recomendada")
+                                    notifier.send("hedge_alert", f"⚠️ {hedge.get('reason', '')}", "warning")
+
+                            # ── Regime Rotation: LONG/SHORT según mercado ────────
+                            await self._manage_rotation_hedge()
+
+                            # ── Shadow trader: resolver señales maduras + drift ──
+                            if self.shadow_trader is not None:
+                                try:
+                                    resolved = self.shadow_trader.resolve_matured()
+                                    if resolved > 0:
+                                        self._log(f"SHADOW: {resolved} señales resueltas")
+                                        await self._auto_evaluate_models()
+                                    drifts = self.shadow_trader.check_drift()
+                                    for d in drifts:
+                                        msg = (
+                                            f"DRIFT {d['ticker']}: live acc={d['live_accuracy']:.1%} "
+                                            f"({d['samples']} samples) < {d['threshold']:.1%}"
+                                        )
+                                        self._log(msg)
+                                        notifier.send("model_drift", msg, "warning")
+                                except Exception as exc:
+                                    logger.warning("ShadowTrader loop error: %s", exc)
+
+                            self._daily_telemetry_snapshot()
+
+                            # Rebalancear portafolio si hay desviaciones
+                            await self._rebalance_portfolio()
+
+                        self._save_position_states()
+
+                        # ── DCA escalonado: ejecutar 2ªs tranches pendientes ──
+                        await self._process_pending_tranches()
+
+                        self._log("Ejecutando escaneo de mercado...")
+                        if ticker:
+                            await self._evaluate_and_trade(ticker, interval, single_ticker=True)
+                        else:
+                            await self._scan_and_trade_universe(interval)
+
+                    # Escaneo de crypto (24/7): nunca bloqueado por horario bursátil
                     self._log("Ejecutando escaneo de crypto...")
                     await self._scan_and_trade_crypto(interval)
 
