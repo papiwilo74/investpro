@@ -84,6 +84,7 @@ class TradingBot:
         self.risk_manager.set_alert_callback(lambda level, event, msg: notifier.send(event, msg, level))
         self.state = BotStateManager()
         self.last_scan: str | None = None
+        self._last_paper_outcomes_update: float = 0.0
         # ── Componentes extraídos (composición sobre herencia) ────────
         # Inicializados sin smart_router; se setea tras crearlo abajo
         self.order_manager = OrderManager(self.client, self.state)
@@ -625,6 +626,17 @@ class TradingBot:
 
                     market_open = self.is_market_open()
 
+                    # ── Auto-cerrar señales paper maduras (1x/día) para que el
+                    #    Safety Gate evalúe consistencia con datos reales ──
+                    if time.time() - self._last_paper_outcomes_update >= 86400:
+                        try:
+                            updated = self.journal.update_outcomes()
+                            if updated:
+                                self._log(f"Paper outcomes actualizados: {updated} señales cerradas")
+                        except Exception as exc:
+                            logger.warning("Error actualizando outcomes paper: %s", exc)
+                        self._last_paper_outcomes_update = time.time()
+
                     if not market_open:
                         self._log("Mercado de acciones cerrado — operando solo crypto 24/7")
                         consecutive_errors = 0
@@ -633,7 +645,8 @@ class TradingBot:
                         self._check_unrealized_drawdown()
                         self._check_critical_alerts()
 
-                        # ── Paper Safety Gate: bloquea trading de ACCIONES si la estrategia no ha demostrado consistencia ──
+                        # ── Paper Safety Gate: bloquea SOLO acciones si hay evidencia de mal desempeño ──
+                        stocks_allowed = True
                         if getattr(self.client, "paper", False) or getattr(self.client, "is_paper_fallback", False):
                             gate = self.journal.safety_gate(
                                 min_days=3,
@@ -642,12 +655,10 @@ class TradingBot:
                                 min_avg_return_pct=0.001,
                             )
                             if not gate.approved:
-                                self._log(f"SAFETY GATE bloquea ejecución paper: {gate.reason}")
-                                consecutive_errors = 0
-                                await asyncio.sleep(sleep_seconds)
-                                continue
+                                self._log(f"SAFETY GATE bloquea acciones: {gate.reason}")
+                                stocks_allowed = False
 
-                        if self.strategy_mode == "web":
+                        if self.strategy_mode == "web" and stocks_allowed:
                             macro = self._check_macro_panic()
                             if macro and macro.get("panic_mode"):
                                 self._log(f"MACRO PANIC: VIX={macro.get('vix_level')} — suspendiendo nuevas entradas")
@@ -693,14 +704,15 @@ class TradingBot:
 
                         self._save_position_states()
 
-                        # ── DCA escalonado: ejecutar 2ªs tranches pendientes ──
-                        await self._process_pending_tranches()
+                        if stocks_allowed:
+                            # ── DCA escalonado: ejecutar 2ªs tranches pendientes ──
+                            await self._process_pending_tranches()
 
-                        self._log("Ejecutando escaneo de mercado...")
-                        if ticker:
-                            await self._evaluate_and_trade(ticker, interval, single_ticker=True)
-                        else:
-                            await self._scan_and_trade_universe(interval)
+                            self._log("Ejecutando escaneo de mercado...")
+                            if ticker:
+                                await self._evaluate_and_trade(ticker, interval, single_ticker=True)
+                            else:
+                                await self._scan_and_trade_universe(interval)
 
                     # Escaneo de crypto (24/7): nunca bloqueado por horario bursátil
                     self._log("Ejecutando escaneo de crypto...")

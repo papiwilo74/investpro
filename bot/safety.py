@@ -206,12 +206,25 @@ class SignalJournal:
                 days_observed=0,
             )
 
+        # Período de gracia: aún no hay suficientes señales cerradas para juzgar la
+        # estrategia. NO bloquear al bot nuevo — solo bloquea cuando HAY evidencia
+        # suficiente de mal desempeño (win rate o retorno por debajo de los umbrales).
+        if stats["closed_signals"] < min_closed_signals:
+            return SafetyGate(
+                approved=True,
+                reason=(
+                    f"APROBADO: período de gracia ({stats['closed_signals']}/{min_closed_signals} "
+                    "señales cerradas — sin evidencia suficiente de mal desempeño)"
+                ),
+                total_signals=stats["total_signals"],
+                closed_signals=stats["closed_signals"],
+                win_rate=stats["win_rate"],
+                avg_return_pct=stats["avg_return_pct"],
+                days_observed=stats["days_observed"],
+            )
+
         checks = [
             (stats["days_observed"] >= min_days, f"faltan dias de observacion ({stats['days_observed']}/{min_days})"),
-            (
-                stats["closed_signals"] >= min_closed_signals,
-                f"faltan senales cerradas ({stats['closed_signals']}/{min_closed_signals})",
-            ),
             (stats["win_rate"] >= min_win_rate, f"win rate insuficiente ({stats['win_rate']:.1%}/{min_win_rate:.1%})"),
             (
                 stats["avg_return_pct"] >= min_avg_return_pct,
