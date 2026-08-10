@@ -645,18 +645,18 @@ class TradingBot:
                         self._check_unrealized_drawdown()
                         self._check_critical_alerts()
 
-                        # ── Paper Safety Gate: bloquea SOLO acciones si hay evidencia de mal desempeño ──
+                        # ── Paper Safety Gate: advierte en paper mode sin bloquear el escaneo ──
                         stocks_allowed = True
                         if getattr(self.client, "paper", False) or getattr(self.client, "is_paper_fallback", False):
                             gate = self.journal.safety_gate(
-                                min_days=3,
-                                min_closed_signals=5,
-                                min_win_rate=0.50,
-                                min_avg_return_pct=0.001,
+                                min_days=7,
+                                min_closed_signals=15,
+                                min_win_rate=0.40,
+                                min_avg_return_pct=-0.005,
                             )
                             if not gate.approved:
-                                self._log(f"SAFETY GATE bloquea acciones: {gate.reason}")
-                                stocks_allowed = False
+                                self._log(f"SAFETY GATE ADVERTENCIA (Paper): {gate.reason}")
+                                # En paper mode mantenemos el escaneo activo para permitir acumular señales y recuperarse
 
                         if self.strategy_mode == "web" and stocks_allowed:
                             macro = self._check_macro_panic()
@@ -835,32 +835,33 @@ class TradingBot:
             logger.warning("Rebalance falló: %s", exc)
 
     async def _run_champion_challenger_cycle(self, single_ticker: str | None) -> None:
-        """Ciclo diario champion/challenger para el modo web.
-
-        Re-entrena solo si: el campeón tiene > N días O la accuracy en vivo
-        (reportada por el ShadowTrader) cayó bajo el drift floor.
-        El challenger solo reemplaza al campeón si lo vence OOS por el margen.
-        """
+        """Ciclo diario champion/challenger para el modo web con fallback a retrain_if_stale."""
+        self._log("Ejecutando escaneo y re-evaluación automática de modelos ML...")
         try:
             from ml.champion_challenger import champion_challenger as cc
         except Exception as exc:
             logger.warning("ChampionChallenger no disponible: %s", exc)
-            return
+            cc = None
 
         ml_tickers = [single_ticker] if single_ticker else WATCHLIST
         for t in ml_tickers:
             try:
-                live_acc = None
-                if self.shadow_trader is not None:
-                    live_acc = self.shadow_trader.live_accuracy(t)
-                should, reason = cc.should_retrain(t, live_accuracy=live_acc)
-                if not should:
-                    continue
-                self._log(f"CHAMPION/CHALLENGER {t}: re-entrenando ({reason})")
-                result = cc.run_cycle(t, self.trainer)
-                self._log(f"CHAMPION/CHALLENGER {t}: {result.get('decision')} — {result.get('reason')}")
+                if cc is not None:
+                    live_acc = None
+                    if self.shadow_trader is not None:
+                        live_acc = self.shadow_trader.live_accuracy(t)
+                    should, reason = cc.should_retrain(t, live_accuracy=live_acc)
+                    if should:
+                        self._log(f"CHAMPION/CHALLENGER {t}: re-entrenando ({reason})")
+                        result = cc.run_cycle(t, self.trainer)
+                        self._log(f"CHAMPION/CHALLENGER {t}: {result.get('decision')} — {result.get('reason')}")
+                        continue
+
+                # Fallback: re-entrenar si el modelo tiene más de 7 días o no existe
+                if self.trainer.retrain_if_stale(t, max_age_days=7):
+                    self._log(f"ML re-entrenado para {t} (stale/missing)")
             except Exception as exc:
-                logger.warning("Champion/Challenger cycle falló para %s: %s", t, exc)
+                logger.warning("Auto-escaneo ML falló para %s: %s", t, exc)
 
     async def _scan_and_trade_universe(self, interval: str = "1d"):
         """Escanea el universo y evalúa cada ticker con el mismo pipeline unificado."""
@@ -934,10 +935,11 @@ class TradingBot:
                 if not self.is_running:
                     break
 
-                ticker = symbol.replace("/", "")  # BTC/USD -> BTCUSD para fetcher
+                ticker = symbol.replace("/", "-") if "/" in symbol else symbol  # BTC/USD -> BTC-USD para yfinance
                 try:
                     df = self.fetcher.get_data(ticker, period="3mo", interval=interval)
                     if df.empty:
+                        self._log(f"CRYPTO {symbol}: sin datos para {ticker}")
                         continue
 
                     df = TechnicalIndicators.add_all(df, intraday=False)
@@ -973,7 +975,8 @@ class TradingBot:
                     )
 
                     if decision.action == "BUY" and not has_position:
-                        if decision.confidence >= 0.5 and score >= self._strategy_params.buy_score_threshold:
+                        min_crypto_score = max(0.05, self._strategy_params.buy_score_threshold - 0.05)
+                        if score >= min_crypto_score:
                             invested = await self._execute_crypto_buy(
                                 symbol, decision, last_close, equity, buying_power
                             )
