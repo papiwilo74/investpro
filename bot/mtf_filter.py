@@ -79,8 +79,10 @@ class MTFFilter:
             reasons.append("SMA20 debajo de SMA50")
 
         # ── Verdict ───────────────────────────────────────────────────
-        passed = weekly_bullish and daily_above_vwap and adx_strong and short_uptrend
-        block_reason = "; ".join(reasons) if reasons else ""
+        # Confirmación flexible: semanal favorable o al menos 2 condiciones de impulso presentes
+        confirmations = sum([weekly_bullish, daily_above_vwap, adx_strong, short_uptrend])
+        passed = (weekly_bullish or confirmations >= 2) and (daily_above_vwap or short_uptrend or adx_strong)
+        block_reason = "; ".join(reasons) if (not passed and reasons) else ""
 
         result = MTFResult(
             ticker=ticker,

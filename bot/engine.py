@@ -878,15 +878,15 @@ class TradingBot:
             universe="nasdaq100",
             period="1y",
             interval="1d",
-            limit=30,
+            limit=12,
             include_rejected=False,
         )
         scan_tickers = [c.ticker for c in scan_result.accepted]
         if scan_tickers:
-            self._log(f"Scanner inteligente: {', '.join(scan_tickers[:10])}")
+            self._log(f"Scanner inteligente: {', '.join(scan_tickers[:8])}")
         else:
             self._log("Scanner sin oportunidades; usando watchlist de respaldo.")
-            scan_tickers = WATCHLIST
+            scan_tickers = WATCHLIST[:12]
 
         # ── Portfolio Allocator: pesos objetivo por risk-parity ──────
         target_allocations: dict[str, float] = {}
@@ -1526,11 +1526,12 @@ class TradingBot:
                 checks.append(f"✅ Score {score:.2f} >= mínimo {min_score:.2f}")
 
         # 3. Confianza
-        if decision.confidence < 0.5:
-            checks.append(f"❌ Confianza {decision.confidence:.2f} < 0.5")
+        min_conf = 0.35
+        if decision.confidence < min_conf:
+            checks.append(f"❌ Confianza {decision.confidence:.2f} < {min_conf:.2f}")
             passed = False
         else:
-            checks.append(f"✅ Confianza {decision.confidence:.2f} >= 0.5")
+            checks.append(f"✅ Confianza {decision.confidence:.2f} >= {min_conf:.2f}")
 
         # 4. Tamaño de posición válido
         if decision.position_size_pct <= 0:

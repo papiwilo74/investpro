@@ -193,18 +193,20 @@ class MarketBreadth:
         # ── Veredicto ───────────────────────────────────────────────────
         total_score = sum(scores.values())
 
-        if total_score >= 4:
+        if total_score >= 3:
             level = "HEALTHY"
             can_trade = True
-        elif total_score >= 1:
+        elif total_score >= 0:
             level = "NEUTRAL"
             can_trade = True
-        elif total_score >= -2:
+        elif total_score >= -4:
             level = "DETERIORATING"
-            can_trade = False
+            can_trade = True  # Permitir entradas individuales con cautela
+            reasons.append("Amplitud debilitada — operar con cautela")
         else:
             level = "UNHEALTHY"
             can_trade = False
+            reasons.append("Pánico/colapso en amplitud de mercado")
 
         if not reasons:
             reasons.append("Sin señales de deterioro")
