@@ -857,8 +857,6 @@ def main() -> None:
         print(f"{'=' * 60}\n")
         try:
             # Pre-importar para detectar errores antes de que uvicorn los oculte
-            print("  [OK] api.server importado correctamente")
-            is_cloud = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
             uvicorn.run(
                 "api.server:app",
                 host=host,
@@ -867,7 +865,6 @@ def main() -> None:
                 workers=1,
                 timeout_keep_alive=5,
                 limit_concurrency=10,
-                limit_max_requests=500 if is_cloud else None,
                 log_level="warning",
             )
         except Exception as e:
