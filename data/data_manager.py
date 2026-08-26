@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import gc
 import logging
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from data.cache_manager import CacheManager, cache_manager
@@ -19,6 +22,28 @@ from data.provider import (
 from data.split_adjuster import SplitAdjuster
 
 logger = logging.getLogger(__name__)
+
+# En cloud (Render 512MB) usar 1 worker; en local usar 2.
+_IS_CLOUD = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
+_MAX_FETCH_WORKERS = 1 if _IS_CLOUD else 2
+
+# Pool de hilos reutilizable para optimizar el uso de CPU y memoria en Render (512MB RAM)
+_FETCH_EXECUTOR = ThreadPoolExecutor(max_workers=_MAX_FETCH_WORKERS)
+
+
+def _optimize_dataframe_memory(df: pd.DataFrame) -> pd.DataFrame:
+    """Optimiza los tipos de datos numéricos a float32/int32 para reducir 50% de RAM."""
+    if df.empty:
+        return df
+
+    df = df.copy()
+    for col in df.columns:
+        if pd.api.types.is_float_dtype(df[col]):
+            df[col] = df[col].astype(np.float32)
+        elif pd.api.types.is_integer_dtype(df[col]):
+            df[col] = df[col].astype(np.int32)
+
+    return df
 
 
 class DataManager:
@@ -53,17 +78,19 @@ class DataManager:
         if not force_refresh:
             cached = self.cache.get(ticker, period, interval)
             if cached is not None and not cached.empty:
-                return cached
+                return _optimize_dataframe_memory(cached)
 
         errors: list[str] = []
         fetch_timeout = 8  # seconds per provider — rápido en failover, 3×8=24s total
         for prov in self._all_providers():
             try:
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(prov.fetch, ticker, period=period, interval=interval)
-                    df = future.result(timeout=fetch_timeout)
+                future = _FETCH_EXECUTOR.submit(prov.fetch, ticker, period=period, interval=interval)
+                df = future.result(timeout=fetch_timeout)
+
                 if df.empty:
                     raise ValueError(f"empty data from {prov.name()}")
+
+                df = _optimize_dataframe_memory(df)
 
                 self.cache.set(
                     ticker,
@@ -79,12 +106,14 @@ class DataManager:
                         "Failover: %s served data for %s (primary %s failed)", prov.name(), ticker, self.provider.name()
                     )
 
+                gc.collect()
                 return df
             except Exception as e:
                 msg = f"{prov.name()}: {e}"
                 errors.append(msg)
                 logger.warning("DataManager failover: %s", msg)
 
+        gc.collect()
         raise RuntimeError(
             f"DataManager: all providers failed for {ticker} ({period}/{interval}). Errors: {'; '.join(errors)}"
         )
@@ -137,9 +166,11 @@ class DataManager:
                 "rows": quality.rows,
                 "null_pct": quality.null_pct,
             }
+            del df
         except Exception as e:
             quality_result = {"status": "error", "error": str(e)}
 
+        gc.collect()
         return {
             "providers": providers_health,
             "cache": cache_stats,

@@ -36,7 +36,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OMP_NUM_THREADS=1 \
     MKL_NUM_THREADS=1 \
     OPENBLAS_NUM_THREADS=1 \
-    NUMEXPR_NUM_THREADS=1
+    NUMEXPR_NUM_THREADS=1 \
+    MALLOC_TRIM_THRESHOLD_=65536 \
+    PYTHONMALLOC=malloc
 
 # Dependencias del sistema necesarias para compilar algunos paquetes de Python
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -45,7 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar dependencias Python
+# Instalar dependencias Python (cloud-optimized, sin torch/transformers)
 COPY requirements-cloud.txt ./
 RUN pip install --no-cache-dir -r requirements-cloud.txt
 

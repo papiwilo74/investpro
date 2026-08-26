@@ -5,6 +5,7 @@ TTL configurable por ticker/intervalo. Limpieza automática de caché expirada.
 
 from __future__ import annotations
 
+import gc
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -100,8 +101,20 @@ class CacheManager:
         ttl_hours: float | None = None,
         provider: str = "",
     ) -> None:
-        """Guarda DataFrame en caché."""
+        """Guarda DataFrame en caché. Optimiza dtypes in-place para ahorrar RAM.
+
+        Antes hacía df.copy() + conversión, lo que duplicaba la memoria temporalmente.
+        Ahora optimiza in-place porque el df ya viene optimizado desde DataManager.
+        """
         parquet = self._parquet_path(ticker, period, interval)
+
+        # Optimizar dtypes in-place (el df ya es una copia optimizada de DataManager)
+        for col in df.columns:
+            if pd.api.types.is_float_dtype(df[col]):
+                df[col] = df[col].astype("float32")
+            elif pd.api.types.is_integer_dtype(df[col]):
+                df[col] = df[col].astype("int32")
+
         df.to_parquet(parquet)
 
         ttl = ttl_hours if ttl_hours is not None else self.default_ttl_hours
@@ -150,6 +163,7 @@ class CacheManager:
                     count += 1
                 conn.execute("DELETE FROM cache_index WHERE ticker=? AND period=? AND interval=?", (t, p, i))
             conn.commit()
+        gc.collect()
         return count
 
     def clear_expired(self) -> int:
@@ -169,6 +183,7 @@ class CacheManager:
                         (ticker, period, interval),
                     )
             conn.commit()
+        gc.collect()
         return count
 
     def stats(self) -> dict[str, Any]:

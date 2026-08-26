@@ -1,5 +1,5 @@
-# Requirements ligero para deploy en la nube (Render/Railway/Fly.io)
-# Versiones alineadas con pyproject.toml pero relajadas para wheels precompilados
+# Dependencias CLOUD (sin torch/transformers/stable-baselines3 para caber en 512MB RAM)
+# Usar este archivo en Dockerfile para deploys en Render/Fly/Railway
 
 # Dependencias principales
 yfinance>=1.5.0
@@ -24,7 +24,7 @@ loguru>=0.7
 requests>=2.34
 structlog>=26.0
 
-# Machine Learning
+# Machine Learning (ligero — sin torch ni transformers)
 xgboost>=3.3
 vaderSentiment>=3.3
 lightgbm>=4.0

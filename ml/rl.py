@@ -25,6 +25,8 @@ class RLExitAgent:
         self.gamma = gamma
         self.epsilon = epsilon
         self.model_path = model_path
+        self._updates_since_save = 0
+        self._save_every_n = 10  # Auto-guardar cada 10 actualizaciones
         self._load_model()
 
     def _load_model(self):
@@ -37,8 +39,18 @@ class RLExitAgent:
                 self.q_table = {}
 
     def save_model(self):
-        with open(self.model_path, "wb") as f:
-            pickle.dump(self.q_table, f)
+        try:
+            with open(self.model_path, "wb") as f:
+                pickle.dump(self.q_table, f)
+            self._updates_since_save = 0
+        except Exception as e:
+            print(f"Error guardando Q-Table: {e}")
+
+    def _maybe_autosave(self):
+        """Guarda automáticamente cada N actualizaciones para no perder aprendizaje."""
+        self._updates_since_save += 1
+        if self._updates_since_save >= self._save_every_n:
+            self.save_model()
 
     def _discretize_state(self, pnl_pct: float, rsi: float, regime: str) -> str:
         # Discretizar PnL
@@ -108,6 +120,9 @@ class RLExitAgent:
             new_value = (1 - self.alpha) * old_value + self.alpha * (reward + self.gamma * next_max)
 
         self.q_table[state][action] = new_value
+
+        # Auto-guardar periódicamente para no perder aprendizaje si Render reinicia
+        self._maybe_autosave()
 
     def get_entry_signal(self, rsi: float, regime: str) -> tuple[str, float] | None:
         """Deriva una señal de entrada desde la Q-table.

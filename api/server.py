@@ -193,14 +193,17 @@ async def _prewarm_modules():
     except Exception as e:
         _logging.warning("Prewarm: DataFetcher falló — %s", e)
 
-    try:
-        _logging.info("Prewarm: cargando ModelTrainer...")
-        from ml.train import ModelTrainer
+    # No pre-calentar ModelTrainer en la nube para no exceder los 512MB de RAM
+    is_cloud = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
+    if not is_cloud:
+        try:
+            _logging.info("Prewarm: cargando ModelTrainer...")
+            from ml.train import ModelTrainer
 
-        ModelTrainer()
-        _logging.info("Prewarm: ModelTrainer listo")
-    except Exception as e:
-        _logging.warning("Prewarm: ModelTrainer falló — %s", e)
+            ModelTrainer()
+            _logging.info("Prewarm: ModelTrainer listo")
+        except Exception as e:
+            _logging.warning("Prewarm: ModelTrainer falló — %s", e)
 
 
 app = FastAPI(

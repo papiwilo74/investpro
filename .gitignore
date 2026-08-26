@@ -95,3 +95,4 @@ alert_queue.json
 .coverage
 coverage.xml
 htmlcov/
+.aider*

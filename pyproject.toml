@@ -33,6 +33,11 @@ dependencies = [
     "httpx>=0.28.1",
     "pytz>=2024.2",
     "pyarrow>=15.0",
+    "torch>=2.5.1",
+    "stable-baselines3>=2.5.0",
+    "gymnasium>=1.1.1",
+    "lightgbm>=4.0",
+    "transformers>=4.40",
 ]
 
 [tool.setuptools.packages.find]
@@ -130,8 +135,6 @@ ignore_errors = true
 exclude_dirs = ["tests", ".venv", ".git"]
 skips = ["B101", "B104", "B107", "B110", "B112", "B301", "B310", "B311", "B403", "B404", "B603", "B607"]
 
-
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -152,7 +155,6 @@ omit = ["tests/*", ".venv/*", "**/__init__.py"]
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "def __repr__", "if __name__ == .__main__.:"]
 fail_under = 70
-
 
 [tool.ruff.format]
 quote-style = "double"

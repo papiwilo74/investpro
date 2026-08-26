@@ -190,6 +190,7 @@ class TradingBot:
         self._strategy_params = params
         self._last_market_regime: dict | None = None
         self._pending_advisor_decisions: dict[str, dict] = {}
+        self._last_critical_alerts: dict[str, float] = {}
 
         # ── Registrar signal handlers para graceful shutdown ──────────
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -597,7 +598,6 @@ class TradingBot:
         retrain_interval_s = 12 * 3600  # re-evaluar modelos dos veces al día (~cada 12h)
         last_retrain_check = 0.0
         consecutive_errors = 0
-        self._last_critical_alerts: dict[str, float] = {}  # event → timestamp del último alert
         try:
             while self.is_running:
                 try:

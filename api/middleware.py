@@ -42,21 +42,41 @@ def add_security_headers_middleware(app: FastAPI) -> None:
 
 
 class InMemoryRateLimiter:
-    def __init__(self, requests_per_minute: int = 60) -> None:
+    def __init__(self, requests_per_minute: int = 60, max_keys: int = 5000) -> None:
         self._requests_per_minute = requests_per_minute
+        self._max_keys = max_keys
         self._buckets: dict[str, list[float]] = defaultdict(list)
+        self._last_cleanup = time.monotonic()
 
     def check(self, key: str) -> bool:
         now = time.monotonic()
         window = 60.0
+
+        if now - self._last_cleanup > 300.0 or len(self._buckets) > self._max_keys:
+            self._cleanup_stale_keys(now, window)
+            self._last_cleanup = now
+
         bucket = self._buckets[key]
         cutoff = now - window
         while bucket and bucket[0] < cutoff:
             bucket.pop(0)
+
         if len(bucket) >= self._requests_per_minute:
             return False
+
         bucket.append(now)
         return True
+
+    def _cleanup_stale_keys(self, now: float, window: float) -> None:
+        cutoff = now - window
+        stale_keys = []
+        for k, timestamps in self._buckets.items():
+            while timestamps and timestamps[0] < cutoff:
+                timestamps.pop(0)
+            if not timestamps:
+                stale_keys.append(k)
+        for k in stale_keys:
+            del self._buckets[k]
 
 
 def add_rate_limiting_middleware(app: FastAPI, rpm: int = 60) -> None:

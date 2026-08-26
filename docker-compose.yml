@@ -1,12 +1,33 @@
 services:
   app:
     build: .
+    container_name: investpro
     ports:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
-      - ENVIRONMENT=development
+      - PYTHONDONTWRITEBYTECODE=1
+      - ENV=development
+      - HOST=0.0.0.0
+      - PORT=8000
+      - ALPACA_API_KEY=${ALPACA_API_KEY:-}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY:-}
+      - ALPACA_BASE_URL=${ALPACA_BASE_URL:-https://paper-api.alpaca.markets}
+      - ALPACA_PAPER=${ALPACA_PAPER:-true}
+      - POLYGON_API_KEY=${POLYGON_API_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      - DATABASE_URL=${DATABASE_URL:-}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - OMP_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
+      - MALLOC_TRIM_THRESHOLD_=65536
+      - PYTHONMALLOC=malloc
     volumes:
+      - ./data:/app/data
       - ./logs:/app/logs
-      - ./data/cache:/app/data/cache
     restart: unless-stopped

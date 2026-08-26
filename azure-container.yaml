@@ -1,0 +1,88 @@
+apiVersion: 2019-12-01
+location: eastus
+name: investpro
+properties:
+  containers:
+    - name: investpro
+      properties:
+        image: TU_REGISTRY_O_DOCKERHUB/investpro:latest
+        resources:
+          requests:
+            cpu: 1
+            memoryInGb: 2
+        ports:
+          - port: 8000
+            protocol: TCP
+        environmentVariables:
+          - name: PYTHONUNBUFFERED
+            value: "1"
+          - name: PYTHONDONTWRITEBYTECODE
+            value: "1"
+          - name: ENV
+            value: production
+          - name: HOST
+            value: 0.0.0.0
+          - name: PORT
+            value: "8000"
+          - name: ALPACA_BASE_URL
+            value: https://paper-api.alpaca.markets
+          - name: ALPACA_PAPER
+            value: "true"
+          - name: JWT_ALGORITHM
+            value: HS256
+          - name: OMP_NUM_THREADS
+            value: "1"
+          - name: MKL_NUM_THREADS
+            value: "1"
+          - name: OPENBLAS_NUM_THREADS
+            value: "1"
+          - name: NUMEXPR_NUM_THREADS
+            value: "1"
+          - name: MALLOC_TRIM_THRESHOLD_
+            value: "65536"
+          - name: PYTHONMALLOC
+            value: malloc
+          - name: ALPACA_API_KEY
+            secureValue: CAMBIA_ESTO_EN_AZURE
+          - name: ALPACA_SECRET_KEY
+            secureValue: CAMBIA_ESTO_EN_AZURE
+          - name: POLYGON_API_KEY
+            secureValue: ""
+          - name: TELEGRAM_BOT_TOKEN
+            secureValue: ""
+          - name: TELEGRAM_CHAT_ID
+            secureValue: ""
+          - name: DISCORD_WEBHOOK_URL
+            secureValue: ""
+          - name: DATABASE_URL
+            secureValue: ""
+          - name: JWT_SECRET
+            secureValue: CAMBIA_ESTO_POR_UN_SECRETO_LARGO
+        volumeMounts:
+          - name: investpro-data
+            mountPath: /app/data
+          - name: investpro-logs
+            mountPath: /app/logs
+  osType: Linux
+  restartPolicy: Always
+  ipAddress:
+    type: Public
+    dnsNameLabel: investpro-bot
+    ports:
+      - protocol: TCP
+        port: 8000
+  volumes:
+    - name: investpro-data
+      azureFile:
+        shareName: investpro-data
+        storageAccountName: TU_STORAGE_ACCOUNT
+        storageAccountKey: TU_STORAGE_ACCOUNT_KEY
+    - name: investpro-logs
+      azureFile:
+        shareName: investpro-logs
+        storageAccountName: TU_STORAGE_ACCOUNT
+        storageAccountKey: TU_STORAGE_ACCOUNT_KEY
+tags:
+  app: investpro
+  environment: production
+type: Microsoft.ContainerInstance/containerGroups
