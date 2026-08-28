@@ -87,6 +87,50 @@ class PaperState(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class BotStateKV(Base):
+    """Generic key-value state used by the trading bot runtime."""
+
+    __tablename__ = "bot_state"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class BotOpenPosition(Base):
+    """Runtime position state for trailing stops, breakeven, and partial TPs."""
+
+    __tablename__ = "open_positions"
+
+    ticker = Column(String(20), primary_key=True)
+    side = Column(String(10), nullable=False)
+    entry_price = Column(Float, nullable=False)
+    entry_atr = Column(Float, nullable=False, default=0.0)
+    max_price = Column(Float, nullable=True)
+    min_price = Column(Float, nullable=True)
+    qty = Column(Float, nullable=False, default=0.0)
+    opened_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    breakeven_active = Column(Boolean, nullable=False, default=False)
+    tp1_hit = Column(Boolean, nullable=False, default=False)
+    tp2_hit = Column(Boolean, nullable=False, default=False)
+
+
+class BotDailyOrder(Base):
+    """Daily order ledger used to enforce bot order limits across restarts."""
+
+    __tablename__ = "daily_orders"
+
+    date = Column(Date, primary_key=True, default=date.today)
+    order_id = Column(String(120), primary_key=True)
+    ticker = Column(String(20), nullable=False)
+    side = Column(String(10), nullable=False)
+    qty = Column(Float, nullable=False)
+    price = Column(Float, nullable=True)
+    leverage = Column(Float, nullable=False, default=1.0)
+    confidence = Column(Float, nullable=False, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class AdvisorTradeLog(Base):
     """Trade log entry recorded by the online advisor."""
 

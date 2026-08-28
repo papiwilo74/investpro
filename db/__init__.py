@@ -24,7 +24,7 @@ _is_sqlite = _DB_URL.startswith("sqlite")
 if _is_sqlite:
     engine = create_engine(_DB_URL, connect_args={"check_same_thread": False}, echo=False)
 else:
-    engine = create_engine(_DB_URL, echo=False)
+    engine = create_engine(_DB_URL, echo=False, pool_pre_ping=True)
 
 if _is_sqlite:
 

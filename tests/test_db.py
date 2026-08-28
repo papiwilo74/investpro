@@ -6,8 +6,9 @@ import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from bot.state_manager import BotStateManager
 from db import Base, get_session, init_db
-from db.models import PaperState
+from db.models import BotDailyOrder, BotOpenPosition, BotStateKV, PaperState
 
 
 @pytest.fixture
@@ -41,6 +42,9 @@ class TestInitDb:
         assert "risk_daily_pnl" in tables
         assert "advisor_states" in tables
         assert "advisor_trade_log" in tables
+        assert "bot_state" in tables
+        assert "open_positions" in tables
+        assert "daily_orders" in tables
 
     def test_idempotent(self, monkeypatch):
         engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -212,3 +216,90 @@ class TestPaperStateModel:
             assert result.cash == 50000.0
         finally:
             session.close()
+
+
+class TestBotStateManagerPostgresMode:
+    def test_key_value_state_uses_sqlalchemy_when_database_url_exists(self, monkeypatch, db_engine):
+        factory = sessionmaker(bind=db_engine)
+        monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+        monkeypatch.setattr("bot.state_manager.init_db", lambda: None)
+
+        manager = BotStateManager(session_factory=factory)
+        manager.set_state("last_scan", {"ticker": "AAPL"})
+
+        assert manager.get_state("last_scan") == {"ticker": "AAPL"}
+        with factory() as session:
+            row = session.get(BotStateKV, "last_scan")
+            assert row is not None
+
+    def test_positions_use_sqlalchemy_when_database_url_exists(self, monkeypatch, db_engine):
+        factory = sessionmaker(bind=db_engine)
+        monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+        monkeypatch.setattr("bot.state_manager.init_db", lambda: None)
+
+        manager = BotStateManager(session_factory=factory)
+        manager.save_position(
+            "AAPL",
+            "LONG",
+            150.0,
+            entry_atr=2.5,
+            qty=10,
+            max_price=155.0,
+            breakeven_active=True,
+            tp1_hit=True,
+        )
+
+        positions = manager.get_positions()
+        assert positions == [
+            {
+                "ticker": "AAPL",
+                "side": "LONG",
+                "entry_price": 150.0,
+                "entry_atr": 2.5,
+                "max_price": 155.0,
+                "min_price": 150.0,
+                "qty": 10.0,
+                "opened_at": positions[0]["opened_at"],
+                "breakeven_active": True,
+                "tp1_hit": True,
+                "tp2_hit": False,
+            }
+        ]
+
+        manager.remove_position("AAPL")
+        assert manager.get_positions() == []
+
+    def test_daily_orders_use_sqlalchemy_when_database_url_exists(self, monkeypatch, db_engine):
+        factory = sessionmaker(bind=db_engine)
+        monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+        monkeypatch.setattr("bot.state_manager.init_db", lambda: None)
+
+        manager = BotStateManager(session_factory=factory)
+        manager.record_order("AAPL", "buy", 10, 150.0, "ord1", leverage=1.5, confidence=0.7)
+        manager.record_order("AAPL", "buy", 10, 150.0, "ord1", leverage=1.5, confidence=0.7)
+
+        assert manager.get_daily_order_count() == 1
+        with factory() as session:
+            row = session.get(BotDailyOrder, {"date": datetime.now().date(), "order_id": "ord1"})
+            assert row is not None
+            assert row.leverage == 1.5
+            assert row.confidence == 0.7
+
+        manager.reset_daily_orders()
+        assert manager.get_daily_order_count() == 0
+
+    def test_clear_state_removes_all_sqlalchemy_records(self, monkeypatch, db_engine):
+        factory = sessionmaker(bind=db_engine)
+        monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+        monkeypatch.setattr("bot.state_manager.init_db", lambda: None)
+
+        manager = BotStateManager(session_factory=factory)
+        manager.set_state("mode", "web")
+        manager.save_position("AAPL", "LONG", 150.0, qty=10)
+        manager.record_order("AAPL", "buy", 10, order_id="ord1")
+        manager.clear_state()
+
+        with factory() as session:
+            assert session.query(BotStateKV).count() == 0
+            assert session.query(BotOpenPosition).count() == 0
+            assert session.query(BotDailyOrder).count() == 0

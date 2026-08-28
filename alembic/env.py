@@ -1,3 +1,4 @@
+import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -13,6 +14,10 @@ if _PROJECT_ROOT not in sys.path:
 
 # Alembic Config object
 config = context.config
+
+database_url = os.environ.get("DATABASE_URL")
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url)
 
 # Logging
 if config.config_file_name is not None:
