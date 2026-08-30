@@ -13,6 +13,40 @@ from dataclasses import dataclass
 class StrategyParams:
     """Parámetros inmutables que controlan el comportamiento del motor de decisiones."""
 
+    # ── Distribución de Portafolio (70% Crypto / 30% Acciones) ───────
+    crypto_portfolio_target_pct: float = 0.70
+    stock_portfolio_target_pct: float = 0.30
+    crypto_position_size_mult: float = 1.50
+
+    # ── Optimización para Render (512 MB RAM) & Neon DB ────────────
+    render_low_memory_mode: bool = True
+    sequential_ticker_processing: bool = True
+    max_memory_history_days: int = 90  # Acota el historial cargado en RAM a 90 días
+
+    # Lista de las 20 principales criptomonedas para análisis secuencial
+    crypto_symbols: tuple[str, ...] = (
+        "BTC/USD",
+        "ETH/USD",
+        "SOL/USD",
+        "AVAX/USD",
+        "NEAR/USD",
+        "ADA/USD",
+        "LINK/USD",
+        "DOT/USD",
+        "DOGE/USD",
+        "XRP/USD",
+        "BNB/USD",
+        "LTC/USD",
+        "SUI/USD",
+        "FET/USD",
+        "INJ/USD",
+        "MATIC/USD",
+        "ATOM/USD",
+        "APT/USD",
+        "ARB/USD",
+        "OP/USD",
+    )
+
     # ── LONG (compra en tendencia alcista) ─────────────────────────
     buy_score_threshold: float = 0.10
     sell_score_threshold: float = -0.50
@@ -124,16 +158,16 @@ class StrategyParams:
     use_neural_brain: bool = False
     neural_brain_min_confidence: float = 0.35
 
-    # ── Adaptive SL/TP ─────────────────────────────────────────────
+    # ── Adaptive SL/TP (Ajustado para volatilidad Crypto) ─────────
     use_adaptive_sltp: bool = True
     adaptive_sltp_atr_mult_stop: float = 2.0
     adaptive_sltp_atr_mult_stop_bear: float = 1.5
-    adaptive_sltp_atr_mult_tp: float = 3.0
+    adaptive_sltp_atr_mult_tp: float = 3.5
     adaptive_sltp_vol_lookback: int = 20
     adaptive_sltp_min_stop_pct: float = -0.02
     adaptive_sltp_max_stop_pct: float = -0.12
     adaptive_sltp_min_tp_pct: float = 0.03
-    adaptive_sltp_max_tp_pct: float = 0.30
+    adaptive_sltp_max_tp_pct: float = 0.45
 
     # ── Time-based exit ────────────────────────────────────────────
     use_time_based_exit: bool = True
