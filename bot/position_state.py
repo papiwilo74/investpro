@@ -78,12 +78,10 @@ class PositionState:
             return min(1.2, p.trail_atr_tight)
 
         pnl_pct = self.current_pnl_pct(self.max_price)
-        if pnl_pct >= 0.15:
-            return 0.9  # Aprieta fuerte al pasar 15% de beneficio
         if pnl_pct >= 0.10:
-            return 1.2  # Aprieta medio al pasar 10%
+            return p.trail_atr_tight
         if pnl_pct >= 0.05:
-            return 1.8  # Aprieta suave al pasar 5%
+            return (p.trail_atr_base + p.trail_atr_tight) / 2
         return p.trail_atr_base
 
     def check_partial_tp(self, current_price: float) -> float:

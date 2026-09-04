@@ -206,11 +206,23 @@ class TradingBot:
         return self._trainer
 
     def _restore_state(self) -> int:
-        """Recupera posiciones abiertas de Alpaca y restaura su estado (trailing stops, etc.)."""
+        """Recupera posiciones abiertas de Alpaca (stocks y crypto) y restaura su estado (trailing stops, etc.)."""
         try:
-            if not self.client.is_connected():
-                return 0
-            alpaca_positions = self.client.get_positions()
+            alpaca_positions: list[dict] = []
+            if self.client.is_connected():
+                try:
+                    alpaca_positions = list(self.client.get_positions())
+                except Exception as e:
+                    logger.debug("Error obteniendo posiciones de client: %s", e)
+
+            if hasattr(self, "crypto_client") and self.crypto_client:
+                try:
+                    crypto_pos = self.crypto_client.get_positions()
+                    if crypto_pos:
+                        alpaca_positions.extend(crypto_pos)
+                except Exception as e:
+                    logger.debug("Error obteniendo posiciones de crypto_client: %s", e)
+
             if not alpaca_positions:
                 return 0
             count = self.brain.restore_positions(self.state, alpaca_positions)
@@ -224,8 +236,15 @@ class TradingBot:
     def _save_position_states(self) -> None:
         """Persiste el estado de todas las posiciones activas (trailing, breakeven, etc.) a SQLite."""
         try:
+            alpaca = {p.get("symbol", ""): p for p in self.client.get_positions()}
+            if hasattr(self, "crypto_client") and self.crypto_client:
+                try:
+                    for cp in self.crypto_client.get_positions():
+                        alpaca[cp.get("symbol", "")] = cp
+                except Exception:
+                    pass
+
             for ticker, pos in self.brain._positions.items():
-                alpaca = {p.get("symbol", ""): p for p in self.client.get_positions()}
                 qty = float(alpaca.get(ticker, {}).get("qty", 0))
                 self.brain.save_position_state(self.state, ticker, qty)
         except Exception as exc:
@@ -318,9 +337,7 @@ class TradingBot:
         return await asyncio.to_thread(lambda: fn(*args, **kwargs))
 
     def _signal_handler(self, signum, frame):
-        if signum is None:
-            return
-        logger.warning("Signal {} recibido — deteniendo bot...", signum)
+        logger.warning("Signal %s recibido — deteniendo bot...", signum)
         self.stop()
 
     def _log(self, msg: str):
@@ -929,9 +946,21 @@ class TradingBot:
 
             equity = acc.get("equity", 0.0)
             buying_power = acc.get("buying_power", 0.0)
-            positions = {p["symbol"]: p for p in self.crypto_client.get_positions()}
+            raw_positions = self.crypto_client.get_positions()
+            positions: dict[str, dict] = {}
+            for p in raw_positions:
+                sym = p.get("symbol", "")
+                positions[sym] = p
+                positions[sym.replace("/", "")] = p
+                positions[sym.replace("-", "")] = p
 
-            for symbol in DEFAULT_CRYPTO_WATCHLIST:
+            crypto_list = (
+                list(self._strategy_params.crypto_symbols)
+                if hasattr(self, "_strategy_params") and self._strategy_params.crypto_symbols
+                else DEFAULT_CRYPTO_WATCHLIST
+            )
+
+            for symbol in crypto_list:
                 if not self.is_running:
                     break
 
@@ -947,7 +976,11 @@ class TradingBot:
                     score = SignalGenerator.composite_score(df)
                     last_close = float(df["close"].iloc[-1])
 
-                    position = positions.get(symbol)
+                    position = (
+                        positions.get(symbol)
+                        or positions.get(symbol.replace("/", ""))
+                        or positions.get(symbol.replace("-", ""))
+                    )
                     has_position = position is not None
                     pnl_pct = float(position.get("unrealized_plpc", 0.0)) if position else 0.0
 
@@ -1621,11 +1654,15 @@ class TradingBot:
     ) -> float:
         """Ejecuta compra de criptomonedas via CryptoBrokerClient."""
         try:
-            invest_amount = min(equity * decision.position_size_pct, buying_power)
-            if invest_amount <= last_close:
+            mult = getattr(self._strategy_params, "crypto_position_size_mult", 1.75)
+            pos_size_pct = getattr(decision, "position_size_pct", 0.15) * mult
+            invest_amount = min(equity * pos_size_pct, buying_power)
+
+            min_crypto_usd = 10.0  # Mínimo para órdenes crypto en USD
+            if invest_amount < min_crypto_usd or last_close <= 0:
                 return 0.0
 
-            qty = invest_amount / last_close
+            qty = round(invest_amount / last_close, 6)
             if qty <= 0:
                 return 0.0
 
@@ -1657,6 +1694,13 @@ class TradingBot:
             qty = float(position.get("qty", 0))
             if qty <= 0:
                 return
+
+            # Soporte para salida parcial (Partial Take Profit)
+            partial_frac = getattr(decision, "partial_exit_fraction", 0.0)
+            if 0.0 < partial_frac < 1.0:
+                qty = round(qty * partial_frac, 6)
+                if qty <= 0:
+                    return
 
             current_price = float(position.get("current_price", 0))
             result = self.crypto_client.place_market_order(symbol, qty, "SELL")

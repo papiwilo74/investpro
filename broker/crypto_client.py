@@ -13,7 +13,18 @@ from config import BROKER_CONFIG
 
 logger = logging.getLogger("inversion_helper.crypto_client")
 
-DEFAULT_CRYPTO_WATCHLIST = ["BTC/USD", "ETH/USD", "SOL/USD"]
+DEFAULT_CRYPTO_WATCHLIST = [
+    "BTC/USD",
+    "ETH/USD",
+    "SOL/USD",
+    "AVAX/USD",
+    "LINK/USD",
+    "DOGE/USD",
+    "LTC/USD",
+    "UNI/USD",
+    "AAVE/USD",
+    "BCH/USD",
+]
 
 
 class CryptoBrokerClient(BaseBrokerClient):

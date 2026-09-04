@@ -276,6 +276,24 @@ class TradingBrain:
         adx_val = float(last.get("adx", 0)) if pd.notna(last.get("adx")) else None
         ticker_key = ticker or "default"
         pos = self._positions.get(ticker_key)
+        if pos is None:
+            # Probar variantes normalizadas (ej. BTCUSD vs BTC-USD vs BTC/USD)
+            canonical = ticker_key.upper().replace("-", "").replace("/", "")
+            for k, v in self._positions.items():
+                if k.upper().replace("-", "").replace("/", "") == canonical:
+                    pos = v
+                    ticker_key = k  # Usar la clave real en memoria
+                    break
+
+        # Si aún no existe PositionState pero el broker reporta posición activa en un ticker real,
+        # reconstruir PositionState en caliente para evaluar trailing stops, SL y TP.
+        if has_position and pos is None and ticker:
+            est_entry = close / (1.0 + position_pnl_pct) if position_pnl_pct != -1.0 else close
+            current_atr = float(atr) if pd.notna(atr) and float(atr) > 0 else close * 0.02
+            pos = PositionState(est_entry, current_atr, self.params, side=position_side)
+            pos.update_extremes(close, current_atr=current_atr)
+            self._positions[ticker_key] = pos
+
         p = self.params
 
         # ── FILTRO OBLIGATORIO DE RÉGIMEN Y TENDENCIA SEMANAL ──────────
@@ -386,6 +404,21 @@ class TradingBrain:
             return Decision("HOLD", "position still valid", side=pos.side)
 
         if has_position:
+            adaptive_sl, adaptive_tp = self._adaptive_sltp(df, idx, market_regime)
+            if position_pnl_pct <= adaptive_sl or position_pnl_pct <= p.stop_loss_pct:
+                return Decision(
+                    "SELL",
+                    f"emergency stop-loss ({position_pnl_pct:.2%} <= {adaptive_sl:.2%})",
+                    confidence=1.0,
+                    side=position_side,
+                )
+            if position_pnl_pct >= adaptive_tp or position_pnl_pct >= p.take_profit_pct:
+                return Decision(
+                    "SELL",
+                    f"emergency take-profit ({position_pnl_pct:.2%} >= {adaptive_tp:.2%})",
+                    confidence=1.0,
+                    side=position_side,
+                )
             return Decision("HOLD", "position valid (no state)", side=position_side)
 
         # ── Sin posición: buscar entrada ────────────────────────────
@@ -927,6 +960,12 @@ class TradingBrain:
         if state_manager is None:
             return
         ps = self._positions.get(ticker)
+        if ps is None:
+            canonical = ticker.upper().replace("-", "").replace("/", "")
+            for k, v in self._positions.items():
+                if k.upper().replace("-", "").replace("/", "") == canonical:
+                    ps = v
+                    break
         if ps is None:
             return
         state_manager.save_position(

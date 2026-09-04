@@ -13,36 +13,33 @@ from dataclasses import dataclass
 class StrategyParams:
     """Parámetros inmutables que controlan el comportamiento del motor de decisiones."""
 
-    # ── Distribución de Portafolio (70% Crypto / 30% Acciones) ───────
-    crypto_portfolio_target_pct: float = 0.70
-    stock_portfolio_target_pct: float = 0.30
-    crypto_position_size_mult: float = 1.50
+    # ── Distribución de Portafolio (85% Crypto / 15% Acciones) ───────
+    crypto_portfolio_target_pct: float = 0.85
+    stock_portfolio_target_pct: float = 0.15
+    crypto_position_size_mult: float = 1.75
 
     # ── Optimización para Render (512 MB RAM) & Neon DB ────────────
     render_low_memory_mode: bool = True
     sequential_ticker_processing: bool = True
     max_memory_history_days: int = 90  # Acota el historial cargado en RAM a 90 días
 
-    # Lista de las 20 principales criptomonedas para análisis secuencial
+    # Lista de criptomonedas prioritarias y compatibles con Alpaca Crypto
     crypto_symbols: tuple[str, ...] = (
         "BTC/USD",
         "ETH/USD",
         "SOL/USD",
         "AVAX/USD",
-        "NEAR/USD",
-        "ADA/USD",
         "LINK/USD",
-        "DOT/USD",
         "DOGE/USD",
-        "XRP/USD",
-        "BNB/USD",
         "LTC/USD",
+        "UNI/USD",
+        "AAVE/USD",
+        "BCH/USD",
+        "NEAR/USD",
         "SUI/USD",
-        "FET/USD",
-        "INJ/USD",
-        "MATIC/USD",
+        "ADA/USD",
+        "DOT/USD",
         "ATOM/USD",
-        "APT/USD",
         "ARB/USD",
         "OP/USD",
     )

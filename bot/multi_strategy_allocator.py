@@ -6,7 +6,7 @@ Evalúa periódicamente el Win Rate y Profit Factor de:
 3. PAIRS_TRADING (Arbitraje estadístico market-neutral)
 
 Asigna un multiplicador de capital (0.5x a 2.0x) para favorecer las estrategias ganadoras en el entorno actual,
-aplicando una distribución objetivo del 70% para Crypto y 30% para Acciones.
+aplicando una distribución objetivo del 85% para Crypto y 15% para Acciones.
 """
 
 from __future__ import annotations
@@ -35,14 +35,14 @@ class StrategyStats:
 
 
 class MultiStrategyAllocator:
-    """Asignador de peso de capital por estrategia y tipo de activo (70% Crypto / 30% Stock)."""
+    """Asignador de peso de capital por estrategia y tipo de activo (85% Crypto / 15% Stock)."""
 
     def __init__(
         self,
         min_trades_to_adjust: int = 5,
-        crypto_target_allocation: float = 0.70,
-        stock_target_allocation: float = 0.30,
-        crypto_boost_factor: float = 1.4,
+        crypto_target_allocation: float = 0.85,
+        stock_target_allocation: float = 0.15,
+        crypto_boost_factor: float = 1.75,
     ) -> None:
         self.min_trades_to_adjust = min_trades_to_adjust
         self.crypto_target_allocation = crypto_target_allocation
@@ -91,9 +91,9 @@ class MultiStrategyAllocator:
     def get_allocation_scale(
         self,
         strategy_type: str,
-        asset_type: str = "STOCK",
+        asset_type: str | None = None,
     ) -> float:
-        """Retorna un multiplicador de tamaño de posición (0.5x - 2.0x) respetando el peso 70/30."""
+        """Retorna un multiplicador de tamaño de posición (0.5x - 2.0x) respetando el peso 85/15."""
         st = strategy_type.upper()
         stat = self.stats.get(st)
 
@@ -112,16 +112,17 @@ class MultiStrategyAllocator:
             else:
                 scale = 0.5  # Pésimo rendimiento -> Reduce al mínimo 50%
 
-        # Escalar ponderación según asignación objetivo 70% Crypto vs 30% Stocks
-        is_crypto = asset_type.upper() == "CRYPTO"
-        if is_crypto:
-            crypto_stat = self.asset_stats.get("CRYPTO")
-            if not crypto_stat or crypto_stat.win_rate >= 0.40:
-                # Factor de impulso para Crypto alineado a la meta del 70%
-                scale *= self.crypto_boost_factor * (self.crypto_target_allocation / 0.50)
-        else:
-            # Ponderación moderada para Acciones (objetivo 30%)
-            scale *= self.stock_target_allocation / 0.50
+        # Si se especifica tipo de activo, escalar ponderación según 85% Crypto vs 15% Stocks
+        if asset_type is not None:
+            is_crypto = asset_type.upper() == "CRYPTO"
+            if is_crypto:
+                crypto_stat = self.asset_stats.get("CRYPTO")
+                if not crypto_stat or crypto_stat.win_rate >= 0.40:
+                    # Factor de impulso para Crypto alineado a la meta del 85%
+                    scale *= self.crypto_boost_factor * (self.crypto_target_allocation / 0.50)
+            else:
+                # Ponderación moderada para Acciones (objetivo 15%)
+                scale *= self.stock_target_allocation / 0.50
 
         return min(round(scale, 2), 2.0)
 
