@@ -966,7 +966,7 @@ class TradingBot:
 
                 ticker = symbol.replace("/", "-") if "/" in symbol else symbol  # BTC/USD -> BTC-USD para yfinance
                 try:
-                    df = self.fetcher.get_data(ticker, period="3mo", interval=interval)
+                    df = self.fetcher.get_data(ticker, period="2mo", interval=interval)
                     if df.empty:
                         self._log(f"CRYPTO {symbol}: sin datos para {ticker}")
                         continue
@@ -1021,6 +1021,16 @@ class TradingBot:
 
                 except Exception as e:
                     logger.warning("Error analizando crypto %s: %s", symbol, e)
+
+                finally:
+                    # ── Liberar RAM tras cada ticker (crítico en Render 512 MB) ──
+                    import gc
+
+                    try:
+                        del df
+                    except NameError:
+                        pass
+                    gc.collect()
 
         except Exception as e:
             logger.warning("Error en escaneo crypto: %s", e)
