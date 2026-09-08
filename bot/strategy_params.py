@@ -183,9 +183,23 @@ class StrategyParams:
     use_time_based_exit: bool = True
     max_hold_days: int = 20
 
-    # Breakeven stop
+    # Breakeven stop (cobertura de comisiones de Alpaca ~0.25%)
     use_breakeven_stop: bool = True
-    breakeven_trigger_pct: float = 0.03
+    breakeven_trigger_pct: float = 0.025  # Se activa al +2.5% de ganancia
+    breakeven_offset_pct: float = 0.003  # Cierra en +0.3% para asegurar $0 de pérdida neta
+
+    # ── Stop-Loss Cooldown (Anti-Cuchillo Cayendo) ─────────────────
+    use_stop_loss_cooldown: bool = True
+    stop_loss_cooldown_seconds: int = 7200  # 2 horas de enfriamiento tras SL
+
+    # ── Filtro de Volumen Institucional (Volume Surge) ────────────
+    use_volume_surge_filter: bool = True
+    volume_surge_min_ratio: float = 1.15  # Requiere 15% más de volumen que la media de 20 barras
+
+    # ── Crypto Fear & Greed Sentiment ──────────────────────────────
+    use_fear_and_greed_filter: bool = True
+    fear_greed_extreme_greed_threshold: int = 75
+    fear_greed_extreme_fear_threshold: int = 25
 
     # Volatility targeting
     use_volatility_targeting: bool = True

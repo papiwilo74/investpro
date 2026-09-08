@@ -120,12 +120,13 @@ class PositionState:
             except Exception:
                 pass
 
-        # Breakeven stop
+        # Breakeven stop con cobertura de comisiones de Alpaca
         if p.use_breakeven_stop and self.side in ("LONG", "DIP"):
             pnl_pct = (current_price / self.entry_price) - 1.0
             if not self._breakeven_active and pnl_pct >= p.breakeven_trigger_pct:
                 self._breakeven_active = True
-            if self._breakeven_active and pnl_pct <= 0:
+            breakeven_floor = getattr(p, "breakeven_offset_pct", 0.0)
+            if self._breakeven_active and pnl_pct <= breakeven_floor:
                 return True, f"breakeven stop (pnl={pnl_pct:.2%})"
 
         if self.side == "MEANREV":

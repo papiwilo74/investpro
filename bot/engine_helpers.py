@@ -36,3 +36,26 @@ def fmt_value(value, suffix: str = "", digits: int = 2) -> str:
         return f"{float(value):.{digits}f}{suffix}"
     except (TypeError, ValueError):
         return "N/A"
+
+
+def trim_process_memory() -> bool:
+    """Fuerza la liberación de memoria en Python y glibc (Linux/Docker).
+
+    En entornos Linux como Render, Python gc.collect() libera referencias de objetos,
+    pero glibc malloc retiene las páginas en la memoria virtual/RSS a menos que
+    se invoque malloc_trim(0). Esto evita OOM Kills con el límite de 512MB.
+    """
+    import gc
+
+    gc.collect()
+
+    try:
+        import ctypes
+
+        libc = ctypes.CDLL("libc.so.6")
+        if hasattr(libc, "malloc_trim"):
+            libc.malloc_trim(0)
+            return True
+    except Exception:
+        pass
+    return False

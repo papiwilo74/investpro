@@ -10,7 +10,7 @@ import pandas as pd
 from loguru import logger
 
 import logging_config  # noqa: F401 — configura loguru al importar
-from bot.engine_helpers import fmt_value, sanitize_web_params
+from bot.engine_helpers import fmt_value, sanitize_web_params, trim_process_memory
 from bot.hedging import HedgeMonitor
 from bot.macro_calendar import MacroTracker
 from bot.market_breadth import MarketBreadth
@@ -43,12 +43,13 @@ class TradingBot:
     """Automated trading bot using shared strategy and risk controls.
 
     Modo ``web`` (recomendado para la UI):
-      - Estrategia LONG conservadora.
-      - Sin NN, RL, short, scalping ni mean-reversion.
-      - Risk manager con correlación real de retornos.
+      - Inicia en segundo plano sin bloquear el server
+      - Se conecta automáticamente a la DB configurada
+      - Aplica parámetros de bajo riesgo (web-safe)
 
-    Modo ``legacy``:
-      - Conserva el comportamiento anterior para compatibilidad con CLI.
+    Modo ``cli`` (legacy):
+      - Bloqueante
+      - Requiere Ctrl+C para salir
     """
 
     def __init__(
@@ -58,33 +59,41 @@ class TradingBot:
         use_neural_brain: bool = False,
         strategy_mode: str = "legacy",
         strategy_params: StrategyParams | None = None,
+        use_db: bool = True,
+        client=None,
+        crypto_client=None,
+        ticker: str | None = None,
     ):
         self.intraday = intraday
         self.strategy_mode = strategy_mode
+        self.ticker = ticker
         self.fetcher = DataFetcher()
-        self.client = create_broker_client(data_fetcher=self.fetcher)
-        self.crypto_client = create_crypto_client(paper=True)
+        self.client = client or create_broker_client(data_fetcher=self.fetcher)
+        self.crypto_client = crypto_client or create_crypto_client(paper=True)
         self._trainer = None  # lazy — XGBoost+sklearn (~200MB), solo al necesitar ML
         self.sentiment = SentimentAnalyzer() if use_sentiment else None
         self.journal = SignalJournal(fetcher=self.fetcher)
         self.scanner = MarketScanner(fetcher=self.fetcher, journal=self.journal)
         # ── Database ──────────────────────────────────────────────────
-        try:
-            init_database()
-            self._db_session = SessionLocal()
-            use_db = self._db_session is not None
-        except Exception:
+        if use_db:
+            try:
+                init_database()
+                self._db_session = SessionLocal()
+            except Exception:
+                self._db_session = None
+        else:
             self._db_session = None
-            use_db = False
         # ───────────────────────────────────────────────────────────────
         self.risk_manager = RiskManager(
             WEB_RISK_CONFIG if strategy_mode == "web" else None,
-            session=self._db_session if use_db else None,
+            session=self._db_session,
         )
         self.risk_manager.set_alert_callback(lambda level, event, msg: notifier.send(event, msg, level))
         self.state = BotStateManager()
         self.last_scan: str | None = None
         self._last_paper_outcomes_update: float = 0.0
+        self._stop_loss_exit_timestamps: dict[str, float] = {}
+
         # ── Componentes extraídos (composición sobre herencia) ────────
         # Inicializados sin smart_router; se setea tras crearlo abajo
         self.order_manager = OrderManager(self.client, self.state)
@@ -610,8 +619,6 @@ class TradingBot:
             logger.warning("Error en check_critical_alerts: %s", exc)
 
     async def _run_loop(self, ticker: str | None = None, interval: str = "1d", sleep_seconds: int = 600):
-        import gc
-
         retrain_interval_s = 12 * 3600  # re-evaluar modelos dos veces al día (~cada 12h)
         last_retrain_check = 0.0
         consecutive_errors = 0
@@ -622,7 +629,12 @@ class TradingBot:
                     now = time.time()
                     if now - last_retrain_check >= retrain_interval_s:
                         last_retrain_check = now
-                        if self.strategy_mode != "web":
+                        import os
+
+                        is_cloud = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
+                        if is_cloud:
+                            self._log("Cloud detectado (Render 512MB): re-entreno ML pesado omitido para prevenir OOM")
+                        elif self.strategy_mode != "web":
                             self._log("Verificando modelos ML para re-entreno...")
                             ml_tickers = [ticker] if ticker else WATCHLIST
                             for t in ml_tickers:
@@ -745,8 +757,9 @@ class TradingBot:
                     self._log(f"ERROR loop principal: {e}")
 
                 self._log(f"Escaneo finalizado. Durmiendo {sleep_seconds // 60} minutos.")
+                trim_process_memory()
                 await asyncio.sleep(sleep_seconds)
-                gc.collect()
+                trim_process_memory()
         finally:
             self.is_running = False
             BROKER_CONFIG.bot_active = False
@@ -853,7 +866,14 @@ class TradingBot:
 
     async def _run_champion_challenger_cycle(self, single_ticker: str | None) -> None:
         """Ciclo diario champion/challenger para el modo web con fallback a retrain_if_stale."""
+        import os
+
+        if bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL")):
+            self._log("Cloud detectado: ciclo Champion/Challenger omitido en Render para proteger memoria (512MB)")
+            return
+
         self._log("Ejecutando escaneo y re-evaluación automática de modelos ML...")
+
         try:
             from ml.champion_challenger import champion_challenger as cc
         except Exception as exc:
@@ -1008,6 +1028,23 @@ class TradingBot:
                     )
 
                     if decision.action == "BUY" and not has_position:
+                        # ── Cooldown post Stop-Loss (Anti-Cuchillo Cayendo) ──
+                        canonical = symbol.replace("/", "").replace("-", "").upper()
+                        use_cooldown = getattr(self._strategy_params, "use_stop_loss_cooldown", False)
+                        if isinstance(use_cooldown, bool) and use_cooldown:
+                            cooldown_sec = getattr(self._strategy_params, "stop_loss_cooldown_seconds", 7200)
+                            if not isinstance(cooldown_sec, int | float):
+                                cooldown_sec = 7200
+                            sl_dict = getattr(self, "_stop_loss_exit_timestamps", {})
+                            last_sl = sl_dict.get(canonical, 0.0) if isinstance(sl_dict, dict) else 0.0
+                            elapsed = time.time() - last_sl if isinstance(last_sl, int | float) else 999999.0
+                            if elapsed < cooldown_sec:
+                                rem_min = int((cooldown_sec - elapsed) // 60)
+                                self._log(
+                                    f"COOLDOWN {symbol}: compra rechazada, enfriamiento post-SL ({rem_min} min restantes)"
+                                )
+                                continue
+
                         min_crypto_score = max(0.05, self._strategy_params.buy_score_threshold - 0.05)
                         if score >= min_crypto_score:
                             invested = await self._execute_crypto_buy(
@@ -1024,13 +1061,11 @@ class TradingBot:
 
                 finally:
                     # ── Liberar RAM tras cada ticker (crítico en Render 512 MB) ──
-                    import gc
-
                     try:
                         del df
                     except NameError:
                         pass
-                    gc.collect()
+                    trim_process_memory()
 
         except Exception as e:
             logger.warning("Error en escaneo crypto: %s", e)
@@ -1139,6 +1174,23 @@ class TradingBot:
                     logger.debug("ShadowTrader record falló %s: %s", ticker, exc)
 
             if decision.action == "BUY" and not has_position:
+                # ── Cooldown post Stop-Loss (Anti-Cuchillo Cayendo) ──
+                canonical = ticker.replace("/", "").replace("-", "").upper()
+                use_cooldown = getattr(self._strategy_params, "use_stop_loss_cooldown", False)
+                if isinstance(use_cooldown, bool) and use_cooldown:
+                    cooldown_sec = getattr(self._strategy_params, "stop_loss_cooldown_seconds", 7200)
+                    if not isinstance(cooldown_sec, int | float):
+                        cooldown_sec = 7200
+                    sl_dict = getattr(self, "_stop_loss_exit_timestamps", {})
+                    last_sl = sl_dict.get(canonical, 0.0) if isinstance(sl_dict, dict) else 0.0
+                    elapsed = time.time() - last_sl if isinstance(last_sl, int | float) else 999999.0
+                    if elapsed < cooldown_sec:
+                        rem_min = int((cooldown_sec - elapsed) // 60)
+                        self._log(
+                            f"COOLDOWN {ticker}: compra rechazada, enfriamiento post-SL ({rem_min} min restantes)"
+                        )
+                        return 0.0
+
                 # Filtro Multi-Timeframe: bloquea si el semanal es bajista o no hay momentum
                 mtf_result = self._check_mtf(ticker, df)
                 if mtf_result and not mtf_result.passed:
@@ -1418,6 +1470,26 @@ class TradingBot:
             )
             self.perf_tracker.compute_rolling_metrics()
 
+            if self.state:
+                import json
+                from datetime import date
+
+                today_str = date.today().isoformat()
+                snap_payload = {
+                    "date": today_str,
+                    "equity": equity,
+                    "cash": cash,
+                    "exposure": exposure / equity if equity > 0 else 0,
+                    "num_positions": len(positions),
+                    "daily_pnl_pct": acc.get("pnl_pct_today", 0) / 100 if acc.get("pnl_pct_today") else 0,
+                    "total_trades": total_trades,
+                }
+                try:
+                    self.state.set_state(f"telemetry_snapshot_{today_str}", json.dumps(snap_payload))
+                    self.state.set_state("latest_telemetry_snapshot", json.dumps(snap_payload))
+                except Exception:
+                    pass
+
             try:
                 from api.metrics import daily_pnl as _dp_g
                 from api.metrics import open_positions as _op_g
@@ -1652,6 +1724,13 @@ class TradingBot:
         pnl_pct: float,
     ) -> None:
         self._log(f"ORDEN {decision.action} {ticker}: pnl={pnl_pct:.2%} | razon={decision.reason}")
+        reason_lower = getattr(decision, "reason", "").lower()
+        if "stop-loss" in reason_lower or "stop loss" in reason_lower or "emergency" in reason_lower:
+            canonical = ticker.replace("/", "").replace("-", "").upper()
+            if not hasattr(self, "_stop_loss_exit_timestamps") or not isinstance(self._stop_loss_exit_timestamps, dict):
+                self._stop_loss_exit_timestamps = {}
+            self._stop_loss_exit_timestamps[canonical] = time.time()
+            self._log(f"COOLDOWN: {ticker} entró en período de enfriamiento post-SL")
         await self._run_sync(self._executor.execute_sell, ticker, decision, position, equity, pnl_pct)
 
     async def _execute_crypto_buy(
@@ -1717,6 +1796,15 @@ class TradingBot:
             if result.get("status") == "success":
                 notifier.new_crypto_sell(symbol, qty, current_price, pnl_pct, decision.reason)
                 self._log(f"CRYPTO SELL EXITOSO: {symbol} {qty} @ ${current_price:,.2f}")
+                reason_lower = getattr(decision, "reason", "").lower()
+                if "stop-loss" in reason_lower or "stop loss" in reason_lower or "emergency" in reason_lower:
+                    canonical = symbol.replace("/", "").replace("-", "").upper()
+                    if not hasattr(self, "_stop_loss_exit_timestamps") or not isinstance(
+                        self._stop_loss_exit_timestamps, dict
+                    ):
+                        self._stop_loss_exit_timestamps = {}
+                    self._stop_loss_exit_timestamps[canonical] = time.time()
+                    self._log(f"COOLDOWN: {symbol} entró en período de enfriamiento post-SL")
             else:
                 self._log(f"CRYPTO SELL FALLO: {symbol} - {result.get('msg', 'error desconocido')}")
 

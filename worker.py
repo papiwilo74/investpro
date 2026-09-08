@@ -6,7 +6,6 @@ pesadas del dashboard no bloqueen ni retrasen el análisis de mercado o la ejecu
 
 from __future__ import annotations
 
-import gc
 import logging
 import os
 import signal
@@ -14,6 +13,7 @@ import sys
 import time
 from typing import NoReturn
 
+from bot.engine_helpers import trim_process_memory
 from bot.multi_strategy_allocator import MultiStrategyAllocator
 from bot.strategy_params import StrategyParams
 
@@ -86,8 +86,8 @@ def main() -> NoReturn:
                 scale = allocator.get_allocation_scale("MOMENTUM", asset_type="CRYPTO")
                 logger.debug(f"Escala de asignación para {symbol}: {scale}x")
 
-                # Liberación de memoria tras cada ticker
-                gc.collect()
+                # Liberación forzada de memoria (Python + glibc) tras cada ticker
+                trim_process_memory()
 
             logger.info(
                 f"✅ Ciclo de escaneo completado. Esperando {scan_interval_seconds} segundos para el próximo ciclo..."
@@ -100,7 +100,7 @@ def main() -> NoReturn:
             )
 
         # Liberación final de memoria al cerrar el ciclo
-        gc.collect()
+        trim_process_memory()
 
         # Pausa respetando la señal de interrupción
         sleep_counter = 0

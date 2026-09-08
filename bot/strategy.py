@@ -818,6 +818,43 @@ class TradingBrain:
         if entry_score < p.buy_score_threshold:
             return Decision("HOLD", f"score below buy threshold ({entry_score:.2f})")
 
+        # ── Crypto Fear & Greed Sentiment Filter ────────────────────
+        if getattr(p, "use_fear_and_greed_filter", False) and ticker:
+            is_crypto = "/" in ticker or "-" in ticker or ticker.upper().endswith("USD")
+            if is_crypto:
+                try:
+                    from data.fear_greed import get_fear_greed_client
+
+                    fg_client = get_fear_greed_client()
+                    fg_adj = fg_client.get_score_adjustment(
+                        extreme_greed=getattr(p, "fear_greed_extreme_greed_threshold", 75),
+                        extreme_fear=getattr(p, "fear_greed_extreme_fear_threshold", 25),
+                    )
+                    effective_threshold = p.buy_score_threshold + fg_adj
+                    if entry_score < effective_threshold:
+                        return Decision(
+                            "HOLD",
+                            f"Fear&Greed: umbral elevado a {effective_threshold:.2f} (score {entry_score:.2f})",
+                        )
+                except Exception:
+                    pass
+
+        # ── Filtro de Volumen Institucional (Volume Surge) ──────────
+        if getattr(p, "use_volume_surge_filter", False) and "volume" in df.columns:
+            try:
+                last_vol = float(df["volume"].iloc[current_index])
+                recent_vols = df["volume"].iloc[max(0, current_index - 19) : current_index + 1]
+                if len(recent_vols) >= 5 and recent_vols.nunique() > 1:
+                    vol_sma = float(recent_vols.mean())
+                    min_ratio = getattr(p, "volume_surge_min_ratio", 1.15)
+                    if vol_sma > 0 and last_vol < vol_sma * min_ratio:
+                        return Decision(
+                            "HOLD",
+                            f"Volumen insuficiente ({last_vol / vol_sma:.2f}x < req. {min_ratio:.2f}x)",
+                        )
+            except Exception:
+                pass
+
         # ── Filtro de confirmación: N/M velas recientes alcistas ────
         n = current_index + 1
         if p.use_confirmation_filter and "sig_composite" in df.columns and n >= p.confirmation_bars:
