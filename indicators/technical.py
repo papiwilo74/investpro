@@ -240,6 +240,12 @@ class TechnicalIndicators:
         df = TechnicalIndicators.add_donchian(df, 20)
         df = TechnicalIndicators.add_donchian(df, 10)
         df = TechnicalIndicators.add_vwap(df)
+
+        # ── Optimización RAM: Downcast de float64 a float32 (-50% uso de memoria) ──
+        for col in df.columns:
+            if pd.api.types.is_float_dtype(df[col]):
+                df[col] = df[col].astype(np.float32)
+
         return df
 
     @staticmethod

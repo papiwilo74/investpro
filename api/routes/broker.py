@@ -71,8 +71,8 @@ def _init_all():
         _bot_real = TradingBot(strategy_mode="web")
         _client_real = _bot_real.client
         _journal_real = _bot_real.journal
-        _shadow_real = ShadowTrader(fetcher=_bot_real.fetcher)
-        _router_real = SmartOrderRouter(_client_real)
+        _shadow_real = _bot_real.shadow_trader or ShadowTrader(fetcher=_bot_real.fetcher)
+        _router_real = _bot_real.smart_router or SmartOrderRouter(_client_real)
         _notifier_real = _nf
         _kelly_real = _kt
 

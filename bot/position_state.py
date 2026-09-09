@@ -173,7 +173,16 @@ class PositionState:
                 if p.use_trailing_stop and self.entry_atr > 0:
                     mult = self._effective_trail_mult()
                     trailing_stop = self.max_price - mult * self.entry_atr
-                    if current_price <= trailing_stop:
+                    eff_tp = take_profit_pct if take_profit_pct is not None else p.take_profit_pct
+                    if pnl_pct >= eff_tp:
+                        tp_floor = self.entry_price * (1.0 + getattr(p, "breakeven_offset_pct", 0.003))
+                        effective_trail = max(trailing_stop, tp_floor)
+                        if current_price <= effective_trail:
+                            return (
+                                True,
+                                f"chandelier trailing-stop tras TP ({current_price:.2f} <= {effective_trail:.2f}, pnl={pnl_pct:.2%})",
+                            )
+                    elif current_price <= trailing_stop:
                         return True, f"trailing-stop RL ({current_price:.2f} <= {trailing_stop:.2f})"
                 return False, ""
 
@@ -182,17 +191,24 @@ class PositionState:
             if pnl_pct <= effective_sl:
                 return True, f"stop-loss ({pnl_pct:.2%})"
 
-            if pnl_pct >= effective_tp:
-                return True, f"take-profit ({pnl_pct:.2%})"
-
             if p.use_trailing_stop and self.entry_atr > 0:
                 mult = self._effective_trail_mult()
                 trailing_stop = self.max_price - mult * self.entry_atr
-                if current_price <= trailing_stop:
+                if pnl_pct >= effective_tp:
+                    tp_floor = self.entry_price * (1.0 + getattr(p, "breakeven_offset_pct", 0.003))
+                    effective_trail = max(trailing_stop, tp_floor)
+                    if current_price <= effective_trail:
+                        return (
+                            True,
+                            f"chandelier trailing-stop tras TP ({current_price:.2f} <= {effective_trail:.2f}, pnl={pnl_pct:.2%})",
+                        )
+                elif current_price <= trailing_stop:
                     return (
                         True,
                         f"trailing-stop ({current_price:.2f} <= {trailing_stop:.2f}, ATR={self.entry_atr:.2f}, mult={mult:.1f})",
                     )
+            elif pnl_pct >= effective_tp:
+                return True, f"take-profit ({pnl_pct:.2%})"
 
         elif self.side == "SHORT":
             pnl_pct = (self.entry_price / current_price) - 1.0
@@ -212,13 +228,21 @@ class PositionState:
             price_change = (current_price / self.entry_price) - 1.0
             if price_change >= p.short_stop_loss_pct:
                 return True, f"short stop-loss (subió {price_change:.2%})"
-            if price_change <= p.short_take_profit_pct:
-                return True, f"short take-profit (bajó {abs(price_change):.2%})"
             if p.use_trailing_stop and self.entry_atr > 0:
                 mult = self._effective_trail_mult()
                 trailing_stop = self.min_price + mult * self.entry_atr
-                if current_price >= trailing_stop:
+                if price_change <= p.short_take_profit_pct:
+                    tp_floor = self.entry_price * (1.0 - getattr(p, "breakeven_offset_pct", 0.003))
+                    effective_trail = min(trailing_stop, tp_floor)
+                    if current_price >= effective_trail:
+                        return (
+                            True,
+                            f"short chandelier trailing-stop tras TP ({current_price:.2f} >= {effective_trail:.2f})",
+                        )
+                elif current_price >= trailing_stop:
                     return True, f"short trailing-stop ({current_price:.2f} >= {trailing_stop:.2f})"
+            elif price_change <= p.short_take_profit_pct:
+                return True, f"short take-profit (bajó {abs(price_change):.2%})"
 
         return False, ""
 

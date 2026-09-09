@@ -1855,9 +1855,20 @@ class TradingBot:
 
                 atr_pct = atr / last_close
                 pos_size_pct = target_risk / max(0.015, atr_pct)
-                pos_size_pct = min(max_size, max(min_size, pos_size_pct))
+
+                # Modulación Half-Kelly si hay historial de trades en el brain
+                kelly_mult = 1.0
+                if hasattr(self, "brain") and hasattr(self.brain, "_kelly"):
+                    trades = getattr(self.brain._kelly, "trades", [])
+                    if isinstance(trades, list) and len(trades) >= 10:
+                        k_pct = getattr(self.brain._kelly, "kelly_pct", 0.10)
+                        if isinstance(k_pct, int | float):
+                            kelly_mult = min(1.25, max(0.60, 1.0 + (k_pct - 0.10) * 1.5))
+
+                pos_size_pct = min(max_size, max(min_size, pos_size_pct * kelly_mult))
                 self._log(
-                    f"CRYPTO VOL PARITY {symbol}: ATR%={atr_pct*100:.1f}%, Target Risk={target_risk*100:.1f}% -> Sizing={pos_size_pct*100:.1f}%"
+                    f"CRYPTO VOL PARITY {symbol}: ATR%={atr_pct*100:.1f}%, Target Risk={target_risk*100:.1f}%, "
+                    f"Kelly={kelly_mult:.2f}x -> Sizing={pos_size_pct*100:.1f}%"
                 )
             else:
                 base_pct = getattr(decision, "position_size_pct", 0.15)
