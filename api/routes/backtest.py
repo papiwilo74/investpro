@@ -42,9 +42,11 @@ async def run_backtest(
         t = ticker.upper().strip()
         engine = _get_engine()
         df = _get_fetcher().get_data(t, period=period, interval=interval)
+        if df.empty:
+            raise ValueError(f"No hay datos disponibles para el ticker {t}")
         df = TechnicalIndicators.add_all(df)
         df = SignalGenerator.add_signal_columns(df)
-        result = engine.run(df)
+        result = engine.run(df, ticker=t)
 
         equity_curve = []
         for idx, val in result.equity_curve.items():

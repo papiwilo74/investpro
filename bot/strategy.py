@@ -571,6 +571,7 @@ class TradingBrain:
         # RSI actual para señales RL/advisor
         last_row = df.iloc[current_index] if current_index < len(df) else df.iloc[-1]
         rsi_val = float(last_row.get("rsi", 50.0)) if pd.notna(last_row.get("rsi")) else 50.0
+        is_live_decision = (current_index is None or current_index >= len(df) - 1) and ticker != "BACKTEST"
 
         # ── Ensemble adaptativo ────────────────────────────────────────
         if p.use_ensemble:
@@ -659,22 +660,23 @@ class TradingBrain:
 
             # ── Panel Model: señal cross-sectional (si está entrenado) ──
             panel_signal = None
-            try:
-                from ml.panel_model import predict_panel
+            if ticker and is_live_decision:
+                try:
+                    from ml.panel_model import predict_panel
 
-                panel_result = predict_panel(ticker)
-                if panel_result and panel_result.get("direction"):
-                    # Panel model retorna "ALCISTA"/"BAJISTA", ensemble usa "BULLISH"/"BEARISH"
-                    panel_dir_raw = panel_result["direction"]
-                    panel_dir = "BULLISH" if panel_dir_raw == "ALCISTA" else "BEARISH"
-                    panel_conf = panel_result.get("probability", 0.5)
-                    panel_signal = ModelSignal(
-                        direction=panel_dir,
-                        probability=panel_conf,
-                        score=panel_conf if panel_dir == "BULLISH" else -panel_conf,
-                    )
-            except Exception:
-                pass
+                    panel_result = predict_panel(ticker)
+                    if panel_result and panel_result.get("direction"):
+                        # Panel model retorna "ALCISTA"/"BAJISTA", ensemble usa "BULLISH"/"BEARISH"
+                        panel_dir_raw = panel_result["direction"]
+                        panel_dir = "BULLISH" if panel_dir_raw == "ALCISTA" else "BEARISH"
+                        panel_conf = panel_result.get("probability", 0.5)
+                        panel_signal = ModelSignal(
+                            direction=panel_dir,
+                            probability=panel_conf,
+                            score=panel_conf if panel_dir == "BULLISH" else -panel_conf,
+                        )
+                except Exception:
+                    pass
 
             # ── PPO: señal del agente PPO entrenado ─────────────────────
             ppo_signal = None
@@ -713,7 +715,7 @@ class TradingBrain:
 
             # ── Reddit Sentiment: sentimiento social ────────────────────
             reddit_signal = None
-            if ticker:
+            if ticker and is_live_decision:
                 try:
                     from ml.reddit_sentiment import RedditSentimentAnalyzer
 
@@ -742,7 +744,7 @@ class TradingBrain:
 
             # ── StockTwits Sentiment: pulso de la comunidad ─────────────
             stocktwits_signal = None
-            if ticker:
+            if ticker and is_live_decision:
                 try:
                     from ml.stocktwits_sentiment import StockTwitsAnalyzer
 
@@ -762,7 +764,7 @@ class TradingBrain:
 
             # ── Fundamentals: datos fundamentalistas ────────────────────
             fundamentals_signal = None
-            if ticker:
+            if ticker and is_live_decision:
                 try:
                     from ml.fundamentals import FundamentalFetcher
 
@@ -819,7 +821,7 @@ class TradingBrain:
             return Decision("HOLD", f"score below buy threshold ({entry_score:.2f})")
 
         # ── Crypto Fear & Greed Sentiment Filter ────────────────────
-        if getattr(p, "use_fear_and_greed_filter", False) and ticker:
+        if getattr(p, "use_fear_and_greed_filter", False) and ticker and is_live_decision:
             is_crypto = "/" in ticker or "-" in ticker or ticker.upper().endswith("USD")
             if is_crypto:
                 try:
