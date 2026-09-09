@@ -231,17 +231,33 @@ add_error_handlers(app)
 add_security_headers_middleware(app)
 add_rate_limiting_middleware(app, rpm=120)
 
-# Habilitar CORS (restringido a origins conocidos en producción)
+# Habilitar CORS (permite frontend local, Render y Vercel)
+_allowed_origins = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+_frontend_env = os.environ.get("FRONTEND_URL", "").strip()
+if _frontend_env:
+    for _url in _frontend_env.split(","):
+        _clean_url = _url.strip().rstrip("/")
+        if _clean_url and _clean_url not in _allowed_origins:
+            _allowed_origins.append(_clean_url)
+
+_render_url = os.environ.get("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+if _render_url and _render_url not in _allowed_origins:
+    _allowed_origins.append(_render_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        os.environ.get("RENDER_EXTERNAL_URL", ""),
-    ],
+    allow_origins=_allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=False,  # True + allow_origins=* es inválido según spec
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Incluir Routers

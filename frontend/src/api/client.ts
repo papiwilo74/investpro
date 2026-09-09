@@ -34,8 +34,8 @@ class ApiClient {
   private readonly CACHE_TTL = 30000; // 30 seconds
 
   constructor(baseUrl = '') {
-    this.baseUrl = baseUrl;
-    this.token = localStorage.getItem('jwt_token');
+    this.baseUrl = (baseUrl || '').replace(/\/+$/, '');
+    this.token = typeof localStorage !== 'undefined' ? localStorage.getItem('jwt_token') : null;
   }
 
   private getHeaders(): HeadersInit {
@@ -256,7 +256,8 @@ class ApiClient {
   }
 }
 
-export const api = new ApiClient();
+const defaultBaseUrl = (import.meta.env?.VITE_API_BASE_URL as string) || '';
+export const api = new ApiClient(defaultBaseUrl);
 
 // Exponer globalmente para compatibilidad con Components.toast
 if (typeof window !== 'undefined') {
