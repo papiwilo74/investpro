@@ -29,7 +29,7 @@ from bot.statistical_arbitrage import PairsTradingEngine
 from bot.strategy import Decision, TradingBrain, create_web_bot_strategy_params
 from bot.strategy_params import StrategyParams
 from broker import create_broker_client, create_crypto_client
-from broker.crypto_client import DEFAULT_CRYPTO_WATCHLIST
+from broker.crypto_client import CRYPTO_YFINANCE_MAP, DEFAULT_CRYPTO_WATCHLIST
 from config import BROKER_CONFIG, WATCHLIST, WEB_RISK_CONFIG
 from data.fetcher import DataFetcher
 from db import SessionLocal
@@ -958,7 +958,8 @@ class TradingBot:
             await asyncio.sleep(2)
 
     async def _scan_and_trade_crypto(self, interval: str = "1d"):
-        """Escanea y opera criptomonedas (BTC, ETH, SOL) 24/7."""
+        """Escanea y opera criptomonedas (27+ pares Alpaca) 24/7 con MTF Sniper y Pairs StatArb."""
+        crypto_closes: dict[str, pd.Series] = {}
         try:
             acc = self.crypto_client.get_account_summary()
             if not acc:
@@ -984,7 +985,7 @@ class TradingBot:
                 if not self.is_running:
                     break
 
-                ticker = symbol.replace("/", "-") if "/" in symbol else symbol  # BTC/USD -> BTC-USD para yfinance
+                ticker = CRYPTO_YFINANCE_MAP.get(symbol, symbol.replace("/", "-") if "/" in symbol else symbol)
                 try:
                     df = self.fetcher.get_data(ticker, period="2mo", interval=interval)
                     if df.empty:
@@ -995,6 +996,61 @@ class TradingBot:
                     df = SignalGenerator.add_signal_columns(df)
                     score = SignalGenerator.composite_score(df)
                     last_close = float(df["close"].iloc[-1])
+
+                    # Cachear serie de cierre para análisis de pares / benchmark
+                    crypto_closes[symbol] = df["close"]
+                    crypto_closes[symbol.replace("/", "")] = df["close"]
+                    crypto_closes[symbol.replace("/", "-")] = df["close"]
+
+                    # ── Mejora 5: Crypto Pairs Arbitrage / StatArb ──
+                    use_pairs = getattr(self._strategy_params, "use_crypto_pairs_arbitrage", True)
+                    if (
+                        isinstance(use_pairs, bool)
+                        and use_pairs
+                        and hasattr(self, "pairs_engine")
+                        and self.pairs_engine
+                    ):
+                        try:
+                            bench_symbol = None
+                            configured_pairs = getattr(
+                                self.pairs_engine,
+                                "crypto_pairs",
+                                getattr(self.pairs_engine, "DEFAULT_CRYPTO_PAIRS", []),
+                            )
+                            for pair_a, pair_b in configured_pairs:
+                                if symbol == pair_a or symbol.replace("/", "") == pair_a.replace("/", ""):
+                                    bench_symbol = pair_b
+                                    break
+
+                            if bench_symbol:
+                                bench_series = crypto_closes.get(bench_symbol)
+                                if bench_series is None or bench_series.empty:
+                                    bench_ticker = CRYPTO_YFINANCE_MAP.get(
+                                        bench_symbol,
+                                        bench_symbol.replace("/", "-") if "/" in bench_symbol else bench_symbol,
+                                    )
+                                    bench_df = self.fetcher.get_data(bench_ticker, period="2mo", interval=interval)
+                                    if bench_df is not None and not bench_df.empty:
+                                        crypto_closes[bench_symbol] = bench_df["close"]
+                                        bench_series = bench_df["close"]
+                                        del bench_df
+
+                                if bench_series is not None and not bench_series.empty:
+                                    zscore = self.pairs_engine.get_crypto_pair_zscore(symbol, df["close"], bench_series)
+                                    z_entry = getattr(self._strategy_params, "crypto_pairs_zscore_entry", -1.75)
+                                    if not isinstance(z_entry, int | float):
+                                        z_entry = -1.75
+                                    if zscore <= z_entry:
+                                        boost = getattr(self._strategy_params, "crypto_pairs_score_boost", 0.08)
+                                        if not isinstance(boost, int | float):
+                                            boost = 0.08
+                                        score += boost
+                                        self._log(
+                                            f"CRYPTO STATARB {symbol} vs {bench_symbol}: Z={zscore:.2f} <= {z_entry:.2f} "
+                                            f"(infravalorado/rezagado). Boost score +{boost:.2f} -> {score:.2f}"
+                                        )
+                        except Exception as e:
+                            logger.debug("Error en crypto StatArb para %s: %s", symbol, e)
 
                     position = (
                         positions.get(symbol)
@@ -1045,10 +1101,43 @@ class TradingBot:
                                 )
                                 continue
 
+                        # ── Mejora 2: Multi-Timeframe (MTF) Sniper Entry ──
+                        use_sniper = getattr(self._strategy_params, "use_crypto_mtf_sniper", True)
+                        if isinstance(use_sniper, bool) and use_sniper:
+                            max_rsi_1h = getattr(self._strategy_params, "crypto_sniper_max_rsi_1h", 70.0)
+                            if not isinstance(max_rsi_1h, int | float):
+                                max_rsi_1h = 70.0
+                            df_1h = None
+                            try:
+                                df_1h = self.fetcher.get_data(ticker, period="7d", interval="1h")
+                                if df_1h is not None and not df_1h.empty and len(df_1h) >= 14:
+                                    df_1h = TechnicalIndicators.add_all(df_1h, intraday=True)
+                                    if "rsi" in df_1h.columns:
+                                        rsi_1h = float(df_1h["rsi"].iloc[-1])
+                                        if pd.notna(rsi_1h) and rsi_1h > max_rsi_1h:
+                                            self._log(
+                                                f"CRYPTO SNIPER {symbol}: Compra 1D pospuesta por 1H RSI={rsi_1h:.1f} > "
+                                                f"{max_rsi_1h:.1f} (esperando retroceso de corto plazo)"
+                                            )
+                                            continue
+                            except Exception as e:
+                                logger.debug("Error en MTF Sniper 1H para %s: %s", symbol, e)
+                            finally:
+                                try:
+                                    del df_1h
+                                except NameError:
+                                    pass
+                                trim_process_memory()
+
                         min_crypto_score = max(0.05, self._strategy_params.buy_score_threshold - 0.05)
                         if score >= min_crypto_score:
+                            atr_val = (
+                                float(df["atr"].iloc[-1])
+                                if "atr" in df.columns and pd.notna(df["atr"].iloc[-1])
+                                else 0.0
+                            )
                             invested = await self._execute_crypto_buy(
-                                symbol, decision, last_close, equity, buying_power
+                                symbol, decision, last_close, equity, buying_power, atr=atr_val
                             )
                             if invested > 0:
                                 buying_power -= invested
@@ -1069,6 +1158,12 @@ class TradingBot:
 
         except Exception as e:
             logger.warning("Error en escaneo crypto: %s", e)
+        finally:
+            try:
+                del crypto_closes
+            except NameError:
+                pass
+            trim_process_memory()
 
     async def _evaluate_and_trade(
         self,
@@ -1740,11 +1835,38 @@ class TradingBot:
         last_close: float,
         equity: float,
         buying_power: float,
+        atr: float = 0.0,
     ) -> float:
         """Ejecuta compra de criptomonedas via CryptoBrokerClient."""
         try:
             mult = getattr(self._strategy_params, "crypto_position_size_mult", 1.75)
-            pos_size_pct = getattr(decision, "position_size_pct", 0.15) * mult
+            use_vol_parity = getattr(self._strategy_params, "use_crypto_volatility_parity", True)
+
+            if isinstance(use_vol_parity, bool) and use_vol_parity and atr > 0 and last_close > 0:
+                target_risk = getattr(self._strategy_params, "crypto_target_risk_per_trade_pct", 0.02)
+                min_size = getattr(self._strategy_params, "crypto_min_position_size_pct", 0.05)
+                max_size = getattr(self._strategy_params, "crypto_max_position_size_pct", 0.25)
+                if not isinstance(target_risk, int | float):
+                    target_risk = 0.02
+                if not isinstance(min_size, int | float):
+                    min_size = 0.05
+                if not isinstance(max_size, int | float):
+                    max_size = 0.25
+
+                atr_pct = atr / last_close
+                pos_size_pct = target_risk / max(0.015, atr_pct)
+                pos_size_pct = min(max_size, max(min_size, pos_size_pct))
+                self._log(
+                    f"CRYPTO VOL PARITY {symbol}: ATR%={atr_pct*100:.1f}%, Target Risk={target_risk*100:.1f}% -> Sizing={pos_size_pct*100:.1f}%"
+                )
+            else:
+                base_pct = getattr(decision, "position_size_pct", 0.15)
+                if not isinstance(base_pct, int | float):
+                    base_pct = 0.15
+                if not isinstance(mult, int | float):
+                    mult = 1.75
+                pos_size_pct = base_pct * mult
+
             invest_amount = min(equity * pos_size_pct, buying_power)
 
             min_crypto_usd = 10.0  # Mínimo para órdenes crypto en USD

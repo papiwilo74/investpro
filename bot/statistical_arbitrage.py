@@ -32,6 +32,13 @@ class PairsTradingEngine:
         ("XOM", "CVX"),
     ]
 
+    DEFAULT_CRYPTO_PAIRS: list[tuple[str, str]] = [
+        ("ETH/USD", "BTC/USD"),
+        ("SOL/USD", "ETH/USD"),
+        ("AVAX/USD", "SOL/USD"),
+        ("LINK/USD", "ETH/USD"),
+    ]
+
     def __init__(
         self,
         pairs: list[tuple[str, str]] | None = None,
@@ -137,3 +144,13 @@ class PairsTradingEngine:
             )
 
         return None
+
+    def get_crypto_pair_zscore(
+        self,
+        symbol: str,
+        series_target: pd.Series,
+        series_benchmark: pd.Series,
+    ) -> float:
+        """Calcula el Z-score del spread entre un activo objetivo y su benchmark de referencia."""
+        _, zscore = self.calculate_spread_and_zscore(series_target, series_benchmark)
+        return float(zscore)

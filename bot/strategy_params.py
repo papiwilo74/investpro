@@ -210,3 +210,18 @@ class StrategyParams:
 
     # Cautious regime boost
     cautious_regime_score_boost: float = 0.15
+
+    # ── Crypto Multi-Timeframe Sniper (1D Macro + 1H Timing) ───────
+    use_crypto_mtf_sniper: bool = True
+    crypto_sniper_max_rsi_1h: float = 70.0
+
+    # ── Crypto Volatility Parity Sizing ───────────────────────────
+    use_crypto_volatility_parity: bool = True
+    crypto_target_risk_per_trade_pct: float = 0.02  # Arriesga el 2% de equity normalizado por ATR%
+    crypto_min_position_size_pct: float = 0.05
+    crypto_max_position_size_pct: float = 0.25
+
+    # ── Crypto Pairs Arbitrage (Statistical Arbitrage) ─────────────
+    use_crypto_pairs_arbitrage: bool = True
+    crypto_pairs_zscore_entry: float = -1.75  # Desviación para considerar rezagado al activo A
+    crypto_pairs_score_boost: float = 0.08  # Impulso de score para el activo infravalorado

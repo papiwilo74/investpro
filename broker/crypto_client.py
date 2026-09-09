@@ -21,10 +21,35 @@ DEFAULT_CRYPTO_WATCHLIST = [
     "LINK/USD",
     "DOGE/USD",
     "LTC/USD",
-    "UNI/USD",
     "AAVE/USD",
     "BCH/USD",
+    "SHIB/USD",
+    "NEAR/USD",
+    "ATOM/USD",
+    "XLM/USD",
+    "DOT/USD",
+    "ADA/USD",
+    "CRV/USD",
+    "MKR/USD",
+    "UNI/USD",
+    "GRT/USD",
+    "BAT/USD",
+    "ALGO/USD",
+    "MANA/USD",
+    "SAND/USD",
+    "AXS/USD",
+    "XTZ/USD",
+    "FIL/USD",
+    "ICP/USD",
+    "SUI/USD",
 ]
+
+# Mapeo específico para tickers que en Yahoo Finance requieren sufijos de contrato
+CRYPTO_YFINANCE_MAP: dict[str, str] = {
+    "UNI/USD": "UNI7083-USD",
+    "GRT/USD": "GRT6719-USD",
+    "SUI/USD": "SUI20947-USD",
+}
 
 
 class CryptoBrokerClient(BaseBrokerClient):
