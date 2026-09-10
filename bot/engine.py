@@ -913,7 +913,7 @@ class TradingBot:
 
         scan_result = self.scanner.scan(
             universe="nasdaq100",
-            period="1y",
+            period="9mo",
             interval="1d",
             limit=12,
             include_rejected=False,
@@ -997,10 +997,14 @@ class TradingBot:
                     score = SignalGenerator.composite_score(df)
                     last_close = float(df["close"].iloc[-1])
 
-                    # Cachear serie de cierre para análisis de pares / benchmark
-                    crypto_closes[symbol] = df["close"]
-                    crypto_closes[symbol.replace("/", "")] = df["close"]
-                    crypto_closes[symbol.replace("/", "-")] = df["close"]
+                    # Cachear serie de cierre aislada (.copy()) SOLO si es benchmark para StatArb
+                    # Esto evita retener el BlockManager de DataFrames enteros en memoria
+                    canon = symbol.replace("/", "").replace("-", "").upper()
+                    if canon in ("BTCUSD", "ETHUSD", "SOLUSD", "AVAXUSD"):
+                        close_isolated = df["close"].copy()
+                        crypto_closes[symbol] = close_isolated
+                        crypto_closes[symbol.replace("/", "")] = close_isolated
+                        crypto_closes[symbol.replace("/", "-")] = close_isolated
 
                     # ── Mejora 5: Crypto Pairs Arbitrage / StatArb ──
                     use_pairs = getattr(self._strategy_params, "use_crypto_pairs_arbitrage", True)
@@ -1031,8 +1035,9 @@ class TradingBot:
                                     )
                                     bench_df = self.fetcher.get_data(bench_ticker, period="2mo", interval=interval)
                                     if bench_df is not None and not bench_df.empty:
-                                        crypto_closes[bench_symbol] = bench_df["close"]
-                                        bench_series = bench_df["close"]
+                                        bench_close = bench_df["close"].copy()
+                                        crypto_closes[bench_symbol] = bench_close
+                                        bench_series = bench_close
                                         del bench_df
 
                                 if bench_series is not None and not bench_series.empty:
@@ -1160,8 +1165,9 @@ class TradingBot:
             logger.warning("Error en escaneo crypto: %s", e)
         finally:
             try:
+                crypto_closes.clear()
                 del crypto_closes
-            except NameError:
+            except (NameError, AttributeError):
                 pass
             trim_process_memory()
 
@@ -1193,7 +1199,7 @@ class TradingBot:
                 positions = {p["symbol"]: p for p in self.client.get_positions()}
                 self._update_risk_state(equity, positions)
 
-            period = "7d" if self.intraday else ("3mo" if not single_ticker else "1y")
+            period = "7d" if self.intraday else ("3mo" if not single_ticker else "9mo")
             use_intraday = self.intraday
             if single_ticker and interval in ("5m", "15m", "30m", "1h"):
                 use_intraday = True
