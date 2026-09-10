@@ -852,7 +852,7 @@ def main() -> None:
         port = args.port or int(os.environ.get("PORT", 8000))
         host = os.environ.get("HOST", "0.0.0.0")
         print(f"\n{'=' * 60}")
-        print("  INVERSION HELPER — Web App Premium")
+        print("  AXIOM — Autonomous Quantitative Engine")
         print(f"  Abriendo en: http://{host}:{port}")
         print(f"{'=' * 60}\n")
         try:

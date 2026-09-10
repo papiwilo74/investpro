@@ -207,17 +207,17 @@ async def _prewarm_modules():
 
 
 app = FastAPI(
-    title="Inversion Helper API",
+    title="Axiom Quantitative Engine API",
     version="2.0.0",
-    description="API de trading automatizado con análisis técnico, ML y gestión de riesgo.\n\n"
+    description="API de trading cuantitativo automatizado con análisis técnico, ML y gestión de riesgo.\n\n"
     "## Modos de operación\n"
     "- **Broker**: Paper trading con Alpaca, gestión de posiciones y órdenes\n"
     "- **Machine Learning**: Predicción de tendencias, ensemble adaptativo\n"
     "- **Backtest**: Simulación histórica de estrategias\n"
     "- **Análisis**: Indicadores técnicos, señales compuestas\n"
     "- **Advisor**: Asistente online para decisiones de trading",
-    summary="Inversion Helper - Trading bot API",
-    contact={"name": "Inversion Helper", "url": "https://github.com/papiwilo74/investpro"},
+    summary="Axiom - Autonomous Quantitative Trading API",
+    contact={"name": "Axiom", "url": "https://github.com/papiwilo74/investpro"},
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",

@@ -22,8 +22,8 @@ export function Sidebar() {
   return (
     <aside className="sidebar w-full lg:w-[300px] glass border-b-2 lg:border-r-2 border-teal-200/30 dark:border-teal-900/20 p-4 lg:p-6 flex flex-col overflow-y-auto flex-shrink-0 shadow-lg lg:shadow-none">
       <div className="flex items-center gap-3 mb-8">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-teal-600 to-cyan-600 flex items-center justify-center font-extrabold text-white text-lg shadow-lg">I</div>
-        <span className="text-xl font-extrabold tracking-tight font-outfit bg-gradient-to-r from-teal-400 to-cyan-500 bg-clip-text text-transparent drop-shadow-md">InvestPro</span>
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-teal-600 to-cyan-600 flex items-center justify-center font-extrabold text-white text-lg shadow-lg">A</div>
+        <span className="text-xl font-extrabold tracking-tight font-outfit bg-gradient-to-r from-teal-400 to-cyan-500 bg-clip-text text-transparent drop-shadow-md">Axiom</span>
       </div>
 
       {/* Ticker Input */}
@@ -110,7 +110,7 @@ export function Sidebar() {
         >
           {theme === 'light' ? 'Modo Oscuro' : 'Modo Claro'}
         </button>
-        <span className="text-[10px] text-slate-400 font-medium text-center">InvestPro v2.0</span>
+        <span className="text-[10px] text-slate-400 font-medium text-center">Axiom v2.0</span>
       </div>
     </aside>
   );
