@@ -913,7 +913,7 @@ class TradingBot:
 
         scan_result = self.scanner.scan(
             universe="nasdaq100",
-            period="9mo",
+            period="1y",
             interval="1d",
             limit=12,
             include_rejected=False,
@@ -1199,7 +1199,7 @@ class TradingBot:
                 positions = {p["symbol"]: p for p in self.client.get_positions()}
                 self._update_risk_state(equity, positions)
 
-            period = "7d" if self.intraday else ("3mo" if not single_ticker else "9mo")
+            period = "7d" if self.intraday else ("3mo" if not single_ticker else "1y")
             use_intraday = self.intraday
             if single_ticker and interval in ("5m", "15m", "30m", "1h"):
                 use_intraday = True
