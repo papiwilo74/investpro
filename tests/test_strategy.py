@@ -160,7 +160,7 @@ class TestPositionState:
         assert "stop-loss" in reason
 
     def test_should_exit_long_take_profit(self):
-        params = StrategyParams(take_profit_pct=0.10, use_rl_exits=False)
+        params = StrategyParams(take_profit_pct=0.10, use_rl_exits=False, use_trailing_stop=False)
         pos = PositionState(100.0, 2.0, params, side="LONG")
         should, reason = pos.should_exit(111.0)
         assert should is True
@@ -187,7 +187,7 @@ class TestPositionState:
         assert "short stop-loss" in reason
 
     def test_should_exit_short_take_profit(self):
-        params = StrategyParams(short_take_profit_pct=-0.03, use_rl_exits=False)
+        params = StrategyParams(short_take_profit_pct=-0.03, use_rl_exits=False, use_trailing_stop=False)
         pos = PositionState(100.0, 2.0, params, side="SHORT")
         should, reason = pos.should_exit(96.0)
         assert should is True
@@ -825,6 +825,7 @@ class TestTradingBrainExits:
                 use_adaptive_sltp=False,
                 use_contrarian_dip=False,
                 use_partial_take_profit=False,
+                use_trailing_stop=False,
             )
         )
         df = make_frame([100.0, 115.0], {"rsi": [50, 70], "adx": [25, 25], "sma_200": [90.0, 90.0], "atr": [2.0, 2.0]})
@@ -844,7 +845,11 @@ class TestTradingBrainExits:
     def test_exit_short_take_profit(self):
         brain = TradingBrain(
             StrategyParams(
-                use_short_selling=True, short_take_profit_pct=-0.03, use_rl_exits=False, use_contrarian_dip=False
+                use_short_selling=True,
+                short_take_profit_pct=-0.03,
+                use_rl_exits=False,
+                use_contrarian_dip=False,
+                use_trailing_stop=False,
             )
         )
         df = make_frame([100.0, 99.0, 98.0, 97.0, 96.0], {"rsi": [60] * 5, "adx": [25] * 5, "atr": [2.0] * 5})

@@ -35,7 +35,7 @@ def test_strategy_params_allocation():
     params = StrategyParams()
     assert params.crypto_portfolio_target_pct == 0.85
     assert params.stock_portfolio_target_pct == 0.15
-    assert params.crypto_position_size_mult == 1.75
+    assert params.crypto_position_size_mult == 1.0
     assert "BTC/USD" in params.crypto_symbols
     assert "ETH/USD" in params.crypto_symbols
     assert "SOL/USD" in params.crypto_symbols

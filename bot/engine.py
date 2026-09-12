@@ -975,6 +975,54 @@ class TradingBot:
                 positions[sym.replace("/", "")] = p
                 positions[sym.replace("-", "")] = p
 
+            # Actualizar estado de riesgo global con posiciones y equity de crypto
+            self._update_risk_state(equity, positions)
+
+            # ── 1. Circuit Breaker & Límite de Pérdida Diaria en Crypto ──
+            pnl_today = acc.get("pnl_pct_today", 0.0)
+            if not pnl_today and "last_equity" in acc and float(acc.get("last_equity", 0.0)) > 0:
+                last_eq = float(acc["last_equity"])
+                pnl_today = (equity - last_eq) / last_eq
+
+            max_daily_loss = getattr(self._strategy_params, "crypto_daily_max_loss_pct", 0.02)
+            cb_active = False
+            if hasattr(self, "risk_manager") and self.risk_manager:
+                risk_dict = self.risk_manager.to_dict()
+                cb_active = bool(
+                    risk_dict.get("circuit_breaker_active", False)
+                    or risk_dict.get("daily_loss_limit_reached", False)
+                    or risk_dict.get("account_liquidated", False)
+                )
+
+            crypto_buys_blocked = (pnl_today <= -max_daily_loss) or cb_active
+            if crypto_buys_blocked:
+                self._log(
+                    f"CRYPTO RISK GATE: Pérdida diaria ({pnl_today:.2%}) o Circuit Breaker activo. "
+                    f"NUEVAS COMPRAS BLOQUEADAS (solo se gestionan salidas de posiciones abiertas)."
+                )
+
+            # ── 2. Bitcoin Macro Shield (Evita comprar altcoins si BTC se desangra) ──
+            btc_is_bearish = False
+            use_btc_shield = getattr(self._strategy_params, "use_crypto_btc_macro_filter", True)
+            if use_btc_shield:
+                try:
+                    btc_df = self.fetcher.get_data("BTC-USD", period="2mo", interval="1d")
+                    if btc_df is not None and not btc_df.empty and len(btc_df) >= 20:
+                        btc_df = TechnicalIndicators.add_all(btc_df, intraday=False)
+                        btc_df = SignalGenerator.add_signal_columns(btc_df)
+                        btc_score = float(SignalGenerator.composite_score(btc_df))
+                        min_btc_score = getattr(self._strategy_params, "crypto_btc_min_score", -0.10)
+                        if btc_score < min_btc_score:
+                            btc_is_bearish = True
+                            self._log(
+                                f"CRYPTO BTC SHIELD: Bitcoin bajista (score={btc_score:.2f} < {min_btc_score:.2f}). "
+                                f"Compras de altcoins bloqueadas para proteger capital."
+                            )
+                        del btc_df
+                        trim_process_memory()
+                except Exception as btc_err:
+                    logger.debug("Error verificando BTC shield: %s", btc_err)
+
             crypto_list = (
                 list(self._strategy_params.crypto_symbols)
                 if hasattr(self, "_strategy_params") and self._strategy_params.crypto_symbols
@@ -1089,24 +1137,56 @@ class TradingBot:
                     )
 
                     if decision.action == "BUY" and not has_position:
-                        # ── Cooldown post Stop-Loss (Anti-Cuchillo Cayendo) ──
+                        # ── 1. Freno de Emergencia / Circuit Breaker Diario ──
+                        if crypto_buys_blocked:
+                            self._log(
+                                f"CRYPTO RISK GATE {symbol}: Compra ignorada por Circuit Breaker / Límite de Pérdida Diaria"
+                            )
+                            continue
+
                         canonical = symbol.replace("/", "").replace("-", "").upper()
-                        use_cooldown = getattr(self._strategy_params, "use_stop_loss_cooldown", False)
+
+                        # ── 2. Bitcoin Macro Shield (Bloquea altcoins si BTC se desangra) ──
+                        if btc_is_bearish and canonical not in ("BTCUSD", "BTC"):
+                            self._log(
+                                f"CRYPTO BTC SHIELD {symbol}: Compra de altcoin bloqueada por debilidad macro de BTC"
+                            )
+                            continue
+
+                        # ── 3. Umbral Cuantitativo Estricto (Filtra rebotes falsos/ruido) ──
+                        min_crypto_score = getattr(self._strategy_params, "crypto_min_buy_score", 0.22)
+                        if score < min_crypto_score:
+                            self._log(
+                                f"CRYPTO SCORE {symbol}: score {score:.2f} < mínimo requerido {min_crypto_score:.2f} — compra omitida"
+                            )
+                            continue
+
+                        # ── 4. Cooldown post-pérdida (Anti-Cuchillo Cayendo & Anti-Churn) ──
+                        use_cooldown = getattr(self._strategy_params, "use_stop_loss_cooldown", True)
                         if isinstance(use_cooldown, bool) and use_cooldown:
-                            cooldown_sec = getattr(self._strategy_params, "stop_loss_cooldown_seconds", 7200)
+                            cooldown_sec = getattr(self._strategy_params, "stop_loss_cooldown_seconds", 14400)
                             if not isinstance(cooldown_sec, int | float):
-                                cooldown_sec = 7200
+                                cooldown_sec = 14400
                             sl_dict = getattr(self, "_stop_loss_exit_timestamps", {})
                             last_sl = sl_dict.get(canonical, 0.0) if isinstance(sl_dict, dict) else 0.0
                             elapsed = time.time() - last_sl if isinstance(last_sl, int | float) else 999999.0
                             if elapsed < cooldown_sec:
                                 rem_min = int((cooldown_sec - elapsed) // 60)
                                 self._log(
-                                    f"COOLDOWN {symbol}: compra rechazada, enfriamiento post-SL ({rem_min} min restantes)"
+                                    f"COOLDOWN {symbol}: compra rechazada, enfriamiento post-pérdida ({rem_min} min restantes)"
                                 )
                                 continue
 
-                        # ── Mejora 2: Multi-Timeframe (MTF) Sniper Entry ──
+                        # ── 5. Verificación de Entrada con RiskManager Central ──
+                        if hasattr(self, "risk_manager") and self.risk_manager:
+                            max_size_allowed = getattr(self._strategy_params, "crypto_max_position_size_pct", 0.05)
+                            est_amount = min(equity * max_size_allowed, buying_power)
+                            risk_check = self.risk_manager.check_entry(symbol, "BUY", est_amount)
+                            if not risk_check.approved:
+                                self._log(f"CRYPTO RISK GATE {symbol}: rechazada — {', '.join(risk_check.reasons)}")
+                                continue
+
+                        # ── 6. Multi-Timeframe (MTF) Sniper Entry ──
                         use_sniper = getattr(self._strategy_params, "use_crypto_mtf_sniper", True)
                         if isinstance(use_sniper, bool) and use_sniper:
                             max_rsi_1h = getattr(self._strategy_params, "crypto_sniper_max_rsi_1h", 70.0)
@@ -1134,18 +1214,14 @@ class TradingBot:
                                     pass
                                 trim_process_memory()
 
-                        min_crypto_score = max(0.05, self._strategy_params.buy_score_threshold - 0.05)
-                        if score >= min_crypto_score:
-                            atr_val = (
-                                float(df["atr"].iloc[-1])
-                                if "atr" in df.columns and pd.notna(df["atr"].iloc[-1])
-                                else 0.0
-                            )
-                            invested = await self._execute_crypto_buy(
-                                symbol, decision, last_close, equity, buying_power, atr=atr_val
-                            )
-                            if invested > 0:
-                                buying_power -= invested
+                        atr_val = (
+                            float(df["atr"].iloc[-1]) if "atr" in df.columns and pd.notna(df["atr"].iloc[-1]) else 0.0
+                        )
+                        invested = await self._execute_crypto_buy(
+                            symbol, decision, last_close, equity, buying_power, atr=atr_val
+                        )
+                        if invested > 0:
+                            buying_power -= invested
 
                     elif decision.action == "SELL" and has_position:
                         await self._execute_crypto_sell(symbol, decision, position, equity, pnl_pct)
@@ -1378,11 +1454,13 @@ class TradingBot:
         return invested
 
     def _update_risk_state(self, equity: float, positions: dict[str, dict]) -> None:
-        self.risk_controller.update_risk_state(equity, positions)
+        if hasattr(self, "risk_controller") and self.risk_controller is not None:
+            self.risk_controller.update_risk_state(equity, positions)
         # Precargar historial de precios para correlación real (últimos 90 días)
         try:
-            price_history = self._load_price_history_for_correlation(list(positions.keys()))
-            self.risk_manager.set_price_history(price_history)
+            if hasattr(self, "risk_manager") and self.risk_manager is not None:
+                price_history = self._load_price_history_for_correlation(list(positions.keys()))
+                self.risk_manager.set_price_history(price_history)
         except Exception as e:
             logger.warning("No se pudo cargar historial para correlación: %s", e)
 
@@ -1845,19 +1923,20 @@ class TradingBot:
     ) -> float:
         """Ejecuta compra de criptomonedas via CryptoBrokerClient."""
         try:
-            mult = getattr(self._strategy_params, "crypto_position_size_mult", 1.75)
+            mult = getattr(self._strategy_params, "crypto_position_size_mult", 1.0)
             use_vol_parity = getattr(self._strategy_params, "use_crypto_volatility_parity", True)
 
+            max_size = getattr(self._strategy_params, "crypto_max_position_size_pct", 0.05)
+            if not isinstance(max_size, int | float):
+                max_size = 0.05
+
             if isinstance(use_vol_parity, bool) and use_vol_parity and atr > 0 and last_close > 0:
-                target_risk = getattr(self._strategy_params, "crypto_target_risk_per_trade_pct", 0.02)
-                min_size = getattr(self._strategy_params, "crypto_min_position_size_pct", 0.05)
-                max_size = getattr(self._strategy_params, "crypto_max_position_size_pct", 0.25)
+                target_risk = getattr(self._strategy_params, "crypto_target_risk_per_trade_pct", 0.0075)
+                min_size = getattr(self._strategy_params, "crypto_min_position_size_pct", 0.02)
                 if not isinstance(target_risk, int | float):
-                    target_risk = 0.02
+                    target_risk = 0.0075
                 if not isinstance(min_size, int | float):
-                    min_size = 0.05
-                if not isinstance(max_size, int | float):
-                    max_size = 0.25
+                    min_size = 0.02
 
                 atr_pct = atr / last_close
                 pos_size_pct = target_risk / max(0.015, atr_pct)
@@ -1874,15 +1953,15 @@ class TradingBot:
                 pos_size_pct = min(max_size, max(min_size, pos_size_pct * kelly_mult))
                 self._log(
                     f"CRYPTO VOL PARITY {symbol}: ATR%={atr_pct*100:.1f}%, Target Risk={target_risk*100:.1f}%, "
-                    f"Kelly={kelly_mult:.2f}x -> Sizing={pos_size_pct*100:.1f}%"
+                    f"Kelly={kelly_mult:.2f}x -> Sizing={pos_size_pct*100:.1f}% (límite seguro 5%)"
                 )
             else:
-                base_pct = getattr(decision, "position_size_pct", 0.15)
+                base_pct = getattr(decision, "position_size_pct", 0.03)
                 if not isinstance(base_pct, int | float):
-                    base_pct = 0.15
+                    base_pct = 0.03
                 if not isinstance(mult, int | float):
-                    mult = 1.75
-                pos_size_pct = base_pct * mult
+                    mult = 1.0
+                pos_size_pct = min(max_size, base_pct * mult)
 
             invest_amount = min(equity * pos_size_pct, buying_power)
 
@@ -1934,16 +2013,34 @@ class TradingBot:
             result = self.crypto_client.place_market_order(symbol, qty, "SELL")
             if result.get("status") == "success":
                 notifier.new_crypto_sell(symbol, qty, current_price, pnl_pct, decision.reason)
-                self._log(f"CRYPTO SELL EXITOSO: {symbol} {qty} @ ${current_price:,.2f}")
+                self._log(f"CRYPTO SELL EXITOSO: {symbol} {qty} @ ${current_price:,.2f} | pnl={pnl_pct:.2%}")
                 reason_lower = getattr(decision, "reason", "").lower()
-                if "stop-loss" in reason_lower or "stop loss" in reason_lower or "emergency" in reason_lower:
+
+                # ── Cooldown tras cualquier salida con pérdida o SL (Anti-Churn & Anti-Falling-Knife) ──
+                if (
+                    pnl_pct < 0
+                    or "stop-loss" in reason_lower
+                    or "stop loss" in reason_lower
+                    or "emergency" in reason_lower
+                ):
                     canonical = symbol.replace("/", "").replace("-", "").upper()
                     if not hasattr(self, "_stop_loss_exit_timestamps") or not isinstance(
                         self._stop_loss_exit_timestamps, dict
                     ):
                         self._stop_loss_exit_timestamps = {}
                     self._stop_loss_exit_timestamps[canonical] = time.time()
-                    self._log(f"COOLDOWN: {symbol} entró en período de enfriamiento post-SL")
+                    cooldown_h = getattr(self._strategy_params, "stop_loss_cooldown_seconds", 14400) // 3600
+                    self._log(f"COOLDOWN: {symbol} entró en período de enfriamiento post-pérdida ({cooldown_h}h)")
+
+                # ── Registrar trade en RiskManager para telemetría y Circuit Breakers globales ──
+                cost_basis = float(position.get("cost_basis", 0.0))
+                market_val = float(position.get("market_value", 0.0))
+                pnl_usd = market_val - cost_basis if cost_basis > 0 else (qty * current_price * pnl_pct)
+                if hasattr(self, "risk_manager") and self.risk_manager is not None:
+                    try:
+                        self.risk_manager.record_trade(symbol, "SELL", pnl_pct, pnl_usd)
+                    except Exception as exc:
+                        logger.warning("Error registrando trade crypto en RiskManager: %s", exc)
             else:
                 self._log(f"CRYPTO SELL FALLO: {symbol} - {result.get('msg', 'error desconocido')}")
 

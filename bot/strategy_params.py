@@ -16,7 +16,7 @@ class StrategyParams:
     # ── Distribución de Portafolio (85% Crypto / 15% Acciones) ───────
     crypto_portfolio_target_pct: float = 0.85
     stock_portfolio_target_pct: float = 0.15
-    crypto_position_size_mult: float = 1.75
+    crypto_position_size_mult: float = 1.0
 
     # ── Optimización para Render (512 MB RAM) & Neon DB ────────────
     render_low_memory_mode: bool = True
@@ -174,8 +174,8 @@ class StrategyParams:
     adaptive_sltp_atr_mult_stop_bear: float = 1.5
     adaptive_sltp_atr_mult_tp: float = 3.5
     adaptive_sltp_vol_lookback: int = 20
-    adaptive_sltp_min_stop_pct: float = -0.02
-    adaptive_sltp_max_stop_pct: float = -0.12
+    adaptive_sltp_min_stop_pct: float = -0.04
+    adaptive_sltp_max_stop_pct: float = -0.08
     adaptive_sltp_min_tp_pct: float = 0.03
     adaptive_sltp_max_tp_pct: float = 0.45
 
@@ -188,9 +188,9 @@ class StrategyParams:
     breakeven_trigger_pct: float = 0.025  # Se activa al +2.5% de ganancia
     breakeven_offset_pct: float = 0.003  # Cierra en +0.3% para asegurar $0 de pérdida neta
 
-    # ── Stop-Loss Cooldown (Anti-Cuchillo Cayendo) ─────────────────
+    # ── Stop-Loss Cooldown (Anti-Cuchillo Cayendo & Anti-Churn) ─────
     use_stop_loss_cooldown: bool = True
-    stop_loss_cooldown_seconds: int = 7200  # 2 horas de enfriamiento tras SL
+    stop_loss_cooldown_seconds: int = 14400  # 4 horas de enfriamiento tras salida con pérdida
 
     # ── Filtro de Volumen Institucional (Volume Surge) ────────────
     use_volume_surge_filter: bool = True
@@ -215,13 +215,19 @@ class StrategyParams:
     use_crypto_mtf_sniper: bool = True
     crypto_sniper_max_rsi_1h: float = 70.0
 
-    # ── Crypto Volatility Parity Sizing ───────────────────────────
+    # ── Crypto Volatility Parity Sizing (Blindado a 5% max) ─────────
     use_crypto_volatility_parity: bool = True
-    crypto_target_risk_per_trade_pct: float = 0.02  # Arriesga el 2% de equity normalizado por ATR%
-    crypto_min_position_size_pct: float = 0.05
-    crypto_max_position_size_pct: float = 0.25
+    crypto_target_risk_per_trade_pct: float = 0.0075  # Arriesga el 0.75% de equity normalizado por ATR%
+    crypto_min_position_size_pct: float = 0.02  # 2% mínimo
+    crypto_max_position_size_pct: float = 0.05  # 5% máximo ($5k en cuenta de $100k, previene slippage)
 
     # ── Crypto Pairs Arbitrage (Statistical Arbitrage) ─────────────
     use_crypto_pairs_arbitrage: bool = True
     crypto_pairs_zscore_entry: float = -1.75  # Desviación para considerar rezagado al activo A
     crypto_pairs_score_boost: float = 0.08  # Impulso de score para el activo infravalorado
+
+    # ── Crypto Protecciones y Circuit Breaker Diario ──────────────
+    crypto_min_buy_score: float = 0.22  # Exige score cuantitativo sólido (filtra rebotes falsos/ruido)
+    crypto_daily_max_loss_pct: float = 0.02  # Freno de emergencia: congela compras si la cartera cae >= 2% en el día
+    use_crypto_btc_macro_filter: bool = True  # Bloquea compras de altcoins si Bitcoin está en caída libre
+    crypto_btc_min_score: float = -0.10  # Score mínimo de Bitcoin requerido para operar altcoins

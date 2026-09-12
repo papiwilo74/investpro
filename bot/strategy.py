@@ -181,8 +181,10 @@ class TradingBrain:
             except Exception:
                 pass
 
-        # Aplicar límites absolutos
-        stop_pct = max(p.adaptive_sltp_min_stop_pct, min(p.adaptive_sltp_max_stop_pct, stop_pct))
+        # Aplicar límites absolutos respetando números negativos
+        lower_stop = min(p.adaptive_sltp_min_stop_pct, p.adaptive_sltp_max_stop_pct)
+        upper_stop = max(p.adaptive_sltp_min_stop_pct, p.adaptive_sltp_max_stop_pct)
+        stop_pct = max(lower_stop, min(upper_stop, stop_pct))
         tp_pct = max(p.adaptive_sltp_min_tp_pct, min(p.adaptive_sltp_max_tp_pct, tp_pct))
 
         return stop_pct, tp_pct

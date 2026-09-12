@@ -96,6 +96,8 @@ async def test_crypto_volatility_parity_sizing():
     # 3. Si se desactiva volatility parity, usa el sizing base fijo
     bot._strategy_params = StrategyParams(
         use_crypto_volatility_parity=False,
+        crypto_position_size_mult=1.75,
+        crypto_max_position_size_pct=0.30,
     )
     # base_pct 0.15 * mult 1.75 = 26.25% de equity ($2,625)
     invested_legacy = await bot._execute_crypto_buy(
