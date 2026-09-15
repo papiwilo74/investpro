@@ -983,6 +983,8 @@ class TradingBot:
             if not pnl_today and "last_equity" in acc and float(acc.get("last_equity", 0.0)) > 0:
                 last_eq = float(acc["last_equity"])
                 pnl_today = (equity - last_eq) / last_eq
+            if abs(pnl_today) > 1.0:
+                pnl_today = pnl_today / 100.0
 
             max_daily_loss = getattr(self._strategy_params, "crypto_daily_max_loss_pct", 0.02)
             cb_active = False

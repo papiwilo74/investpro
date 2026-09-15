@@ -84,12 +84,17 @@ class CryptoBrokerClient(BaseBrokerClient):
         if self.client:
             try:
                 acc = self.client.get_account()
+                equity = float(acc.equity)
+                last_equity = float(acc.last_equity)
+                pnl = equity - last_equity
+                pnl_pct = (pnl / last_equity) if last_equity > 0 else 0.0
                 return {
-                    "equity": float(acc.equity),
+                    "equity": equity,
                     "cash": float(acc.cash),
                     "buying_power": float(acc.buying_power),
-                    "pnl_today": float(acc.equity) - float(acc.last_equity),
-                    "pnl_pct_today": 0.0,
+                    "last_equity": last_equity,
+                    "pnl_today": pnl,
+                    "pnl_pct_today": pnl_pct,
                     "status": acc.status,
                 }
             except Exception as e:
