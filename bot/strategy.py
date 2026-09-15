@@ -295,8 +295,22 @@ class TradingBrain:
             pos = PositionState(est_entry, current_atr, self.params, side=position_side)
             pos.update_extremes(close, current_atr=current_atr)
             self._positions[ticker_key] = pos
-
         p = self.params
+
+        # ── HOLD MANUAL / PROTECCIÓN DE POSICIONES EN RECUPERACIÓN ──
+        if ticker and hasattr(self.params, "is_symbol_in_manual_hold") and self.params.is_symbol_in_manual_hold(ticker):
+            if has_position:
+                return Decision(
+                    "HOLD",
+                    f"HOLD manual activo para {ticker} (esperando recuperación)",
+                    confidence=1.0,
+                )
+            else:
+                return Decision(
+                    "HOLD",
+                    f"Símbolo {ticker} en HOLD manual (nuevas entradas bloqueadas)",
+                    confidence=0.0,
+                )
 
         # ── FILTRO OBLIGATORIO DE RÉGIMEN Y TENDENCIA SEMANAL ──────────
         # Evita operar en chop/bear donde la mayoría de estrategias fallan

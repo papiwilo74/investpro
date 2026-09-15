@@ -231,3 +231,23 @@ class StrategyParams:
     crypto_daily_max_loss_pct: float = 0.02  # Freno de emergencia: congela compras si la cartera cae >= 2% en el día
     use_crypto_btc_macro_filter: bool = True  # Bloquea compras de altcoins si Bitcoin está en caída libre
     crypto_btc_min_score: float = -0.10  # Score mínimo de Bitcoin requerido para operar altcoins
+
+    # ── Posiciones en HOLD Manual (Protección y recuperación) ──────
+    manual_hold_symbols: tuple[str, ...] = (
+        "DOT/USD",
+        "DOTUSD",
+    )  # Activos que el usuario decide no vender para esperar recuperación
+
+    def is_symbol_in_manual_hold(self, symbol: str) -> bool:
+        """Verifica si un símbolo está en la lista de HOLD manual o en MANUAL_HOLD_SYMBOLS env."""
+        import os
+
+        target = symbol.replace("/", "").replace("-", "").upper()
+        holds = {s.replace("/", "").replace("-", "").upper() for s in self.manual_hold_symbols}
+        env_holds = os.getenv("MANUAL_HOLD_SYMBOLS", "")
+        if env_holds:
+            for s in env_holds.split(","):
+                clean = s.strip().replace("/", "").replace("-", "").upper()
+                if clean:
+                    holds.add(clean)
+        return target in holds

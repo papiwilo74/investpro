@@ -287,6 +287,11 @@ class SignalExecutor:
         equity: float,
         pnl_pct: float,
     ) -> None:
+        if hasattr(self._brain, "params") and hasattr(self._brain.params, "is_symbol_in_manual_hold"):
+            if self._brain.params.is_symbol_in_manual_hold(ticker):
+                logger.info("HOLD %s: Venta omitida por HOLD manual (esperando recuperación).", ticker)
+                return
+
         qty = int(position.get("qty", 0))
         if decision.partial_exit_fraction > 0:
             qty = max(1, int(qty * decision.partial_exit_fraction))

@@ -1226,6 +1226,11 @@ class TradingBot:
                             buying_power -= invested
 
                     elif decision.action == "SELL" and has_position:
+                        if hasattr(
+                            self._strategy_params, "is_symbol_in_manual_hold"
+                        ) and self._strategy_params.is_symbol_in_manual_hold(symbol):
+                            self._log(f"CRYPTO HOLD {symbol}: Venta omitida por HOLD manual (esperando recuperación).")
+                            continue
                         await self._execute_crypto_sell(symbol, decision, position, equity, pnl_pct)
 
                 except Exception as e:

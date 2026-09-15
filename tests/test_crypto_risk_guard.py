@@ -149,3 +149,21 @@ async def test_crypto_loss_exit_triggers_4h_cooldown_and_risk_manager():
     assert "AVAXUSD" in bot._stop_loss_exit_timestamps
     assert time.time() - bot._stop_loss_exit_timestamps["AVAXUSD"] < 2.0
     bot.risk_manager.record_trade.assert_called_once_with("AVAX/USD", "SELL", -0.0355, -27.0)
+
+
+def test_manual_hold_symbol_protection():
+    """Verifica que los símbolos marcados en manual_hold_symbols retornen HOLD y no se vendan."""
+    params = StrategyParams(manual_hold_symbols=("DOT/USD", "DOTUSD"))
+    assert params.is_symbol_in_manual_hold("DOT/USD")
+    assert params.is_symbol_in_manual_hold("DOT-USD")
+    assert params.is_symbol_in_manual_hold("DOTUSD")
+    assert not params.is_symbol_in_manual_hold("BTC/USD")
+
+    # Verificar que el cerebro retorne HOLD incluso ante stop-loss severo
+    brain = TradingBrain(params)
+    dates = pd.date_range("2026-01-01", periods=10, freq="D")
+    df = pd.DataFrame({"close": [1.0] * 10, "atr": [0.05] * 10, "rsi": [30.0] * 10}, index=dates)
+
+    decision = brain.decide(df=df, score=-0.50, has_position=True, position_pnl_pct=-0.15, ticker="DOT-USD")
+    assert decision.action == "HOLD"
+    assert "HOLD manual activo" in decision.reason
