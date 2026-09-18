@@ -925,6 +925,14 @@ class TradingBot:
             self._log("Scanner sin oportunidades; usando watchlist de respaldo.")
             scan_tickers = WATCHLIST[:12]
 
+        # ── Asegurar que todas las posiciones de acciones abiertas se evalúen siempre ──
+        open_stock_tickers = [
+            p_sym for p_sym in positions.keys() if p_sym and not p_sym.endswith("USD") and "/" not in p_sym
+        ]
+        for ost in open_stock_tickers:
+            if ost not in scan_tickers:
+                scan_tickers.insert(0, ost)
+
         # ── Portfolio Allocator: pesos objetivo por risk-parity ──────
         target_allocations: dict[str, float] = {}
         if self.portfolio_allocator is not None and equity > 0:

@@ -13,9 +13,9 @@ from dataclasses import dataclass
 class StrategyParams:
     """Parámetros inmutables que controlan el comportamiento del motor de decisiones."""
 
-    # ── Distribución de Portafolio (85% Crypto / 15% Acciones) ───────
-    crypto_portfolio_target_pct: float = 0.85
-    stock_portfolio_target_pct: float = 0.15
+    # ── Distribución de Portafolio (60% Crypto / 40% Acciones) ───────
+    crypto_portfolio_target_pct: float = 0.60
+    stock_portfolio_target_pct: float = 0.40
     crypto_position_size_mult: float = 1.0
 
     # ── Optimización para Render (512 MB RAM) & Neon DB ────────────
