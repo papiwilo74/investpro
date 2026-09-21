@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from api.auth import register_auth_routes
 from api.metrics import metrics_endpoint
 from api.middleware import add_error_handlers, add_rate_limiting_middleware, add_security_headers_middleware
-from api.routes import advisor, analysis, backtest, broker, market, ml, portfolio
+from api.routes import advisor, analysis, backtest, broker, llm, market, ml, portfolio
 from api.schemas import (
     ConfigFlagsResponse,
     PerformanceLiveResponse,
@@ -267,6 +267,7 @@ app.include_router(backtest.router, prefix="/api/backtest", tags=["Backtest"])
 app.include_router(portfolio.router, prefix="/api/portfolio", tags=["Portfolio"])
 app.include_router(ml.router, prefix="/api/ml", tags=["Machine Learning"])
 app.include_router(advisor.router, prefix="/api/advisor", tags=["Advisor"])
+app.include_router(llm.router, prefix="/api/llm", tags=["LLM Copilot"])
 app.include_router(broker.router, prefix="/api/broker", tags=["Broker"])
 app.include_router(broker.public_router, prefix="/api/broker", tags=["Broker Public"])
 

@@ -157,6 +157,11 @@ class Settings(BaseSettings):
     CC_MIN_CHALLENGER_ACCURACY: float = 0.52
     CC_MAX_AGE_DAYS: int = 14
     CC_DRIFT_FLOOR: float = 0.45
+    # ── Local LLM (Ollama) ─────────────────────────────────────────────
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.1:8b"
+    OLLAMA_TIMEOUT: float = 30.0
+    OLLAMA_ENABLED: bool = True
 
     # ── Derived properties ─────────────────────────────────────────────
 

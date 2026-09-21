@@ -299,3 +299,58 @@ class AdvisorStatusResponse(BaseModel):
     value_added_pct: float | None = None
     performance: dict[str, Any] | None = None
     recent_trades: list[dict[str, Any]] = []
+
+
+# ── LLM Copilot & Explainer ──────────────────────────────────────────
+
+
+class LLMStatusResponse(BaseModel):
+    available: bool = False
+    base_url: str = "http://localhost:11434"
+    model: str = "llama3.1:8b"
+    models_available: list[str] = []
+    engine: str = "Ollama Local (RTX 4060)"
+    fallback_active: bool = False
+    message: str = ""
+
+
+class LLMExplainRequest(BaseModel):
+    period: str = "1y"
+    interval: str = "1d"
+    custom_question: str | None = None
+
+
+class LLMExplainResponse(BaseModel):
+    ticker: str
+    verdict: str = "HOLD"
+    source: str = "rule_based_fallback"
+    explanation: str = ""
+    key_factors: list[str] = []
+    confidence_level: str = "MEDIUM"
+    metrics_summary: dict[str, Any] = {}
+    timestamp: str = ""
+
+
+class LLMPortfolioExplainResponse(BaseModel):
+    verdict: str = "NEUTRAL"
+    source: str = "rule_based_fallback"
+    explanation: str = ""
+    allocation_status: str = "BALANCED"
+    total_equity: float = 0.0
+    cash_ratio_pct: float = 0.0
+    positions_count: int = 0
+    hedging_active: bool = False
+    key_takeaways: list[str] = []
+    timestamp: str = ""
+
+
+class LLMChatRequest(BaseModel):
+    query: str
+    ticker: str | None = None
+
+
+class LLMChatResponse(BaseModel):
+    query: str
+    response: str
+    source: str
+    timestamp: str = ""
