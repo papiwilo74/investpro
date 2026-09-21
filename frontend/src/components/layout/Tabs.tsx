@@ -4,6 +4,7 @@ import { useAppStore } from '@/store/appStore';
 import { tabs } from '@/store/appStore';
 
 const tabLabels: Record<string, string> = {
+  copilot: '🤖 Copilot IA',
   advisor: 'Asesor',
   chart: 'Gráfico',
   signals: 'Señales',

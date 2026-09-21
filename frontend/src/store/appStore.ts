@@ -30,7 +30,7 @@ interface AppState {
 }
 
 const TABS = [
-  'advisor', 'chart', 'signals', 'backtest',
+  'copilot', 'advisor', 'chart', 'signals', 'backtest',
   'validation', 'portfolio', 'ml', 'news', 'broker'
 ] as const;
 

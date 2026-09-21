@@ -46,7 +46,8 @@ class TestAxiomLLMExplainer:
             "sma_200": 140.0,
             "atr": 3.0,
         }
-        res = await llm_explainer.explain_symbol_setup(
+        offline_explainer = AxiomLLMExplainer(base_url="http://localhost:19999", timeout=0.5)
+        res = await offline_explainer.explain_symbol_setup(
             ticker="AAPL",
             price=155.0,
             composite_score=0.45,
@@ -73,7 +74,8 @@ class TestAxiomLLMExplainer:
             "sma_200": 115.0,
             "atr": 4.0,
         }
-        res = await llm_explainer.explain_symbol_setup(
+        offline_explainer = AxiomLLMExplainer(base_url="http://localhost:19999", timeout=0.5)
+        res = await offline_explainer.explain_symbol_setup(
             ticker="TSLA",
             price=98.0,
             composite_score=-0.40,

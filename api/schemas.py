@@ -344,9 +344,15 @@ class LLMPortfolioExplainResponse(BaseModel):
     timestamp: str = ""
 
 
+class ChatMessageItem(BaseModel):
+    role: str = "user"
+    content: str = ""
+
+
 class LLMChatRequest(BaseModel):
     query: str
     ticker: str | None = None
+    history: list[ChatMessageItem] = []
 
 
 class LLMChatResponse(BaseModel):

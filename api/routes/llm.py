@@ -184,9 +184,11 @@ async def chat_with_copilot(req: LLMChatRequest) -> dict[str, Any]:
     except Exception:
         pass
 
+    history_dicts = [{"role": h.role, "content": h.content} for h in req.history]
     result = await llm_explainer.chat_copilot(
         query=req.query,
         ticker=req.ticker,
         context=context,
+        history=history_dicts,
     )
     return sanitize_for_json(result)

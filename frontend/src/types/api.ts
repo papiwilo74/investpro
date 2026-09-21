@@ -493,3 +493,49 @@ export interface RiskStatusResponse {
     odds_ratio: number;
   };
 }
+
+export interface LLMStatusResponse {
+  available: boolean;
+  base_url: string;
+  model: string;
+  models_available: string[];
+  engine: string;
+  fallback_active: boolean;
+  message: string;
+}
+
+export interface LLMExplainResponse {
+  ticker: string;
+  verdict: string;
+  source: string;
+  explanation: string;
+  key_factors: string[];
+  confidence_level: string;
+  metrics_summary: Record<string, any>;
+  timestamp: string;
+}
+
+export interface LLMPortfolioExplainResponse {
+  verdict: string;
+  source: string;
+  explanation: string;
+  allocation_status: string;
+  total_equity: number;
+  cash_ratio_pct: number;
+  positions_count: number;
+  hedging_active: boolean;
+  key_takeaways: string[];
+  timestamp: string;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+export interface LLMChatResponse {
+  query: string;
+  response: string;
+  source: string;
+  timestamp: string;
+}

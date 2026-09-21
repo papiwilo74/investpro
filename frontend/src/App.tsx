@@ -8,6 +8,7 @@ import { Header } from '@/components/layout/Header';
 import { Tabs } from '@/components/layout/Tabs';
 import { Components } from '@/components/ui/Components';
 
+const CopilotPanel = lazy(() => import('@/components/panels/CopilotPanel').then(m => ({ default: m.CopilotPanel })));
 const AdvisorPanel = lazy(() => import('@/components/panels/AdvisorPanel').then(m => ({ default: m.AdvisorPanel })));
 const ChartPanel = lazy(() => import('@/components/panels/ChartPanel').then(m => ({ default: m.ChartPanel })));
 const SignalsPanel = lazy(() => import('@/components/panels/SignalsPanel').then(m => ({ default: m.SignalsPanel })));
@@ -21,6 +22,7 @@ const BrokerPanel = lazy(() => import('@/components/panels/BrokerPanel').then(m 
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const panels: Record<string, React.LazyExoticComponent<React.ComponentType<any>>> = {
+  copilot: CopilotPanel,
   advisor: AdvisorPanel,
   chart: ChartPanel,
   signals: SignalsPanel,
@@ -102,7 +104,7 @@ export function App() {
     };
   }, []);
 
-  const ActivePanel = panels[activeTab as keyof typeof panels] || panels.advisor;
+  const ActivePanel = panels[activeTab as keyof typeof panels] || panels.copilot;
 
   return (
     <div className="min-h-screen w-full flex flex-col lg:flex-row bg-slate-50 dark:bg-slate-950 transition-colors duration-300">

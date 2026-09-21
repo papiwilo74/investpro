@@ -494,27 +494,43 @@ Continuar con la ejecución programada de la estrategia de rebalanceo, mantenien
         query: str,
         ticker: str | None = None,
         context: dict[str, Any] | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
-        """Responde preguntas libres en lenguaje natural sobre el sistema y el mercado."""
+        """Responde preguntas libres en lenguaje natural sobre el sistema y el mercado con memoria conversacional."""
         now_iso = datetime.datetime.now(datetime.UTC).isoformat()
         context = context or {}
+        history = history or []
 
         status = await self.check_availability()
         if status.get("available") and not status.get("fallback_active"):
             try:
                 system_prompt = (
-                    "Eres el Copiloto Cuantitativo de Axiom (InvestPro). "
-                    "Responde a la pregunta del usuario con claridad, autoridad técnica y concisión en español. "
-                    f"Contexto del sistema: {context}"
+                    "Eres el Copiloto Cuantitativo y Asistente Personal de Inversiones de Axiom (InvestPro). "
+                    "Tu rol es interactuar de manera amigable, técnica, analítica y directa en español con el usuario. "
+                    "Tienes acceso en tiempo real a los balances, posiciones y telemetría de trading del fondo. "
+                    f"Contexto del sistema en tiempo real: {context}. "
+                    "Responde con formato enriquecido en Markdown cuando sea apropiado (listas, negrita, viñetas)."
                 )
+                formatted_history = []
+                for msg in history[-8:]:  # mantener los últimos 8 turnos de contexto
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    if role in ("user", "assistant") and content:
+                        formatted_history.append({"role": role, "content": content})
+
+                user_prompt = f"Activo enfocado: {ticker}\nPregunta: {query}" if ticker else query
+
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    *formatted_history,
+                    {"role": "user", "content": user_prompt},
+                ]
+
                 payload = {
                     "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"Activo: {ticker or 'General'}\nPregunta: {query}"},
-                    ],
+                    "messages": messages,
                     "stream": False,
-                    "options": {"temperature": 0.3},
+                    "options": {"temperature": 0.35, "top_p": 0.9},
                 }
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     res = await client.post(f"{self.base_url}/api/chat", json=payload)

@@ -25,6 +25,11 @@ import type {
   KellyStatsResponse,
   MLModelsStatusResponse,
   RiskStatusResponse,
+  LLMStatusResponse,
+  LLMExplainResponse,
+  LLMPortfolioExplainResponse,
+  ChatMessage,
+  LLMChatResponse,
 } from '../types/api';
 
 class ApiClient {
@@ -253,6 +258,27 @@ class ApiClient {
 
   getRiskStatus() {
     return this.fetchJson<RiskStatusResponse>('/api/broker/risk');
+  }
+
+  getLLMStatus() {
+    return this.fetchJson<LLMStatusResponse>('/api/llm/status');
+  }
+
+  getLLMExplain(ticker: string, period = '1y', interval = '1d') {
+    return this.fetchJson<LLMExplainResponse>(
+      `/api/llm/explain/${encodeURIComponent(ticker)}?period=${period}&interval=${interval}`
+    );
+  }
+
+  getLLMPortfolioExplain() {
+    return this.fetchJson<LLMPortfolioExplainResponse>('/api/llm/explain-portfolio');
+  }
+
+  chatCopilot(query: string, ticker?: string, history?: ChatMessage[]) {
+    return this.fetchJson<LLMChatResponse>('/api/llm/chat', {
+      method: 'POST',
+      body: JSON.stringify({ query, ticker: ticker || null, history: history || [] }),
+    });
   }
 }
 
