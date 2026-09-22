@@ -70,7 +70,7 @@ class StrategyParams:
     atr_risk_pct: float = 0.02
     min_ml_buy_probability: float = 0.52
     require_price_above_sma200: bool = False
-    max_buy_rsi: float = 75.0
+    max_buy_rsi: float = 80.0
     use_ml_filter: bool = False
     use_donchian_breakout: bool = True
 
@@ -132,7 +132,7 @@ class StrategyParams:
     # ── Confirmación de velas ──────────────────────────────────────
     use_confirmation_filter: bool = True
     confirmation_bars: int = 10
-    confirmation_min_ratio: float = 0.6
+    confirmation_min_ratio: float = 0.4
 
     # Suavizado de señal
     signal_smoothing_periods: int = 3
@@ -213,7 +213,7 @@ class StrategyParams:
 
     # ── Crypto Multi-Timeframe Sniper (1D Macro + 1H Timing) ───────
     use_crypto_mtf_sniper: bool = True
-    crypto_sniper_max_rsi_1h: float = 70.0
+    crypto_sniper_max_rsi_1h: float = 78.0
 
     # ── Crypto Volatility Parity Sizing (Blindado a 5% max) ─────────
     use_crypto_volatility_parity: bool = True

@@ -69,7 +69,7 @@ class AdaptiveThresholdManager:
             p_dict["buy_score_threshold"] = min(0.15, base_params.buy_score_threshold * 0.8)  # Entrar temprano
             p_dict["take_profit_pct"] = max(0.20, base_params.take_profit_pct * 1.3)  # Dejar correr ganadores
             p_dict["trailing_stop_atr_mult"] = max(3.0, base_params.trailing_stop_atr_mult * 1.2)
-            p_dict["max_buy_rsi"] = 78.0  # Permitir impulsos fuertes de momentum
+            p_dict["max_buy_rsi"] = 82.0  # Permitir impulsos fuertes de momentum
 
         # 3. Mercado Bajista (BEAR trend)
         elif spy_trend == "BEAR":

@@ -542,18 +542,25 @@ class RiskManager:
             return False, f"VaR excedido ({var:.2%} ≤ {self.config.max_var_daily_pct:.2%})"
         return True, f"VaR OK ({var:.2%})"
 
+    def _get_sector(self, symbol: str) -> str:
+        clean = symbol.upper().strip()
+        if "/" in clean or ("USD" in clean and not clean.startswith("SH")):
+            return "crypto"
+        return SECTOR_MAP.get(clean, "other")
+
     def _check_sector_exposure(self, ticker: str) -> tuple[bool, str]:
-        sector = SECTOR_MAP.get(ticker.upper(), "other")
+        sector = self._get_sector(ticker)
         current_sector_value = 0.0
         for pos in self._positions_cache:
-            pos_sector = SECTOR_MAP.get(pos.get("symbol", ""), "other")
+            pos_sector = self._get_sector(pos.get("symbol", ""))
             if pos_sector == sector:
                 current_sector_value += float(pos.get("market_value", 0))
         new_exposure = (current_sector_value / self._portfolio_value) if self._portfolio_value > 0 else 0
-        if new_exposure >= self.config.max_sector_exposure_pct:
+        sector_limit = 0.60 if sector == "crypto" else self.config.max_sector_exposure_pct
+        if new_exposure >= sector_limit:
             return (
                 False,
-                f"Exposición sectorial ({sector}) excedida: {new_exposure:.1%} ≥ {self.config.max_sector_exposure_pct:.0%}",
+                f"Exposición sectorial ({sector}) excedida: {new_exposure:.1%} ≥ {sector_limit:.0%}",
             )
         return True, f"Exposición sector {sector}: {new_exposure:.1%}"
 
