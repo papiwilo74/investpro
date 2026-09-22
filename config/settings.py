@@ -160,7 +160,7 @@ class Settings(BaseSettings):
     # ── Local LLM (Ollama) ─────────────────────────────────────────────
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.1:8b"
-    OLLAMA_TIMEOUT: float = 30.0
+    OLLAMA_TIMEOUT: float = 90.0
     OLLAMA_ENABLED: bool = True
 
     # ── Derived properties ─────────────────────────────────────────────
