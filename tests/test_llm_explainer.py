@@ -10,8 +10,8 @@ from bot.llm_explainer import AxiomLLMExplainer, llm_explainer
 class TestAxiomLLMExplainer:
     @pytest.mark.asyncio
     async def test_explainer_offline_status(self):
-        """Si Ollama está apagado, check_availability() debe reportar fallback sin lanzar excepción."""
-        explainer = AxiomLLMExplainer(base_url="http://localhost:19999", timeout=1.0)
+        """Si Ollama está apagado y no hay cloud key, check_availability() debe reportar fallback."""
+        explainer = AxiomLLMExplainer(base_url="http://localhost:19999", cloud_api_key="", timeout=1.0)
         status = await explainer.check_availability()
         assert status["available"] is False
         assert status["fallback_active"] is True
@@ -46,7 +46,7 @@ class TestAxiomLLMExplainer:
             "sma_200": 140.0,
             "atr": 3.0,
         }
-        offline_explainer = AxiomLLMExplainer(base_url="http://localhost:19999", timeout=0.5)
+        offline_explainer = AxiomLLMExplainer(base_url="http://localhost:19999", cloud_api_key="", timeout=0.5)
         res = await offline_explainer.explain_symbol_setup(
             ticker="AAPL",
             price=155.0,
@@ -74,7 +74,7 @@ class TestAxiomLLMExplainer:
             "sma_200": 115.0,
             "atr": 4.0,
         }
-        offline_explainer = AxiomLLMExplainer(base_url="http://localhost:19999", timeout=0.5)
+        offline_explainer = AxiomLLMExplainer(base_url="http://localhost:19999", cloud_api_key="", timeout=0.5)
         res = await offline_explainer.explain_symbol_setup(
             ticker="TSLA",
             price=98.0,
@@ -184,7 +184,7 @@ class TestAxiomLLMExplainer:
                 indicators=indicators,
             )
             assert res["ticker"] == "ETH/USD"
-            assert res["source"] == "cloud:llama-3.1-8b-instant"
+            assert res["source"] == f"cloud:{explainer.cloud_model}"
             assert res["verdict"] == "BUY"
             assert "COMPRA RECOMENDADA" in res["explanation"]
 
@@ -214,7 +214,7 @@ class TestAxiomLLMExplainer:
                 priority="local_first",
             )
             res = await explainer.chat_copilot(query="¿Cuál es el sesgo de hoy?")
-            assert res["source"] == "cloud:llama-3.1-8b-instant"
+            assert res["source"] == f"cloud:{explainer.cloud_model}"
             assert "CAUTELA" in res["response"]
 
     @pytest.mark.asyncio
@@ -245,7 +245,7 @@ class TestAxiomLLMExplainer:
             flags=re.UNICODE,
         )
 
-        explainer = AxiomLLMExplainer(base_url="http://localhost:19999", timeout=0.5)
+        explainer = AxiomLLMExplainer(base_url="http://localhost:19999", cloud_api_key="", timeout=0.5)
         # Portafolio fallback
         account = {"equity": 100_000.0, "cash": 35_000.0}
         positions = [{"symbol": "BTC/USD", "market_value": 40_000.0, "unrealized_pl": 2000.0}]
@@ -259,7 +259,7 @@ class TestAxiomLLMExplainer:
     @pytest.mark.asyncio
     async def test_copilot_chat_fallback(self):
         """Verifica que el chat responda amigablemente aun sin Ollama."""
-        explainer = AxiomLLMExplainer(base_url="http://localhost:19999", timeout=1.0)
+        explainer = AxiomLLMExplainer(base_url="http://localhost:19999", cloud_api_key="", timeout=1.0)
         res = await explainer.chat_copilot(query="¿Por qué no has comprado hoy?")
         assert res["source"] == "rule_based_fallback"
         assert "Copiloto Axiom" in res["response"]

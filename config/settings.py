@@ -168,7 +168,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     CLOUD_LLM_API_KEY: str = ""
     CLOUD_LLM_BASE_URL: str = "https://api.groq.com/openai/v1"
-    CLOUD_LLM_MODEL: str = "llama-3.1-8b-instant"
+    CLOUD_LLM_MODEL: str = "qwen/qwen3.8-27b"
     CLOUD_LLM_TIMEOUT: float = 30.0
     LLM_PROVIDER_PRIORITY: Literal["auto", "local_first", "cloud_first"] = "auto"
 
