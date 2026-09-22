@@ -11,6 +11,85 @@ interface DisplayMessage extends ChatMessage {
   timestamp?: string;
 }
 
+function formatInlineText(text: string): React.ReactNode {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+      return (
+        <code key={i} className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-blue-600 dark:text-blue-400 font-mono text-xs font-semibold">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+      return (
+        <strong key={i} className="font-bold text-slate-900 dark:text-white">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part;
+  });
+}
+
+function renderFormattedContent(text: string) {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let currentList: string[] = [];
+
+  const flushList = (keyPrefix: number) => {
+    if (currentList.length > 0) {
+      elements.push(
+        <ul key={`ul-${keyPrefix}`} className="list-disc list-inside space-y-1 my-2 pl-1">
+          {currentList.map((item, idx) => (
+            <li key={idx} className="leading-relaxed">
+              {formatInlineText(item)}
+            </li>
+          ))}
+        </ul>
+      );
+      currentList = [];
+    }
+  };
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      currentList.push(trimmed.slice(2));
+    } else {
+      flushList(index);
+      if (trimmed.startsWith('#### ')) {
+        elements.push(
+          <h4 key={index} className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mt-3 mb-1">
+            {formatInlineText(trimmed.slice(5))}
+          </h4>
+        );
+      } else if (trimmed.startsWith('### ')) {
+        elements.push(
+          <h3 key={index} className="text-sm font-bold text-slate-900 dark:text-white mt-3 mb-1">
+            {formatInlineText(trimmed.slice(4))}
+          </h3>
+        );
+      } else if (trimmed.startsWith('> ')) {
+        elements.push(
+          <blockquote key={index} className="border-l-2 border-blue-500 pl-3 italic text-xs text-slate-500 dark:text-slate-400 my-1.5">
+            {formatInlineText(trimmed.slice(2))}
+          </blockquote>
+        );
+      } else if (trimmed.length > 0) {
+        elements.push(
+          <p key={index} className="mb-2 last:mb-0 leading-relaxed">
+            {formatInlineText(line)}
+          </p>
+        );
+      }
+    }
+  });
+
+  flushList(lines.length);
+  return elements.length > 0 ? elements : text;
+}
+
 export function CopilotPanel() {
   const { ticker } = useAppStore();
   const [messages, setMessages] = useState<DisplayMessage[]>([
@@ -242,13 +321,13 @@ Puedes consultarme sobre el código fuente del bot, los modelos de Machine Learn
             </div>
 
             <div
-              className={`p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap transition-all shadow-sm ${
+              className={`p-4 rounded-2xl text-sm leading-relaxed transition-all shadow-sm ${
                 m.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-tr-none font-medium'
+                  ? 'bg-blue-600 text-white rounded-tr-none font-medium whitespace-pre-wrap'
                   : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-tl-none'
               }`}
             >
-              {m.content}
+              {m.role === 'user' ? m.content : renderFormattedContent(m.content)}
             </div>
           </div>
         ))}
