@@ -179,6 +179,20 @@ async def chat_with_copilot(req: LLMChatRequest) -> dict[str, Any]:
         if isinstance(acc, dict):
             context["equity"] = acc.get("equity")
             context["cash"] = acc.get("cash")
+            context["buying_power"] = acc.get("buying_power")
+
+        positions = client.get_positions()
+        if isinstance(positions, list):
+            context["positions"] = [
+                {
+                    "symbol": p.get("symbol"),
+                    "qty": p.get("qty"),
+                    "market_value": p.get("market_value"),
+                    "unrealized_pl": p.get("unrealized_pl"),
+                }
+                for p in positions
+            ]
+
         if hasattr(bot, "market_regime") and bot.market_regime:
             context["market_regime"] = bot.market_regime.to_dict()
     except Exception:

@@ -17,11 +17,11 @@ export function CopilotPanel() {
     {
       id: 'initial',
       role: 'assistant',
-      content: `¡Hola! Soy **Axiom Copilot**, tu Asistente Cuantitativo personal potenciado por **Llama 3.1 8B** corriendo localmente en tu GPU **NVIDIA RTX 4060**.
+      content: `Hola. Soy **Axiom Copilot**, tu Asistente Cuantitativo e Ingeniero de Software de Axiom (InvestPro), potenciado por **Llama 3.1 8B** corriendo localmente en tu GPU **NVIDIA RTX 4060**.
 
-Tengo acceso en tiempo real a tus balances de Alpaca, el estado de tus posiciones, los indicadores técnicos (RSI, Bollinger, MACD, SMA 200) y el régimen macroeconómico.
+Poseo acceso y conocimiento completo de la arquitectura de la plataforma, el código fuente de los módulos (bot/, ml/, indicators/, portfolio/, api/) y los balances y telemetría de tu cuenta en tiempo real.
 
-Puedes hacerme preguntas libres sobre el mercado, pedirme que analice un activo o usar las sugerencias rápidas aquí abajo.`,
+Puedes consultarme sobre el código fuente del bot, los modelos de Machine Learning, el análisis de cualquier activo o la salud del portafolio.`,
       source: 'ollama:llama3.1:8b',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
@@ -121,11 +121,12 @@ Puedes hacerme preguntas libres sobre el mercado, pedirme que analice un activo 
   };
 
   const quickPrompts = [
-    { label: '📊 Salud del Portafolio', query: '¿Cómo está la salud general de mi portafolio hoy y qué nivel de liquidez tenemos?' },
-    { label: '🔍 ¿Por qué no compramos?', query: '¿Por qué Axiom no ha abierto nuevas posiciones hoy? ¿Qué filtros no pasaron?' },
-    { label: `🛡️ Riesgo en ${ticker}`, query: `¿Cuál es el riesgo actual y el análisis cuantitativo de mantener ${ticker}?` },
-    { label: '⚖️ Regla 60/40', query: '¿Cómo está la asignación entre Cripto y Renta Variable respecto a la meta de 60% Cripto / 40% Acciones?' },
-    { label: '📈 Régimen de Mercado', query: '¿Qué régimen de mercado tenemos en SPY y VIX, y qué precaución debemos tener?' },
+    { label: 'Salud del Portafolio', query: '¿Cómo está la salud general de mi portafolio hoy y qué nivel de liquidez tenemos?' },
+    { label: 'Filtros de Compra', query: '¿Por qué Axiom no ha abierto nuevas posiciones hoy? ¿Qué filtros no pasaron?' },
+    { label: `Riesgo en ${ticker}`, query: `¿Cuál es el riesgo actual y el análisis cuantitativo de mantener ${ticker}?` },
+    { label: 'Regla 60/40', query: '¿Cómo está la asignación entre Cripto y Renta Variable respecto a la meta de 60% Cripto / 40% Acciones?' },
+    { label: 'Régimen de Mercado', query: '¿Qué régimen de mercado tenemos en SPY y VIX, y qué precaución debemos tener?' },
+    { label: 'Código y Arquitectura', query: 'Explícame la arquitectura del sistema, los módulos en bot/, ml/, indicators/ y cómo opera el bot de trading.' },
   ];
 
   const isOnline = status?.available && !status?.fallback_active;
@@ -135,8 +136,10 @@ Puedes hacerme preguntas libres sobre el mercado, pedirme que analice un activo 
       {/* Header del Copiloto */}
       <div className="glass-card flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-6">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-blue-500/20">
-            🤖
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -186,7 +189,7 @@ Puedes hacerme preguntas libres sobre el mercado, pedirme que analice un activo 
             className="px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 rounded-xl transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
             title="Reiniciar conversación"
           >
-            🗑️ Limpiar
+            Limpiar
           </button>
         </div>
       </div>
