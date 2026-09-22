@@ -551,3 +551,14 @@ async def spa_fallback(path: str):
 
     # Client-side routing: todo lo demás → index.html
     return FileResponse(index_file, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "api.server:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        log_level="info",
+    )
