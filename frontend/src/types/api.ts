@@ -496,13 +496,17 @@ export interface RiskStatusResponse {
 
 export interface LLMStatusResponse {
   available: boolean;
+  active_provider?: 'ollama' | 'cloud' | 'fallback';
   base_url: string;
   model: string;
   models_available: string[];
   engine: string;
   fallback_active: boolean;
+  cloud_configured?: boolean;
+  ollama_available?: boolean;
   message: string;
 }
+
 
 export interface LLMExplainResponse {
   ticker: string;

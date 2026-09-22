@@ -91,7 +91,7 @@ Puedes consultarme sobre el código fuente del bot, los modelos de Machine Learn
       const errorMsg: DisplayMessage = {
         id: `err-${Date.now()}`,
         role: 'assistant',
-        content: `⚠️ **Error al consultar el asistente**: ${err.message || 'Verifica que Ollama esté activo en tu PC'}.`,
+        content: `**Error al consultar el asistente**: ${err.message || 'Verifica que Ollama o las credenciales Cloud API estén activas'}.`,
         source: 'error',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
@@ -145,11 +145,11 @@ Puedes consultarme sobre el código fuente del bot, los modelos de Machine Learn
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">Axiom Copilot</h2>
               <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-                Llama 3.1 8B
+                {status?.model || 'Llama 3.1 8B'}
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Asistente Cuantitativo en tiempo real • Inferencia local en NVIDIA RTX 4060
+              {status?.engine ? `Asistente Cuantitativo • ${status.engine}` : 'Asistente Cuantitativo Híbrido en tiempo real'}
             </p>
           </div>
         </div>
@@ -157,12 +157,24 @@ Puedes consultarme sobre el código fuente del bot, los modelos de Machine Learn
         {/* Estado y Controles */}
         <div className="flex flex-wrap items-center gap-3">
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold ${
-            isOnline
+            status?.active_provider === 'ollama'
               ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+              : status?.active_provider === 'cloud'
+              ? 'bg-sky-50 dark:bg-sky-950/40 border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300'
               : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300'
           }`}>
-            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-            {isOnline ? 'GPU RTX 4060 En Línea' : 'Modo Respaldo Algorítmico'}
+            <span className={`w-2 h-2 rounded-full ${
+              status?.active_provider === 'ollama'
+                ? 'bg-emerald-500 animate-pulse'
+                : status?.active_provider === 'cloud'
+                ? 'bg-sky-500 animate-pulse'
+                : 'bg-amber-500'
+            }`} />
+            {status?.active_provider === 'ollama'
+              ? 'GPU RTX 4060 Local'
+              : status?.active_provider === 'cloud'
+              ? (status.engine || 'Cloud AI En Línea')
+              : 'Modo Respaldo Algorítmico'}
           </div>
 
           <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-xl text-xs font-medium">
@@ -246,8 +258,13 @@ Puedes consultarme sobre el código fuente del bot, los modelos de Machine Learn
             <div className="flex items-center gap-1.5 mb-1 px-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Axiom Copilot</span>
               <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-950 text-blue-500">
-                Razonando en RTX 4060...
+                {status?.active_provider === 'cloud'
+                  ? `Inferencia en ${status.engine || 'Cloud AI'}...`
+                  : status?.active_provider === 'ollama'
+                  ? 'Razonando en RTX 4060...'
+                  : 'Generando respuesta cuantitativa...'}
               </span>
+
             </div>
             <div className="p-4 rounded-2xl rounded-tl-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.3s]"></span>

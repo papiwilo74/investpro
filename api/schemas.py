@@ -306,11 +306,14 @@ class AdvisorStatusResponse(BaseModel):
 
 class LLMStatusResponse(BaseModel):
     available: bool = False
+    active_provider: str = "fallback"  # "ollama" | "cloud" | "fallback"
     base_url: str = "http://localhost:11434"
     model: str = "llama3.1:8b"
     models_available: list[str] = []
     engine: str = "Ollama Local (RTX 4060)"
     fallback_active: bool = False
+    cloud_configured: bool = False
+    ollama_available: bool = False
     message: str = ""
 
 

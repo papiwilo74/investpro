@@ -138,6 +138,125 @@ class TestAxiomLLMExplainer:
         assert "60/40" in res["allocation_status"] or "Cripto" in res["allocation_status"]
 
     @pytest.mark.asyncio
+    async def test_cloud_llm_status_reporting(self):
+        """Verifica que con API key de nube y Ollama offline se active el proveedor Cloud."""
+        explainer = AxiomLLMExplainer(
+            base_url="http://localhost:19999",
+            cloud_api_key="gsk_test_api_key",
+            cloud_model="llama-3.1-8b-instant",
+            priority="auto",
+        )
+        status = await explainer.check_availability()
+        assert status["available"] is True
+        assert status["active_provider"] == "cloud"
+        assert status["fallback_active"] is False
+        assert "Groq" in status["engine"] or "Cloud" in status["engine"]
+
+    @pytest.mark.asyncio
+    async def test_cloud_llm_mock_symbol_explanation(self):
+        """Prueba inferencia a través de la API en la nube (Groq/OpenAI compatible)."""
+        import httpx
+
+        mock_cloud_resp = httpx.Response(
+            status_code=200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": "**Veredicto**: COMPRA RECOMENDADA. Ruptura alcista sobre SMA 200 con RSI en 55."
+                        }
+                    }
+                ]
+            },
+        )
+
+        with patch("httpx.AsyncClient.post", return_value=mock_cloud_resp):
+            explainer = AxiomLLMExplainer(
+                base_url="http://localhost:19999",
+                cloud_api_key="gsk_test_api_key",
+                priority="cloud_first",
+            )
+            indicators = {"rsi": 55.0, "macd": 1.0, "macd_signal": 0.5, "sma_200": 150.0, "atr": 2.5}
+            res = await explainer.explain_symbol_setup(
+                ticker="ETH/USD",
+                price=3200.0,
+                composite_score=0.42,
+                indicators=indicators,
+            )
+            assert res["ticker"] == "ETH/USD"
+            assert res["source"] == "cloud:llama-3.1-8b-instant"
+            assert res["verdict"] == "BUY"
+            assert "COMPRA RECOMENDADA" in res["explanation"]
+
+    @pytest.mark.asyncio
+    async def test_hybrid_failover_ollama_to_cloud(self):
+        """Verifica conmutación por error: si Ollama falla, se usa Cloud LLM automáticamente."""
+        import httpx
+
+        mock_tags = httpx.Response(status_code=200, json={"models": [{"name": "llama3.1:8b"}]})
+        mock_cloud_resp = httpx.Response(
+            status_code=200,
+            json={"choices": [{"message": {"content": "**Veredicto**: CAUTELA. Mercado en rango de compresión."}}]},
+        )
+
+        async def mock_post(url, **kwargs):
+            if "/chat/completions" in str(url):
+                return mock_cloud_resp
+            # Simular fallo en Ollama /api/chat
+            raise httpx.ConnectError("Ollama connection reset")
+
+        with (
+            patch("httpx.AsyncClient.get", return_value=mock_tags),
+            patch("httpx.AsyncClient.post", side_effect=mock_post),
+        ):
+            explainer = AxiomLLMExplainer(
+                cloud_api_key="gsk_test_api_key",
+                priority="local_first",
+            )
+            res = await explainer.chat_copilot(query="¿Cuál es el sesgo de hoy?")
+            assert res["source"] == "cloud:llama-3.1-8b-instant"
+            assert "CAUTELA" in res["response"]
+
+    @pytest.mark.asyncio
+    async def test_hybrid_failover_all_to_fallback(self):
+        """Si tanto Ollama como Cloud fallan, se devuelve el fallback determinista sin excepción."""
+        import httpx
+
+        with (
+            patch("httpx.AsyncClient.get", side_effect=httpx.ConnectError("Offline")),
+            patch("httpx.AsyncClient.post", side_effect=httpx.ConnectError("Offline")),
+        ):
+            explainer = AxiomLLMExplainer(
+                base_url="http://localhost:19999",
+                cloud_api_key="gsk_test_api_key",
+                priority="auto",
+            )
+            res = await explainer.chat_copilot(query="Test failover")
+            assert res["source"] == "rule_based_fallback"
+            assert "Copiloto Axiom" in res["response"]
+
+    @pytest.mark.asyncio
+    async def test_zero_emojis_policy(self):
+        """Valida que los mensajes generados por fallback no contengan ningún emoji."""
+        import re
+
+        emoji_pattern = re.compile(
+            r"[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\ufe0f]",
+            flags=re.UNICODE,
+        )
+
+        explainer = AxiomLLMExplainer(base_url="http://localhost:19999", timeout=0.5)
+        # Portafolio fallback
+        account = {"equity": 100_000.0, "cash": 35_000.0}
+        positions = [{"symbol": "BTC/USD", "market_value": 40_000.0, "unrealized_pl": 2000.0}]
+        port_res = await explainer.explain_portfolio(account, positions)
+        assert not emoji_pattern.search(port_res["explanation"]), "Se detectó emoji en explain_portfolio"
+
+        # Chat fallback
+        chat_res = await explainer.chat_copilot(query="Consulta de prueba")
+        assert not emoji_pattern.search(chat_res["response"]), "Se detectó emoji en chat_copilot"
+
+    @pytest.mark.asyncio
     async def test_copilot_chat_fallback(self):
         """Verifica que el chat responda amigablemente aun sin Ollama."""
         explainer = AxiomLLMExplainer(base_url="http://localhost:19999", timeout=1.0)

@@ -157,11 +157,20 @@ class Settings(BaseSettings):
     CC_MIN_CHALLENGER_ACCURACY: float = 0.52
     CC_MAX_AGE_DAYS: int = 14
     CC_DRIFT_FLOOR: float = 0.45
-    # ── Local LLM (Ollama) ─────────────────────────────────────────────
+    # ── LLM Engine (Hybrid: Ollama Local RTX 4060 + Cloud LLM API) ────
+    # Local Ollama
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.1:8b"
     OLLAMA_TIMEOUT: float = 90.0
     OLLAMA_ENABLED: bool = True
+
+    # Cloud LLM (OpenAI-compatible: Groq, Alibaba Cloud DashScope, OpenRouter, OpenAI)
+    GROQ_API_KEY: str = ""
+    CLOUD_LLM_API_KEY: str = ""
+    CLOUD_LLM_BASE_URL: str = "https://api.groq.com/openai/v1"
+    CLOUD_LLM_MODEL: str = "llama-3.1-8b-instant"
+    CLOUD_LLM_TIMEOUT: float = 30.0
+    LLM_PROVIDER_PRIORITY: Literal["auto", "local_first", "cloud_first"] = "auto"
 
     # ── Derived properties ─────────────────────────────────────────────
 
