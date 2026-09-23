@@ -142,7 +142,7 @@ async def get_account() -> dict[str, Any]:
 
 
 @router.get("/positions")
-async def get_positions() -> dict[str, Any]:
+async def get_positions() -> list[dict[str, Any]]:
     """Obtiene todas las posiciones abiertas actualmente."""
     try:
         positions = client.get_positions()
@@ -152,7 +152,7 @@ async def get_positions() -> dict[str, Any]:
 
 
 @router.get("/orders")
-async def get_recent_orders() -> dict[str, Any]:
+async def get_recent_orders() -> list[dict[str, Any]]:
     """Obtiene las órdenes recientes del broker."""
     try:
         orders = client.get_orders()

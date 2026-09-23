@@ -167,10 +167,14 @@ Puedes consultarme sobre el código fuente del bot, los modelos de Machine Learn
 
       setMessages(prev => [...prev, aiMsg]);
     } catch (err: any) {
+      const isConnection = err?.name === 'NetworkError' || String(err?.message || '').toLowerCase().includes('conexi');
+      const content = isConnection
+        ? '**El servidor en la nube está despertando (Cold Start) o tardó en responder.** En el plan gratuito de Render, el backend entra en reposo tras 15 minutos de inactividad. Espera 20-30 segundos y reintenta tu consulta.'
+        : `**Error al consultar el asistente**: ${err.message || 'Verifica que Ollama o las credenciales Cloud API estén activas'}.`;
       const errorMsg: DisplayMessage = {
         id: `err-${Date.now()}`,
         role: 'assistant',
-        content: `**Error al consultar el asistente**: ${err.message || 'Verifica que Ollama o las credenciales Cloud API estén activas'}.`,
+        content,
         source: 'error',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
