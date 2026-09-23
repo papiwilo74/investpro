@@ -904,7 +904,7 @@ def main() -> None:
             from http.server import BaseHTTPRequestHandler, HTTPServer
 
             class _HealthHandler(BaseHTTPRequestHandler):
-                def do_GET(self):  # noqa: N802
+                def do_GET(self):
                     if self.path in ("/health", "/api/_ping"):
                         self.send_response(200)
                         self.send_header("Content-Type", "application/json")

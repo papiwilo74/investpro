@@ -5,7 +5,7 @@ from bot.market_regime import MarketRegime
 from bot.strategy import StrategyParams
 
 
-def test_adaptive_thresholds_high_volatility(mocker):
+def test_adaptive_thresholds_high_volatility(monkeypatch):
     manager = AdaptiveThresholdManager()
 
     high_vol_regime = MarketRegime(
@@ -20,7 +20,7 @@ def test_adaptive_thresholds_high_volatility(mocker):
         can_trade_long=False,
     )
 
-    mocker.patch.object(manager.regime_filter, "get_regime", return_value=high_vol_regime)
+    monkeypatch.setattr(manager.regime_filter, "get_regime", lambda: high_vol_regime)
 
     base_params = StrategyParams(buy_score_threshold=0.20, take_profit_pct=0.15)
     adapted = manager.get_adapted_params(base_params)
@@ -29,7 +29,7 @@ def test_adaptive_thresholds_high_volatility(mocker):
     assert adapted.take_profit_pct <= 0.06
 
 
-def test_adaptive_thresholds_bull_market(mocker):
+def test_adaptive_thresholds_bull_market(monkeypatch):
     manager = AdaptiveThresholdManager()
 
     bull_regime = MarketRegime(
@@ -44,7 +44,7 @@ def test_adaptive_thresholds_bull_market(mocker):
         can_trade_long=True,
     )
 
-    mocker.patch.object(manager.regime_filter, "get_regime", return_value=bull_regime)
+    monkeypatch.setattr(manager.regime_filter, "get_regime", lambda: bull_regime)
 
     base_params = StrategyParams(buy_score_threshold=0.20, take_profit_pct=0.15)
     adapted = manager.get_adapted_params(base_params)

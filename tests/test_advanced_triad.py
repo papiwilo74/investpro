@@ -33,13 +33,13 @@ def test_progressive_atr_trailing_stop():
     # 1. Sin ganancias (PnL 0%) -> Mult base (2.5x)
     assert pos._effective_trail_mult() == 2.5
 
-    # 2. Con ganancia de 7% -> Mult medio (1.8x)
+    # 2. Con ganancia de 7% -> Mult medio ((2.5 + 1.0) / 2 = 1.75x)
     pos.update_extremes(107.0)
-    assert pos._effective_trail_mult() == 1.8
+    assert pos._effective_trail_mult() == 1.75
 
-    # 3. Con ganancia de 16% -> Mult apretado (0.9x)
+    # 3. Con ganancia de 16% -> Mult apretado (1.0x)
     pos.update_extremes(116.0)
-    assert pos._effective_trail_mult() == 0.9
+    assert pos._effective_trail_mult() == 1.0
 
 
 def test_news_sentinel_batch():

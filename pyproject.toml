@@ -163,6 +163,7 @@ quote-style = "double"
 "__init__.py" = ["F401"]
 "tests/*" = ["N802", "N803", "N806"]
 "ml/*.py" = ["N802", "N803", "N806", "N812", "F841"]
+"main.py" = ["N802"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["api", "app", "backtesting", "bot", "broker", "config", "data", "db", "frontend", "indicators", "logging_config", "ml", "portfolio"]
