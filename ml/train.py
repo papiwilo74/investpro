@@ -36,11 +36,19 @@ except Exception:
 # ── Detectar GPU ───────────────────────────────────────────────────────
 _HAS_CUDA = False
 try:
-    import cupy as cp
-
-    _HAS_CUDA = cp.cuda.is_available()
+    _probe = XGBClassifier(n_estimators=1, max_depth=1, tree_method="hist", device="cuda")
+    _probe.fit(np.zeros((2, 2)), np.array([0, 1]))
+    _HAS_CUDA = True
 except Exception:
-    pass
+    _HAS_CUDA = False
+
+if not _HAS_CUDA:
+    try:
+        import cupy as cp
+
+        _HAS_CUDA = cp.cuda.is_available()
+    except Exception:
+        pass
 
 if not _HAS_CUDA:
     try:

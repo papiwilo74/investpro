@@ -38,20 +38,19 @@ run_tests.py
 *.sqlite3
 *.h5
 *.pkl
+!rl_qtable.pkl
 *.pt
 *.pth
 *.parquet
 data/cache/
 data/*.json
+!data/genetic_hall_of_fame.json
 data/*.sqlite3
 data/*.log
 logs/
 *.log
-config/optimal_params.json
-rl_qtable.pkl
-data/genetic_hall_of_fame.json
 ml/models/*.zip
-ml/models/*.pkl
+!ml/models/*.calib.pkl
 
 
 # ══════════════════════════════════════════════════════════
