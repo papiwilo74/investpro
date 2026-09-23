@@ -51,6 +51,7 @@ def mock_state():
 @pytest.fixture
 def mock_brain():
     b = MagicMock()
+    b.params.is_symbol_in_manual_hold.return_value = False
     return b
 
 

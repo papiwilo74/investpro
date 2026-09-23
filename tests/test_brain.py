@@ -127,7 +127,7 @@ class TestTradingBrain:
     def test_position_state_should_exit_take_profit(self):
         from bot.strategy import PositionState
 
-        params = StrategyParams(take_profit_pct=0.10, use_rl_exits=False)
+        params = StrategyParams(take_profit_pct=0.10, use_rl_exits=False, use_trailing_stop=False)
         pos = PositionState(entry_price=100.0, entry_atr=2.0, params=params)
         should_exit, reason = pos.should_exit(115.0, rsi=70.0)
         assert should_exit is True
