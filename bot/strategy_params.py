@@ -23,38 +23,12 @@ class StrategyParams:
     sequential_ticker_processing: bool = True
     max_memory_history_days: int = 90  # Acota el historial cargado en RAM a 90 días
 
-    # Lista de criptomonedas prioritarias y compatibles con Alpaca Crypto
-    # Ordenadas por capitalización de mercado y liquidez en Alpaca (25 pares)
+    # Lista de criptomonedas prioritarias de máxima liquidez (Tier 1 Mega-cap)
+    # Acotada a 3 pares líderes para garantizar ultra-bajo consumo de RAM (< 160MB) en Render
     crypto_symbols: tuple[str, ...] = (
-        # ── Tier 1: Mega-cap (máxima liquidez) ──────────────────────
         "BTC/USD",
         "ETH/USD",
         "SOL/USD",
-        "XRP/USD",
-        "DOGE/USD",
-        "ADA/USD",
-        # ── Tier 2: Large-cap DeFi / Layer1 ─────────────────────────
-        "AVAX/USD",
-        "LINK/USD",
-        "DOT/USD",
-        "ATOM/USD",
-        "NEAR/USD",
-        "LTC/USD",
-        "BCH/USD",
-        # ── Tier 3: Layer2 / DeFi alternativo ───────────────────────
-        "ARB/USD",
-        "OP/USD",
-        "MATIC/USD",
-        "UNI/USD",
-        "AAVE/USD",
-        "MKR/USD",
-        "CRV/USD",
-        # ── Tier 4: Ecosistemas emergentes ───────────────────────────
-        "SUI/USD",
-        "ALGO/USD",
-        "FIL/USD",
-        "GRT/USD",
-        "LDO/USD",
     )
 
     # ── LONG (compra en tendencia alcista) ─────────────────────────

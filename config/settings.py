@@ -134,7 +134,7 @@ class Settings(BaseSettings):
     CIRCUIT_BREAKER_MINUTES: int = 60
     LEVERAGE_ENABLED: bool = True
     MIN_LEVERAGE: float = 2.0
-    MAX_LEVERAGE: float = 3.0
+    MAX_LEVERAGE: float = 5.0
 
     # ── Scanner ────────────────────────────────────────────────────────
     SCANNER_DEFAULT_UNIVERSE: str = "nasdaq100"

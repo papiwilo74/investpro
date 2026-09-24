@@ -230,11 +230,21 @@ class PaperTradingClient:
         return market_open <= now_ny <= market_close
 
     def get_account_summary(self) -> dict[str, Any]:
-        equity = self._cash + sum(p.qty * self._get_price(p.symbol) for p in self._positions.values())
+        from config import BROKER_CONFIG
+
+        lev = BROKER_CONFIG.max_leverage if BROKER_CONFIG.leverage_enabled else 1.0
+        equity = self._cash + sum(
+            (
+                ((p.qty * p.avg_entry_price / lev) + p.qty * (self._get_price(p.symbol) - p.avg_entry_price))
+                if lev > 1.0
+                else (p.qty * self._get_price(p.symbol))
+            )
+            for p in self._positions.values()
+        )
         return {
             "equity": round(equity, 2),
             "cash": round(self._cash, 2),
-            "buying_power": round(self._cash * 2, 2),
+            "buying_power": round(self._cash * lev, 2),
             "pnl_today": round(equity - self._initial_cash, 2),
             "pnl_pct_today": round((equity - self._initial_cash) / self._initial_cash * 100, 4),
             "status": "active",
@@ -283,19 +293,28 @@ class PaperTradingClient:
         if qty <= 0:
             return {"status": "error", "msg": "Invalid quantity"}
 
+        from config import BROKER_CONFIG
+
+        lev = BROKER_CONFIG.max_leverage if BROKER_CONFIG.leverage_enabled else 1.0
         fill_price = self._simulate_fill_price(side)
         cost = fill_price * qty
+        margin_required = cost / lev
 
         if side.upper() == "BUY":
-            if cost > self._cash:
-                return {"status": "error", "msg": f"Insufficient funds: need ${cost:.2f}, have ${self._cash:.2f}"}
-            self._cash -= cost
+            if margin_required > self._cash:
+                return {
+                    "status": "error",
+                    "msg": f"Insufficient funds: need ${margin_required:.2f}, have ${self._cash:.2f}",
+                }
+            self._cash -= margin_required
             self._add_position(symbol, qty, fill_price, "LONG")
         else:
             pos = self._positions.get(symbol)
             if not pos or pos.qty < qty:
                 return {"status": "error", "msg": f"Insufficient shares: have {pos.qty if pos else 0}, need {qty}"}
-            self._cash += cost
+            margin_returned = (pos.avg_entry_price * qty) / lev if lev > 1.0 else cost
+            pnl = (fill_price - pos.avg_entry_price) * qty
+            self._cash += (margin_returned + pnl) if lev > 1.0 else cost
             self._remove_position(symbol, qty, fill_price, "LONG")
 
         order_id = self._next_order_id()

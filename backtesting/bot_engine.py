@@ -132,8 +132,16 @@ class BotBacktestEngine:
                 # El sizing del cerebro + apalancamiento configurado (modo Hedge Fund)
                 invest_amount = capital * decision.position_size_pct * self.leverage
                 # En backtest permitimos "comprar a crédito" (capital puede ir negativo)
-                # para reflejar el margen del apalancamiento real.
-                qty = int(invest_amount / exec_price)
+                # Para crypto permitimos fracciones decimales (6 decimales)
+                is_crypto = (
+                    ticker.endswith("-USD")
+                    or "/" in ticker
+                    or ticker in {"BTC", "ETH", "SOL", "DOT", "UNI", "FIL", "GRT"}
+                )
+                if is_crypto:
+                    qty = round(invest_amount / exec_price, 6)
+                else:
+                    qty = int(invest_amount / exec_price)
                 if qty > 0:
                     cost = exec_price * qty
                     comm = self._commission(exec_price, qty)
@@ -151,7 +159,10 @@ class BotBacktestEngine:
                 exec_price = self._apply_slippage(close, is_buy=False)
                 sell_qty = shares
                 if decision.partial_exit_fraction > 0:
-                    sell_qty = max(1, int(shares * decision.partial_exit_fraction))
+                    if is_crypto or shares < 1.0:
+                        sell_qty = round(shares * decision.partial_exit_fraction, 6)
+                    else:
+                        sell_qty = max(1, int(shares * decision.partial_exit_fraction))
                 revenue = exec_price * sell_qty
                 comm = self._commission(exec_price, sell_qty)
                 pnl = revenue - (entry_price * sell_qty) - comm
@@ -184,7 +195,10 @@ class BotBacktestEngine:
             elif decision.action == "SHORT" and not has_position:
                 exec_price = self._apply_slippage(close, is_buy=False)
                 invest_amount = capital * decision.position_size_pct * self.leverage
-                qty = int(invest_amount / exec_price)
+                if is_crypto:
+                    qty = round(invest_amount / exec_price, 6)
+                else:
+                    qty = int(invest_amount / exec_price)
                 if qty > 0:
                     comm = self._commission(exec_price, qty)
                     capital -= comm

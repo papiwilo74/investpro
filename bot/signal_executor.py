@@ -156,11 +156,14 @@ class SignalExecutor:
         if target_usd > 0 and target_usd < max_invest:
             max_invest = target_usd * leverage
         invest_amount = min(max_invest, buying_power)
-        if invest_amount <= ref_price:
+        is_crypto = (
+            ticker.endswith("-USD") or "/" in ticker or ticker in {"BTC", "ETH", "SOL", "DOT", "UNI", "FIL", "GRT"}
+        )
+        if not is_crypto and invest_amount <= ref_price:
             return 0.0
 
         current_exposure = self.compute_current_exposure(positions, equity)
-        exposure_cap = min(0.90, 0.35 * leverage) if cfg.leverage_enabled else 0.35
+        exposure_cap = min(float(cfg.max_leverage), 0.70 * leverage) if cfg.leverage_enabled else 0.35
         new_pct = current_exposure + (invest_amount / equity) if equity > 0 else 1.0
         if new_pct > exposure_cap:
             return 0.0
@@ -170,7 +173,7 @@ class SignalExecutor:
         if not self._risk.check_entry(ticker, "BUY", first_alloc):
             return 0.0
 
-        qty = int(first_alloc // ref_price)
+        qty = round(first_alloc / ref_price, 6) if is_crypto else int(first_alloc // ref_price)
         if qty <= 0:
             return 0.0
 
@@ -229,11 +232,14 @@ class SignalExecutor:
 
         max_invest = equity * decision.position_size_pct * leverage
         invest_amount = min(max_invest, buying_power * 0.5)
-        if invest_amount <= ref_price:
+        is_crypto = (
+            ticker.endswith("-USD") or "/" in ticker or ticker in {"BTC", "ETH", "SOL", "DOT", "UNI", "FIL", "GRT"}
+        )
+        if not is_crypto and invest_amount <= ref_price:
             return 0.0
 
         current_exposure = self.compute_current_exposure(positions, equity)
-        short_cap = min(0.50, 0.25 * leverage) if cfg.leverage_enabled else 0.25
+        short_cap = min(float(cfg.max_leverage) * 0.5, 0.35 * leverage) if cfg.leverage_enabled else 0.25
         new_pct = current_exposure + (invest_amount / equity) if equity > 0 else 1.0
         if new_pct > short_cap:
             return 0.0
@@ -245,7 +251,7 @@ class SignalExecutor:
         if not self._risk.check_entry(ticker, "SHORT", invest_amount):
             return 0.0
 
-        qty = int(invest_amount // ref_price)
+        qty = round(invest_amount / ref_price, 6) if is_crypto else int(invest_amount // ref_price)
         if qty <= 0:
             return 0.0
 

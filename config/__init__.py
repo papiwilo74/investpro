@@ -31,16 +31,10 @@ def validate_secrets() -> list[str]:
 WATCHLIST: list[str] = [
     "AAPL",
     "MSFT",
-    "GOOGL",
-    "AMZN",
-    "TSLA",
     "NVDA",
-    "META",
-    "NFLX",
-    "AMD",
-    "CRM",
-    "COST",
-    "QCOM",
+    "BTC-USD",
+    "ETH-USD",
+    "SOL-USD",
 ]
 
 NASDAQ_100_UNIVERSE: list[str] = [
