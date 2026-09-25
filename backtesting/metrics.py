@@ -48,7 +48,14 @@ class PerformanceMetrics:
         if len(equity) < 2:
             return 0.0
         total = PerformanceMetrics.cumulative_return(equity)
-        n_days = (equity.index[-1] - equity.index[0]).days
+        diff = equity.index[-1] - equity.index[0]
+        if hasattr(diff, "days"):
+            n_days = diff.days
+        else:
+            try:
+                n_days = int(diff)
+            except (TypeError, ValueError):
+                n_days = len(equity)
         if n_days <= 0:
             return 0.0
         years = n_days / 365.25

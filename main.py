@@ -821,7 +821,7 @@ def main() -> None:
         "--val-oos-split",
         type=float,
         default=0.15,
-        help="Fracción final de datos para OOS test (default: 0.15 = 15%)",
+        help="Fracción final de datos para OOS test (default: 0.15 = 15%%)",
     )
     parser.add_argument(
         "--val-mc-sims",

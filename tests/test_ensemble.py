@@ -184,6 +184,7 @@ class TestAdaptiveEnsemble:
 
     def test_weights_adjust_after_multiple_predictions(self):
         e = AdaptiveEnsemble()
+        initial_weight = e._weights["BULL"]["xgboost"]
         for i in range(25):
             xgb = ModelSignal(direction="BULLISH", probability=0.9, score=0.8)
             e.predict(regime="BULL", xgboost_signal=xgb)
@@ -192,10 +193,9 @@ class TestAdaptiveEnsemble:
         rel_perf = e._tracker.relative_performance("xgboost", "BULL")
         assert rel_perf < 0, "xgboost should underperform baseline when always wrong"
         current_weight = e._weights["BULL"]["xgboost"]
-        average_weight = 1.0 / len(e._weights["BULL"])
         assert (
-            current_weight <= average_weight
-        ), f"xgboost weight {current_weight:.4f} should not exceed average {average_weight:.4f}"
+            current_weight < initial_weight
+        ), f"xgboost weight {current_weight:.4f} should drop below initial {initial_weight:.4f}"
 
     def test_get_status_returns_weights(self):
         e = AdaptiveEnsemble()

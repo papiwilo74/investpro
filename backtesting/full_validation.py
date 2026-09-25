@@ -137,8 +137,11 @@ class FullValidationPipeline:
         period: str = "2y",
         interval: str = "1d",
         strategy_params: StrategyParams | None = None,
+        progress_callback: Callable[[str, float], None] | None = None,
     ) -> FullValidationResult:
         """Ejecuta el pipeline completo de validación."""
+        if progress_callback is not None:
+            self.progress = progress_callback
         start_time = time.time()
         self.progress(f"Iniciando validación completa para {ticker}...", 0.0)
 

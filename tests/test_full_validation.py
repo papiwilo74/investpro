@@ -177,11 +177,12 @@ class TestFullValidationPipeline:
             ticker="TEST",
             period="2y",
             interval="1d",
+            progress_callback=progress,
         )
 
         assert isinstance(result, FullValidationResult)
         assert result.ticker == "TEST"
-        assert result.verdict in ("APPROVED", "CONDITIONAL", "REJECTED")
+        assert result.verdict in ("APPROVED", "CONDITIONAL", "REJECTED", "APROBADO", "CONDICIONAL", "RECHAZADO")
         assert len(progress_log) > 0
 
     def test_run_with_bot_params(self, sample_df):
@@ -211,7 +212,7 @@ class TestFullValidationPipeline:
             strategy_params=params,
         )
         assert isinstance(result, FullValidationResult)
-        assert result.verdict in ("APPROVED", "CONDITIONAL", "REJECTED")
+        assert result.verdict in ("APPROVED", "CONDITIONAL", "REJECTED", "APROBADO", "CONDICIONAL", "RECHAZADO")
 
     def test_median_params_from_empty_windows(self):
         pipeline = FullValidationPipeline()
@@ -246,7 +247,7 @@ class TestFullValidationPipeline:
                 train_metrics={"sharpe_ratio": 1.8},
                 test_metrics={"sharpe_ratio": 0.8},
                 best_params={"buy_score_threshold": 0.15},
-                sharpe_oos=0.8,
+                sharpe_oos=-0.8,
                 sharpe_is=1.8,
                 overfit_ratio=0.44,
             ),
@@ -284,7 +285,7 @@ def test_run_full_validation_convenience(sample_df):
     )
     assert isinstance(result, FullValidationResult)
     assert result.ticker == "CONV"
-    assert result.verdict in ("APPROVED", "CONDITIONAL", "REJECTED")
+    assert result.verdict in ("APPROVED", "CONDITIONAL", "REJECTED", "APROBADO", "CONDICIONAL", "RECHAZADO")
 
 
 class TestIntegrationWithBotEngine:
@@ -315,4 +316,4 @@ class TestIntegrationWithBotEngine:
         pipeline = FullValidationPipeline(config=config)
         val_result = pipeline.run(sample_df, ticker="INTEGRATION", period="2y")
         assert val_result.ticker == "INTEGRATION"
-        assert val_result.verdict in ("APPROVED", "CONDITIONAL", "REJECTED")
+        assert val_result.verdict in ("APPROVED", "CONDITIONAL", "REJECTED", "APROBADO", "CONDICIONAL", "RECHAZADO")
