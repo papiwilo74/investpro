@@ -184,6 +184,7 @@ Responde siempre en español, con rigor científico e institucional, usando Mark
         messages: list[dict[str, str]],
         temperature: float = 0.25,
         top_p: float = 0.85,
+        max_tokens: int = 600,
     ) -> str:
         """Invoca el endpoint OpenAI-compatible en la nube (Groq, Alibaba Cloud DashScope, etc.)."""
         if not self.cloud_api_key:
@@ -198,6 +199,7 @@ Responde siempre en español, con rigor científico e institucional, usando Mark
             "messages": messages,
             "temperature": temperature,
             "top_p": top_p,
+            "max_tokens": max_tokens,
             "stream": False,
         }
         url = f"{self.cloud_base_url}/chat/completions"
@@ -236,6 +238,7 @@ Responde siempre en español, con rigor científico e institucional, usando Mark
         messages: list[dict[str, str]],
         temperature: float = 0.25,
         top_p: float = 0.85,
+        max_tokens: int = 600,
     ) -> tuple[str, str]:
         """Ejecuta el prompt a través del proveedor prioritario con conmutación por error (failover)."""
         status = await self.check_availability()
@@ -252,7 +255,9 @@ Responde siempre en español, con rigor científico e institucional, usando Mark
                 logger.warning("Ollama falló: %s. Conmutando a Cloud API...", e)
                 if cloud_ok:
                     try:
-                        raw_text = await self._call_cloud_llm(messages, temperature=temperature, top_p=top_p)
+                        raw_text = await self._call_cloud_llm(
+                            messages, temperature=temperature, top_p=top_p, max_tokens=max_tokens
+                        )
                         return raw_text, f"cloud:{self.cloud_model}"
                     except Exception as ce:
                         logger.warning("Cloud LLM también falló: %s", ce)
@@ -260,7 +265,9 @@ Responde siempre en español, con rigor científico e institucional, usando Mark
         # Si el proveedor activo es Cloud
         elif active == "cloud":
             try:
-                raw_text = await self._call_cloud_llm(messages, temperature=temperature, top_p=top_p)
+                raw_text = await self._call_cloud_llm(
+                    messages, temperature=temperature, top_p=top_p, max_tokens=max_tokens
+                )
                 return raw_text, f"cloud:{self.cloud_model}"
             except Exception as e:
                 logger.warning("Cloud LLM falló: %s. Conmutando a Ollama local...", e)
@@ -630,7 +637,7 @@ Continuar con la ejecución programada de la estrategia de rebalanceo, mantenien
         ]
 
         try:
-            raw_text, source = await self._execute_prompt(messages, temperature=0.35, top_p=0.9)
+            raw_text, source = await self._execute_prompt(messages, temperature=0.35, top_p=0.9, max_tokens=600)
             return {
                 "query": query,
                 "response": raw_text,
@@ -640,17 +647,43 @@ Continuar con la ejecución programada de la estrategia de rebalanceo, mantenien
         except Exception:
             pass
 
-        # Fallback conversacional institucional (CERO EMOJIS)
+        # Fallback conversacional institucional y cuantitativo con telemetría real (CERO EMOJIS)
+        equity = context.get("equity")
+        cash = context.get("cash")
+        positions = context.get("positions", [])
+
+        telemetry_lines = []
+        if equity is not None and cash is not None:
+            liquidity_pct = (cash / equity * 100.0) if equity > 0 else 0.0
+            invested = equity - cash
+            telemetry_lines.append(f"- **Capital Total (Equity)**: ${equity:,.2f} USD")
+            telemetry_lines.append(
+                f"- **Efectivo Disponible (Cash)**: ${cash:,.2f} USD ({liquidity_pct:.1f}% de liquidez inmediata)"
+            )
+            telemetry_lines.append(
+                f"- **Capital Comprometido**: ${invested:,.2f} USD distribuidos en {len(positions)} posiciones abiertas"
+            )
+            telemetry_lines.append(
+                "- **Apalancamiento de Posiciones**: Las posiciones abiertas actuales operan en modo Spot (x1.0) vía Alpaca Crypto."
+            )
+
+        telemetry_block = (
+            "\n".join(telemetry_lines)
+            if telemetry_lines
+            else "Telemetría de portafolio no disponible en este ciclo de consulta."
+        )
+        cloud_desc = "Conectada (Groq)" if self.cloud_api_key else "No configurada"
+
         fallback_msg = (
-            f"**Respuesta del Copiloto Axiom (Modo Asistente Algorítmico):**\n\n"
+            f"**Diagnóstico del Copiloto Axiom (Modo Asistente Algorítmico):**\n\n"
             f'Has consultado: *"{query}"*\n\n'
-            f"- **Arquitectura Híbrida**: Axiom Copilot soporta inferencia local con Ollama (`{self.model}`) en GPU "
-            f"o en la nube mediante API ultraligera (Groq / Alibaba Cloud DashScope / OpenAI compatible, consumo < 2MB RAM).\n"
-            f"- **Estado Actual**: No se detectó servidor Ollama activo en `{self.base_url}` ni API key en la nube configurada.\n"
-            f"- **Para inferencia local con RTX 4060**: Ejecuta en tu terminal `ollama run llama3.1:8b`.\n"
-            f"- **Para inferencia en la nube (Render o local)**: Configura la variable `GROQ_API_KEY` o `CLOUD_LLM_API_KEY`.\n"
-            f"- **Disciplina Cuantitativa**: El bot continúa operando normalmente con su límite diario de pérdidas (-2%), "
-            f"política estratégica 60% Cripto / 40% Acciones y filtros de Circuit Breaker."
+            f"### Estado y Telemetría del Portafolio:\n"
+            f"{telemetry_block}\n\n"
+            f"### Parámetros de Control y Riesgo:\n"
+            f"- **Límites de Riesgo**: Límite diario de pérdidas (-2.0%), trailing stop ATR dinámico y reglas de corte activas.\n"
+            f"- **Arquitectura del Copiloto**: Inferencia servida mediante motor de telemetría determinista "
+            f"(Cloud API: {cloud_desc} | Local Ollama: {self.base_url}).\n"
+            f"- **Estado de Apalancamiento**: Ninguna de las posiciones abiertas preexistentes posee apalancamiento; se mantienen en Spot x1.0."
         )
 
         return {
