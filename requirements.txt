@@ -37,6 +37,7 @@ transformers>=4.40
 
 # Base de datos
 sqlalchemy>=2.0.51
+psycopg[binary]>=3.2
 psycopg2-binary>=2.9.10
 
 # Autenticación JWT

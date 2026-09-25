@@ -16,8 +16,26 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 _DB_PATH = Path(__file__).resolve().parent.parent / "data" / "inversion_helper.db"
 
-# Usar DATABASE_URL de entorno (PostgreSQL en Render) o fallback a SQLite
-_DB_URL = os.environ.get("DATABASE_URL") or f"sqlite:///{_DB_PATH}"
+# Usar DATABASE_URL de entorno (PostgreSQL en Render/Neon) o fallback a SQLite
+_raw_db_url = os.environ.get("DATABASE_URL")
+if _raw_db_url:
+    # Render y plataformas heredadas proveen a menudo postgres:// en lugar de postgresql://
+    if _raw_db_url.startswith("postgres://"):
+        _raw_db_url = _raw_db_url.replace("postgres://", "postgresql://", 1)
+
+    # Si la URL es postgresql:// genérica, compatibilizar dinámicamente con el driver instalado
+    if _raw_db_url.startswith("postgresql://"):
+        try:
+            __import__("psycopg")
+        except ImportError:
+            try:
+                __import__("psycopg2")
+                _raw_db_url = _raw_db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+            except ImportError:
+                pass
+    _DB_URL = _raw_db_url
+else:
+    _DB_URL = f"sqlite:///{_DB_PATH}"
 
 _is_sqlite = _DB_URL.startswith("sqlite")
 
