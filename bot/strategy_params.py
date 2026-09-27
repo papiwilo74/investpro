@@ -13,23 +13,18 @@ from dataclasses import dataclass
 class StrategyParams:
     """Parámetros inmutables que controlan el comportamiento del motor de decisiones."""
 
-    # ── Distribución de Portafolio (60% Crypto / 40% Acciones) ───────
-    crypto_portfolio_target_pct: float = 0.60
-    stock_portfolio_target_pct: float = 0.40
-    crypto_position_size_mult: float = 1.0
+    # ── Distribución de Portafolio (100% Acciones / 0% Crypto) ───────
+    crypto_portfolio_target_pct: float = 0.0
+    stock_portfolio_target_pct: float = 1.0
+    crypto_position_size_mult: float = 0.0
 
     # ── Optimización para Render (512 MB RAM) & Neon DB ────────────
     render_low_memory_mode: bool = True
     sequential_ticker_processing: bool = True
     max_memory_history_days: int = 90  # Acota el historial cargado en RAM a 90 días
 
-    # Lista de criptomonedas prioritarias de máxima liquidez (Tier 1 Mega-cap)
-    # Acotada a 3 pares líderes para garantizar ultra-bajo consumo de RAM (< 160MB) en Render
-    crypto_symbols: tuple[str, ...] = (
-        "BTC/USD",
-        "ETH/USD",
-        "SOL/USD",
-    )
+    # Lista de criptomonedas (vaciada para modo 100% Acciones)
+    crypto_symbols: tuple[str, ...] = ()
 
     # ── LONG (compra en tendencia alcista) ─────────────────────────
     buy_score_threshold: float = 0.10
@@ -207,10 +202,7 @@ class StrategyParams:
     crypto_btc_min_score: float = -0.10  # Score mínimo de Bitcoin requerido para operar altcoins
 
     # ── Posiciones en HOLD Manual (Protección y recuperación) ──────
-    manual_hold_symbols: tuple[str, ...] = (
-        "DOT/USD",
-        "DOTUSD",
-    )  # Activos que el usuario decide no vender para esperar recuperación
+    manual_hold_symbols: tuple[str, ...] = ()  # Activos que el usuario decide no vender para esperar recuperación
 
     def is_symbol_in_manual_hold(self, symbol: str) -> bool:
         """Verifica si un símbolo está en la lista de HOLD manual o en MANUAL_HOLD_SYMBOLS env."""

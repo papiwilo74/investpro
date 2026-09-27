@@ -33,24 +33,21 @@ def sample_crypto_df():
 
 def test_strategy_params_allocation():
     params = StrategyParams()
-    assert params.crypto_portfolio_target_pct == 0.60
-    assert params.stock_portfolio_target_pct == 0.40
-    assert params.crypto_position_size_mult == 1.0
-    assert "BTC/USD" in params.crypto_symbols
-    assert "ETH/USD" in params.crypto_symbols
-    assert "SOL/USD" in params.crypto_symbols
+    assert params.crypto_portfolio_target_pct == 0.0
+    assert params.stock_portfolio_target_pct == 1.0
+    assert params.crypto_position_size_mult == 0.0
+    assert len(params.crypto_symbols) == 0
 
 
 def test_multi_strategy_allocator_crypto_weighting():
     allocator = MultiStrategyAllocator()
-    # Crypto con WR neutral o bueno recibe factor de impulso
+    # Crypto con 0% allocation retorna escala 0.0
     scale_crypto = allocator.get_allocation_scale("MOMENTUM", asset_type="CRYPTO")
-    # Stock recibe ponderación hacia 40%
+    # Stock recibe ponderación completa 100% (1.0x o superior)
     scale_stock = allocator.get_allocation_scale("MOMENTUM", asset_type="STOCK")
 
-    assert scale_crypto > scale_stock
-    assert scale_crypto >= 1.25  # Boost activo para crypto (60%)
-    assert scale_stock <= 0.85  # Stock ponderado hacia 40%
+    assert scale_crypto == 0.0
+    assert scale_stock >= 1.0
 
 
 def test_trading_brain_canonical_crypto_symbol_matching(sample_crypto_df):

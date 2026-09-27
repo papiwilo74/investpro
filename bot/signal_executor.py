@@ -159,11 +159,14 @@ class SignalExecutor:
         is_crypto = (
             ticker.endswith("-USD") or "/" in ticker or ticker in {"BTC", "ETH", "SOL", "DOT", "UNI", "FIL", "GRT"}
         )
-        if not is_crypto and invest_amount <= ref_price:
+        if is_crypto:
+            logger.info("{}: compras de cripto bloqueadas (cartera 100% acciones)", ticker)
+            return 0.0
+        if invest_amount <= ref_price:
             return 0.0
 
         current_exposure = self.compute_current_exposure(positions, equity)
-        exposure_cap = min(float(cfg.max_leverage), 0.70 * leverage) if cfg.leverage_enabled else 0.35
+        exposure_cap = min(float(cfg.max_leverage), 0.90 * leverage) if cfg.leverage_enabled else 0.35
         new_pct = current_exposure + (invest_amount / equity) if equity > 0 else 1.0
         if new_pct > exposure_cap:
             return 0.0

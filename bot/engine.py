@@ -1033,11 +1033,18 @@ class TradingBot:
                 except Exception as btc_err:
                     logger.debug("Error verificando BTC shield: %s", btc_err)
 
-            crypto_list = (
-                list(self._strategy_params.crypto_symbols)
-                if hasattr(self, "_strategy_params") and self._strategy_params.crypto_symbols
-                else DEFAULT_CRYPTO_WATCHLIST
-            )
+            target_crypto = getattr(self._strategy_params, "crypto_portfolio_target_pct", 0.0)
+            if target_crypto <= 0:
+                # Cartera 100% Acciones: Solo gestionar salida de posiciones cripto abiertas existentes
+                crypto_list = [p.get("symbol", "") for p in raw_positions if p.get("symbol")]
+                if not crypto_list:
+                    return
+            else:
+                crypto_list = (
+                    list(self._strategy_params.crypto_symbols)
+                    if hasattr(self, "_strategy_params") and self._strategy_params.crypto_symbols
+                    else DEFAULT_CRYPTO_WATCHLIST
+                )
 
             for symbol in crypto_list:
                 if not self.is_running:
@@ -1147,6 +1154,12 @@ class TradingBot:
                     )
 
                     if decision.action == "BUY" and not has_position:
+                        if target_crypto <= 0:
+                            self._log(
+                                f"CRYPTO ALLOCATION {symbol}: Compra bloqueada (cartera rebalanceada a 100% acciones)"
+                            )
+                            continue
+
                         # ── 1. Freno de Emergencia / Circuit Breaker Diario ──
                         if crypto_buys_blocked:
                             self._log(
