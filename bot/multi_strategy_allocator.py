@@ -40,9 +40,9 @@ class MultiStrategyAllocator:
     def __init__(
         self,
         min_trades_to_adjust: int = 5,
-        crypto_target_allocation: float = 0.0,
-        stock_target_allocation: float = 1.0,
-        crypto_boost_factor: float = 0.0,
+        crypto_target_allocation: float = 1.0,
+        stock_target_allocation: float = 0.0,
+        crypto_boost_factor: float = 1.25,
     ) -> None:
         self.min_trades_to_adjust = min_trades_to_adjust
         self.crypto_target_allocation = crypto_target_allocation
@@ -112,20 +112,22 @@ class MultiStrategyAllocator:
             else:
                 scale = 0.5  # Pésimo rendimiento -> Reduce al mínimo 50%
 
-        # Si se especifica tipo de activo, escalar ponderación según 0% Crypto vs 100% Stocks
+        # Si se especifica tipo de activo, escalar ponderación según 100% Crypto vs 0% Stocks
         if asset_type is not None:
             is_crypto = asset_type.upper() == "CRYPTO"
             if is_crypto:
-                if self.crypto_target_allocation <= 0.0:
-                    return 0.0
                 crypto_stat = self.asset_stats.get("CRYPTO")
                 if not crypto_stat or crypto_stat.win_rate >= 0.40:
-                    scale *= self.crypto_boost_factor * (self.crypto_target_allocation / 0.50)
+                    scale *= self.crypto_boost_factor * self.crypto_target_allocation
+                else:
+                    scale *= self.crypto_target_allocation
             else:
-                # Ponderación para Acciones (objetivo 100%)
+                # Si el objetivo de acciones es 0%, bloquear asignación
+                if self.stock_target_allocation <= 0.0:
+                    return 0.0
                 scale *= self.stock_target_allocation
 
-        return min(round(scale, 2), 3.0)
+        return min(round(scale, 2), 2.0)
 
     def clear_memory_cache() -> None:
         """Fuerza la recolección de basura en el ciclo de escaneo."""

@@ -911,27 +911,32 @@ class TradingBot:
         positions = {p["symbol"]: p for p in self.client.get_positions()}
         self._update_risk_state(equity, positions)
 
-        scan_result = self.scanner.scan(
-            universe="nasdaq100",
-            period="1y",
-            interval="1d",
-            limit=12,
-            include_rejected=False,
-        )
-        scan_tickers = [c.ticker for c in scan_result.accepted]
-        if scan_tickers:
-            self._log(f"Scanner inteligente: {', '.join(scan_tickers[:8])}")
-        else:
-            self._log("Scanner sin oportunidades; usando watchlist de respaldo.")
-            scan_tickers = WATCHLIST[:12]
-
-        # ── Asegurar que todas las posiciones de acciones abiertas se evalúen siempre ──
+        target_stock = getattr(self._strategy_params, "stock_portfolio_target_pct", 0.0)
         open_stock_tickers = [
             p_sym for p_sym in positions.keys() if p_sym and not p_sym.endswith("USD") and "/" not in p_sym
         ]
-        for ost in open_stock_tickers:
-            if ost not in scan_tickers:
-                scan_tickers.insert(0, ost)
+        if target_stock <= 0:
+            if not open_stock_tickers:
+                return
+            scan_tickers = open_stock_tickers
+        else:
+            scan_result = self.scanner.scan(
+                universe="nasdaq100",
+                period="1y",
+                interval="1d",
+                limit=12,
+                include_rejected=False,
+            )
+            scan_tickers = [c.ticker for c in scan_result.accepted]
+            if scan_tickers:
+                self._log(f"Scanner inteligente: {', '.join(scan_tickers[:8])}")
+            else:
+                self._log("Scanner sin oportunidades; usando watchlist de respaldo.")
+                scan_tickers = WATCHLIST[:12]
+
+            for ost in open_stock_tickers:
+                if ost not in scan_tickers:
+                    scan_tickers.insert(0, ost)
 
         # ── Portfolio Allocator: pesos objetivo por risk-parity ──────
         target_allocations: dict[str, float] = {}

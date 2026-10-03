@@ -27,14 +27,14 @@ def validate_secrets() -> list[str]:
     return _settings.validate()
 
 
-# ── Watchlist por defecto (100% Acciones) ─────────────────────────────
+# ── Watchlist por defecto (100% Cripto) ───────────────────────────────
 WATCHLIST: list[str] = [
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "AMZN",
-    "META",
-    "GOOGL",
+    "BTC-USD",
+    "ETH-USD",
+    "SOL-USD",
+    "LTC-USD",
+    "DOT-USD",
+    "AAVE-USD",
 ]
 
 NASDAQ_100_UNIVERSE: list[str] = [

@@ -159,10 +159,17 @@ class SignalExecutor:
         is_crypto = (
             ticker.endswith("-USD") or "/" in ticker or ticker in {"BTC", "ETH", "SOL", "DOT", "UNI", "FIL", "GRT"}
         )
-        if is_crypto:
-            logger.info("{}: compras de cripto bloqueadas (cartera 100% acciones)", ticker)
-            return 0.0
-        if invest_amount <= ref_price:
+        params = getattr(self._brain, "params", None)
+        if params is not None:
+            stock_pct = getattr(params, "stock_portfolio_target_pct", None)
+            if isinstance(stock_pct, int | float) and stock_pct <= 0.0 and not is_crypto:
+                logger.info("{}: compras de acciones bloqueadas (target_stock=0)", ticker)
+                return 0.0
+            crypto_pct = getattr(params, "crypto_portfolio_target_pct", None)
+            if isinstance(crypto_pct, int | float) and crypto_pct <= 0.0 and is_crypto:
+                logger.info("{}: compras de cripto bloqueadas (target_crypto=0)", ticker)
+                return 0.0
+        if invest_amount <= 0:
             return 0.0
 
         current_exposure = self.compute_current_exposure(positions, equity)

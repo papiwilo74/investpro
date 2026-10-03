@@ -13,18 +13,29 @@ from dataclasses import dataclass
 class StrategyParams:
     """Parámetros inmutables que controlan el comportamiento del motor de decisiones."""
 
-    # ── Distribución de Portafolio (100% Acciones / 0% Crypto) ───────
-    crypto_portfolio_target_pct: float = 0.0
-    stock_portfolio_target_pct: float = 1.0
-    crypto_position_size_mult: float = 0.0
+    # ── Distribución de Portafolio (100% Crypto / 0% Acciones) ───────
+    crypto_portfolio_target_pct: float = 1.0
+    stock_portfolio_target_pct: float = 0.0
+    crypto_position_size_mult: float = 1.0
 
     # ── Optimización para Render (512 MB RAM) & Neon DB ────────────
     render_low_memory_mode: bool = True
     sequential_ticker_processing: bool = True
     max_memory_history_days: int = 90  # Acota el historial cargado en RAM a 90 días
 
-    # Lista de criptomonedas (vaciada para modo 100% Acciones)
-    crypto_symbols: tuple[str, ...] = ()
+    # Lista de criptomonedas prioritarias de máxima liquidez y rentabilidad
+    crypto_symbols: tuple[str, ...] = (
+        "BTC/USD",
+        "ETH/USD",
+        "SOL/USD",
+        "LTC/USD",
+        "DOT/USD",
+        "AAVE/USD",
+        "UNI/USD",
+        "ADA/USD",
+        "FIL/USD",
+        "LINK/USD",
+    )
 
     # ── LONG (compra en tendencia alcista) ─────────────────────────
     buy_score_threshold: float = 0.10
