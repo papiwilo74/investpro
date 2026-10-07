@@ -174,7 +174,9 @@ class StrategyParams:
 
     # ── Filtro de Volumen Institucional (Volume Surge) ────────────
     use_volume_surge_filter: bool = True
-    volume_surge_min_ratio: float = 1.15  # Requiere 15% más de volumen que la media de 20 barras
+    volume_surge_min_ratio: float = 0.85  # Normalizado a 0.85x para velas diarias en formación
+    crypto_volume_surge_min_ratio: float = 0.80  # Calibrado para liquidez crypto 24/7
+    volume_bypass_score_threshold: float = 0.30  # Señales de alta convicción (score >= 0.30) no se bloquean por volumen
 
     # ── Crypto Fear & Greed Sentiment ──────────────────────────────
     use_fear_and_greed_filter: bool = True

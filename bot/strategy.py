@@ -858,13 +858,23 @@ class TradingBrain:
                     pass
 
         # ── Filtro de Volumen Institucional (Volume Surge) ──────────
-        if getattr(p, "use_volume_surge_filter", False) and "volume" in df.columns:
+        bypass_score = getattr(p, "volume_bypass_score_threshold", 0.30)
+        skip_vol_filter = entry_score >= bypass_score
+        if getattr(p, "use_volume_surge_filter", False) and "volume" in df.columns and not skip_vol_filter:
             try:
                 last_vol = float(df["volume"].iloc[current_index])
                 recent_vols = df["volume"].iloc[max(0, current_index - 19) : current_index + 1]
                 if len(recent_vols) >= 5 and recent_vols.nunique() > 1:
                     vol_sma = float(recent_vols.mean())
-                    min_ratio = getattr(p, "volume_surge_min_ratio", 1.15)
+                    is_crypto_asset = (
+                        "/" in ticker or "-" in ticker or ticker.upper().endswith("USD") if ticker else False
+                    )
+                    default_ratio = 0.80 if is_crypto_asset else 0.85
+                    min_ratio = getattr(
+                        p,
+                        "crypto_volume_surge_min_ratio" if is_crypto_asset else "volume_surge_min_ratio",
+                        default_ratio,
+                    )
                     if vol_sma > 0 and last_vol < vol_sma * min_ratio:
                         return Decision(
                             "HOLD",
@@ -1101,7 +1111,10 @@ def create_web_bot_strategy_params() -> StrategyParams:
         use_dynamic_trailing=True,
         use_confirmation_filter=True,
         confirmation_bars=10,
-        confirmation_min_ratio=0.6,
+        confirmation_min_ratio=0.4,
+        volume_surge_min_ratio=0.85,
+        crypto_volume_surge_min_ratio=0.80,
+        volume_bypass_score_threshold=0.30,
         use_multi_timeframe=True,
         use_regime_filter=True,
         use_earnings_blackout=False,
