@@ -85,6 +85,7 @@ def test_volume_surge_filter():
     """Verifica que señales con volumen anémico sean rechazadas cuando se activa el filtro."""
     params = StrategyParams(
         buy_score_threshold=0.10,
+        volume_bypass_score_threshold=0.80,
         use_volume_surge_filter=True,
         volume_surge_min_ratio=1.20,  # Requiere 20% más que la media
         use_confirmation_filter=False,
