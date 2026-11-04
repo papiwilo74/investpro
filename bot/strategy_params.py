@@ -13,9 +13,9 @@ from dataclasses import dataclass
 class StrategyParams:
     """Parámetros inmutables que controlan el comportamiento del motor de decisiones."""
 
-    # ── Distribución de Portafolio (100% Crypto / 0% Acciones) ───────
-    crypto_portfolio_target_pct: float = 1.0
-    stock_portfolio_target_pct: float = 0.0
+    # ── Distribución de Portafolio (60% Crypto / 40% Acciones) ───────
+    crypto_portfolio_target_pct: float = 0.60
+    stock_portfolio_target_pct: float = 0.40
     crypto_position_size_mult: float = 1.0
 
     # ── Optimización para Render (512 MB RAM) & Neon DB ────────────
@@ -111,7 +111,7 @@ class StrategyParams:
 
     # ── Confirmación de velas ──────────────────────────────────────
     use_confirmation_filter: bool = True
-    confirmation_bars: int = 10
+    confirmation_bars: int = 5
     confirmation_min_ratio: float = 0.4
 
     # Suavizado de señal
@@ -176,7 +176,7 @@ class StrategyParams:
     use_volume_surge_filter: bool = True
     volume_surge_min_ratio: float = 0.85  # Normalizado a 0.85x para velas diarias en formación
     crypto_volume_surge_min_ratio: float = 0.80  # Calibrado para liquidez crypto 24/7
-    volume_bypass_score_threshold: float = 0.30  # Señales de alta convicción (score >= 0.30) no se bloquean por volumen
+    volume_bypass_score_threshold: float = 0.22  # Señales sólidas (score >= 0.22) no se bloquean por volumen parcial
 
     # ── Crypto Fear & Greed Sentiment ──────────────────────────────
     use_fear_and_greed_filter: bool = True
@@ -209,7 +209,7 @@ class StrategyParams:
     crypto_pairs_score_boost: float = 0.08  # Impulso de score para el activo infravalorado
 
     # ── Crypto Protecciones y Circuit Breaker Diario ──────────────
-    crypto_min_buy_score: float = 0.22  # Exige score cuantitativo sólido (filtra rebotes falsos/ruido)
+    crypto_min_buy_score: float = 0.12  # Score cuantitativo calibrado con buy_score_threshold (0.10)
     crypto_daily_max_loss_pct: float = 0.02  # Freno de emergencia: congela compras si la cartera cae >= 2% en el día
     use_crypto_btc_macro_filter: bool = True  # Bloquea compras de altcoins si Bitcoin está en caída libre
     crypto_btc_min_score: float = -0.10  # Score mínimo de Bitcoin requerido para operar altcoins

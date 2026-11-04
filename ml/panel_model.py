@@ -481,7 +481,7 @@ class PanelModelTrainer:
         logger.info("PanelModel: modelo guardado en %s", model_path)
 
     def load(self) -> dict[str, Any] | None:
-        """Carga el modelo panel entrenado."""
+        """Carga el modelo panel entrenado (con caché en memoria por mtime)."""
         base_path = self._get_panel_path()
         model_path = base_path.with_suffix(".json")
         meta_path = base_path.with_suffix(".meta.json")
@@ -489,6 +489,14 @@ class PanelModelTrainer:
         if not model_path.exists() or not meta_path.exists():
             logger.warning("PanelModel: no hay modelo entrenado")
             return None
+
+        try:
+            mtime = model_path.stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        cache_key = (str(model_path), mtime)
+        if getattr(self, "_cached_key", None) == cache_key and getattr(self, "_cached_data", None) is not None:
+            return self._cached_data
 
         metadata = json.loads(meta_path.read_text(encoding="utf-8"))
         model_type = metadata.get("model_type", "xgboost")
@@ -501,7 +509,10 @@ class PanelModelTrainer:
             model = XGBClassifier(device="cuda" if _HAS_CUDA else "cpu")
             model.load_model(str(model_path))
 
-        return {**metadata, "model": model}
+        res = {**metadata, "model": model}
+        self._cached_key = cache_key
+        self._cached_data = res
+        return res
 
     def predict(self, df: pd.DataFrame) -> dict[str, Any] | None:
         """Predice usando el modelo panel para un DataFrame de un solo ticker."""

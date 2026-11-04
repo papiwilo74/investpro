@@ -40,9 +40,9 @@ class MultiStrategyAllocator:
     def __init__(
         self,
         min_trades_to_adjust: int = 5,
-        crypto_target_allocation: float = 1.0,
-        stock_target_allocation: float = 0.0,
-        crypto_boost_factor: float = 1.25,
+        crypto_target_allocation: float = 0.60,
+        stock_target_allocation: float = 0.40,
+        crypto_boost_factor: float = 1.75,
     ) -> None:
         self.min_trades_to_adjust = min_trades_to_adjust
         self.crypto_target_allocation = crypto_target_allocation

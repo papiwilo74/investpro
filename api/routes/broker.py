@@ -143,9 +143,19 @@ async def get_account() -> dict[str, Any]:
 
 @router.get("/positions")
 async def get_positions() -> list[dict[str, Any]]:
-    """Obtiene todas las posiciones abiertas actualmente."""
+    """Obtiene todas las posiciones abiertas actualmente (acciones + cripto)."""
     try:
-        positions = client.get_positions()
+        positions = list(client.get_positions() or [])
+        existing_syms = {p.get("symbol") for p in positions if isinstance(p, dict)}
+        crypto_cli = getattr(bot, "crypto_client", None)
+        if crypto_cli is not None:
+            try:
+                for cp in crypto_cli.get_positions() or []:
+                    if isinstance(cp, dict) and cp.get("symbol") not in existing_syms:
+                        positions.append(cp)
+                        existing_syms.add(cp.get("symbol"))
+            except Exception:
+                pass
         return sanitize_for_json(positions)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

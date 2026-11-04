@@ -50,14 +50,6 @@ if not _HAS_CUDA:
     except Exception:
         pass
 
-if not _HAS_CUDA:
-    try:
-        import torch
-
-        _HAS_CUDA = torch.cuda.is_available()
-    except Exception:
-        pass
-
 
 class _NumpyEncoder(json.JSONEncoder):
     """Codifica valores numpy/scipy a tipos nativos de Python para JSON."""
@@ -80,6 +72,8 @@ class ModelTrainer:
         self.models_dir = models_dir or (PROJECT_ROOT / "ml" / "models")
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.fetcher = DataFetcher()
+        self._cached_key: tuple[str, float] | None = None
+        self._cached_model_data: dict[str, Any] | None = None
 
     def _get_model_path(self, ticker: str) -> Path:
         """Ruta base para el modelo (sin extensión)."""
@@ -353,6 +347,8 @@ class ModelTrainer:
     def load_model(self, ticker: str) -> dict[str, Any] | None:
         """
         Carga un modelo XGBoost entrenado para el ticker especificado.
+        Usa un caché de 1 slot para evitar doble carga en _get_ml_prediction + predict_trend
+        sin acumular múltiples modelos en la RAM (límite 512MB).
         """
         ticker = ticker.upper()
         base_path = self._get_model_path(ticker)
@@ -361,6 +357,14 @@ class ModelTrainer:
         legacy_pkl = base_path.with_suffix(".pkl")
 
         if model_path.exists() and meta_path.exists():
+            try:
+                mtime = model_path.stat().st_mtime
+            except OSError:
+                mtime = 0.0
+            cache_key = (str(model_path), mtime)
+            if getattr(self, "_cached_key", None) == cache_key and getattr(self, "_cached_model_data", None) is not None:
+                return self._cached_model_data
+
             xgb_model = XGBClassifier(device="cuda" if _HAS_CUDA else "cpu")
             xgb_model.load_model(str(model_path))
             with open(meta_path, encoding="utf-8") as f:
@@ -374,7 +378,10 @@ class ModelTrainer:
                         calibrator = pickle.load(f)
                 except Exception:
                     calibrator = None
-            return {**metadata, "model": xgb_model, "calibrator": calibrator}
+            res = {**metadata, "model": xgb_model, "calibrator": calibrator}
+            self._cached_key = cache_key
+            self._cached_model_data = res
+            return res
 
         if legacy_pkl.exists():
             with open(legacy_pkl, "rb") as f:

@@ -335,7 +335,9 @@ class TradingBrain:
                     smoothed[j] = smoothed[j - 1]
                 else:
                     smoothed[j] = raw[j] * alpha + smoothed[j - 1] * (1.0 - alpha)
-            smooth_score = float(smoothed[-1])
+            raw_last = float(raw[-1]) if not np.isnan(raw[-1]) else score
+            score_boost = max(0.0, score - raw_last)
+            smooth_score = float(smoothed[-1]) + score_boost
         else:
             smooth_score = score
         self._last_smooth_score = smooth_score
@@ -618,8 +620,10 @@ class TradingBrain:
                         direction=nn_dir, probability=nn_result["confidence"], score=(nn_result["confidence"] * 2 - 1)
                     )
 
+            low_mem = bool(getattr(p, "render_low_memory_mode", False))
+
             lstm_signal = None
-            if self._lstm_predictor is None:
+            if not low_mem and self._lstm_predictor is None:
                 try:
                     from ml.lstm_model import LSTMPredictor
 
@@ -630,7 +634,7 @@ class TradingBrain:
                     self._lstm_predictor = predictor
                 except Exception:
                     self._lstm_predictor = False
-            if self._lstm_predictor and self._lstm_predictor is not False:
+            if not low_mem and self._lstm_predictor and self._lstm_predictor is not False:
                 try:
                     lstm_result = self._lstm_predictor.predict_trend(df)
                     if lstm_result["status"] == "OK":
@@ -674,9 +678,9 @@ class TradingBrain:
                         score=0.4 if adv_dir == "BULLISH" else -0.4,
                     )
 
-            # ── Panel Model: señal cross-sectional (si está entrenado) ──
+            # ── Panel Model: señal cross-sectional (si está entrenado y no estamos en low_mem) ──
             panel_signal = None
-            if ticker and is_live_decision:
+            if not low_mem and ticker and is_live_decision:
                 try:
                     from ml.panel_model import predict_panel
 
@@ -694,24 +698,25 @@ class TradingBrain:
                 except Exception:
                     pass
 
-            # ── PPO: señal del agente PPO entrenado ─────────────────────
+            # ── PPO: señal del agente PPO entrenado (omitido en 512MB low_mem) ──
             ppo_signal = None
-            try:
-                from ml.ppo_signal import ppo_predict
+            if not low_mem:
+                try:
+                    from ml.ppo_signal import ppo_predict
 
-                ppo_result = ppo_predict(ticker, df)
-                if ppo_result and ppo_result.get("direction"):
-                    ppo_dir = ppo_result["direction"]
-                    ppo_conf = ppo_result.get("probability", 0.6)
-                    ppo_signal = ModelSignal(
-                        direction=ppo_dir,
-                        probability=ppo_conf,
-                        score=ppo_conf if ppo_dir == "BULLISH" else -ppo_conf,
-                    )
-            except Exception:
-                pass
+                    ppo_result = ppo_predict(ticker, df)
+                    if ppo_result and ppo_result.get("direction"):
+                        ppo_dir = ppo_result["direction"]
+                        ppo_conf = ppo_result.get("probability", 0.6)
+                        ppo_signal = ModelSignal(
+                            direction=ppo_dir,
+                            probability=ppo_conf,
+                            score=ppo_conf if ppo_dir == "BULLISH" else -ppo_conf,
+                        )
+                except Exception:
+                    pass
 
-            # ── Vision (CNN): análisis visual de chart ──────────────────
+            # ── Vision (CNN): análisis visual heurístico ligero ─────────
             vision_signal = None
             try:
                 from ml.vision import VisualAnalyzer
@@ -729,9 +734,9 @@ class TradingBrain:
             except Exception:
                 pass
 
-            # ── Reddit Sentiment: sentimiento social ────────────────────
+            # ── Reddit Sentiment: sentimiento social (omitido en low_mem) ─
             reddit_signal = None
-            if ticker and is_live_decision:
+            if not low_mem and ticker and is_live_decision:
                 try:
                     from ml.reddit_sentiment import RedditSentimentAnalyzer
 
@@ -758,9 +763,9 @@ class TradingBrain:
                 except Exception:
                     pass
 
-            # ── StockTwits Sentiment: pulso de la comunidad ─────────────
+            # ── StockTwits Sentiment: pulso de la comunidad (omitido en low_mem) ─
             stocktwits_signal = None
-            if ticker and is_live_decision:
+            if not low_mem and ticker and is_live_decision:
                 try:
                     from ml.stocktwits_sentiment import StockTwitsAnalyzer
 
@@ -778,9 +783,9 @@ class TradingBrain:
                 except Exception:
                     pass
 
-            # ── Fundamentals: datos fundamentalistas ────────────────────
+            # ── Fundamentals: datos fundamentalistas (omitido en low_mem) ─
             fundamentals_signal = None
-            if ticker and is_live_decision:
+            if not low_mem and ticker and is_live_decision:
                 try:
                     from ml.fundamentals import FundamentalFetcher
 
@@ -875,11 +880,18 @@ class TradingBrain:
                         "crypto_volume_surge_min_ratio" if is_crypto_asset else "volume_surge_min_ratio",
                         default_ratio,
                     )
-                    if vol_sma > 0 and last_vol < vol_sma * min_ratio:
-                        return Decision(
-                            "HOLD",
-                            f"Volumen insuficiente ({last_vol / vol_sma:.2f}x < req. {min_ratio:.2f}x)",
-                        )
+                    if vol_sma > 0:
+                        # Si la vela diaria actual está recién abriendo (<45% del volumen medio),
+                        # considerar el volumen de la última vela cerrada para no bloquear por sesión parcial
+                        effective_vol = last_vol
+                        if last_vol < vol_sma * 0.45 and current_index >= 1:
+                            prev_vol = float(df["volume"].iloc[current_index - 1])
+                            effective_vol = max(last_vol, prev_vol)
+                        if effective_vol < vol_sma * min_ratio:
+                            return Decision(
+                                "HOLD",
+                                f"Volumen insuficiente ({effective_vol / vol_sma:.2f}x < req. {min_ratio:.2f}x)",
+                            )
             except Exception:
                 pass
 
@@ -946,7 +958,15 @@ class TradingBrain:
         sma50 = df["close"].rolling(50).mean()
         if pd.isna(sma50.iloc[-1]):
             return "NEUTRAL"
-        return "BULLISH" if df["close"].iloc[-1] > sma50.iloc[-1] else "BEARISH"
+        last_close = float(df["close"].iloc[-1])
+        sma50_val = float(sma50.iloc[-1])
+        if last_close > sma50_val:
+            return "BULLISH"
+        # Si está cerca de SMA50 (>= 98%) o recuperándose sobre SMA20, considerar NEUTRAL en lugar de bloquear
+        sma20 = df["close"].rolling(20).mean().iloc[-1] if len(df) >= 20 else sma50_val
+        if last_close >= sma50_val * 0.98 or (pd.notna(sma20) and last_close > float(sma20)):
+            return "NEUTRAL"
+        return "BEARISH"
 
     @staticmethod
     def _infer_market_regime(df: pd.DataFrame) -> str:

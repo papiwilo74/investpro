@@ -818,6 +818,9 @@ class TradingBot:
         """
         if self.portfolio_allocator is None:
             return
+        target_stock = getattr(self._strategy_params, "stock_portfolio_target_pct", 0.40)
+        if target_stock <= 0:
+            return
         try:
             acc = await self._run_sync(self.client.get_account_summary)
             if not acc:
@@ -826,6 +829,8 @@ class TradingBot:
             if equity <= 0:
                 return
             positions = {p["symbol"]: p for p in await self._run_sync(self.client.get_positions)}
+            if getattr(self._strategy_params, "render_low_memory_mode", False) and not positions:
+                return
             tickers = list(positions.keys()) + WATCHLIST[:10]
             plan = self.portfolio_allocator.rebalance_plan(
                 target_weights={t: 1.0 / len(tickers) for t in tickers},
@@ -920,12 +925,17 @@ class TradingBot:
                 return
             scan_tickers = open_stock_tickers
         else:
+            use_seq = bool(
+                getattr(self._strategy_params, "sequential_ticker_processing", False)
+                or getattr(self._strategy_params, "render_low_memory_mode", False)
+            )
             scan_result = self.scanner.scan(
                 universe="nasdaq100",
-                period="1y",
+                period="6mo" if use_seq else "1y",
                 interval="1d",
                 limit=12,
                 include_rejected=False,
+                parallel=not use_seq,
             )
             scan_tickers = [c.ticker for c in scan_result.accepted]
             if scan_tickers:
@@ -1501,8 +1511,17 @@ class TradingBot:
         """Carga precios de cierre de los símbolos de interés para calcular correlaciones."""
         if not symbols:
             return None
+        unique_map: dict[str, str] = {}
+        for s in symbols:
+            if not s:
+                continue
+            canon = s.replace("/", "").replace("-", "").upper()
+            if canon not in unique_map:
+                unique_map[canon] = s.replace("/", "-") if "/" in s else s
+        if len(unique_map) < 2:
+            return None
         frames = {}
-        for sym in symbols:
+        for sym in unique_map.values():
             try:
                 df = self.fetcher.get_data(sym, period="3mo", interval="1d")
                 if not df.empty and "close" in df.columns:
@@ -2006,10 +2025,30 @@ class TradingBot:
             if qty <= 0:
                 return 0.0
 
+            try:
+                set_price_fn = getattr(self.crypto_client, "set_last_price", None)
+                if callable(set_price_fn):
+                    set_price_fn(symbol, last_close)
+            except Exception:
+                pass
+
             result = self.crypto_client.place_market_order(symbol, qty, "BUY")
             if result.get("status") == "success":
                 fill_price = float(result.get("filled_avg_price", last_close))
                 invested = qty * fill_price
+                try:
+                    if getattr(self, "state", None) is not None:
+                        self.state.save_position(symbol, getattr(decision, "side", "LONG"), fill_price, qty=qty)
+                        self._record_order(
+                            symbol,
+                            "buy",
+                            qty,
+                            fill_price,
+                            order_id=result.get("order_id"),
+                            confidence=float(getattr(decision, "confidence", 0.5)),
+                        )
+                except Exception as st_err:
+                    logger.debug("No se pudo persistir orden/posición crypto %s: %s", symbol, st_err)
                 notifier.new_crypto_buy(symbol, qty, fill_price, invested)
                 self._log(f"CRYPTO BUY EXITOSO: {symbol} {qty} @ ${fill_price:,.2f} = ${invested:,.0f}")
                 return invested
@@ -2043,8 +2082,28 @@ class TradingBot:
                     return
 
             current_price = float(position.get("current_price", 0))
+            try:
+                set_price_fn = getattr(self.crypto_client, "set_last_price", None)
+                if callable(set_price_fn) and current_price > 0:
+                    set_price_fn(symbol, current_price)
+            except Exception:
+                pass
             result = self.crypto_client.place_market_order(symbol, qty, "SELL")
             if result.get("status") == "success":
+                try:
+                    if getattr(self, "state", None) is not None:
+                        if not (0.0 < partial_frac < 1.0):
+                            self.state.remove_position(symbol)
+                        self._record_order(
+                            symbol,
+                            "sell",
+                            qty,
+                            current_price,
+                            order_id=result.get("order_id"),
+                            confidence=float(getattr(decision, "confidence", 1.0)),
+                        )
+                except Exception as st_err:
+                    logger.debug("No se pudo actualizar estado tras venta crypto %s: %s", symbol, st_err)
                 notifier.new_crypto_sell(symbol, qty, current_price, pnl_pct, decision.reason)
                 self._log(f"CRYPTO SELL EXITOSO: {symbol} {qty} @ ${current_price:,.2f} | pnl={pnl_pct:.2%}")
                 reason_lower = getattr(decision, "reason", "").lower()

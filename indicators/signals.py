@@ -53,15 +53,20 @@ class SignalGenerator:
         df = df.copy()
 
         # RSI ──────────────────────────────────────────────────────────
-        # Continuo: +1 cuando RSI=0, -1 cuando RSI=100, 0 en RSI=50
+        # Continuo: sobreventa (<35) positivo, zona saludable alcista (48-68) positivo moderado,
+        # sobrecompra (>70) negativo
         df["sig_rsi"] = 0.0
         if "rsi" in df.columns:
             rsi = df["rsi"]
-            # Mapeo: 0->+1, 30->0, 50->0, 70->0, 100->-1
-            # En sobreventa (<30): positivo
-            # En sobrecompra (>70): negativo
-            # Neutral: 0
-            df["sig_rsi"] = ((50 - rsi) / 20).clip(-1.0, 1.0)
+            oversold = ((35 - rsi) / 25).clip(0.0, 1.0)
+            overbought = -((rsi - 70) / 20).clip(0.0, 1.0)
+            healthy_trend = ((rsi - 48) / 45).clip(-0.20, 0.45)
+            df["sig_rsi"] = np.where(
+                rsi < 35,
+                oversold,
+                np.where(rsi > 70, overbought, healthy_trend),
+            )
+            df.loc[rsi.isna(), "sig_rsi"] = 0.0
 
         # MACD ────────────────────────────────────────────────────────
         # Continuo: signo de la diferencia normalizada, no solo cruce
@@ -84,13 +89,22 @@ class SignalGenerator:
             df["sig_bb"] = ((middle - df["close"]) / (bb_range / 2)).clip(-1.0, 1.0)
 
         # SMA ──────────────────────────────────────────────────────────
-        # Continuo: gap normalizado entre SMA50 y SMA200, no solo cruce
+        # Continuo: gap normalizado entre SMA50 y SMA200 (con fallback a close vs SMA50 en ventanas <200 barras)
         df["sig_sma"] = 0.0
         if "sma_50" in df.columns and "sma_200" in df.columns:
             gap = df["sma_50"] - df["sma_200"]
-            sma_200 = df["sma_200"].replace(0, np.nan).fillna(1e-8)
-            # Gap porcentual: 0% -> 0, +5% -> fuerte positivo, -5% -> fuerte negativo
-            df["sig_sma"] = np.tanh(gap / (sma_200 * 0.02))  # 2% de gap es "fuerte"
+            sma_200 = df["sma_200"].replace(0, np.nan)
+            valid_200 = sma_200.notna() & df["sma_50"].notna()
+            df.loc[valid_200, "sig_sma"] = np.tanh(gap[valid_200] / (sma_200[valid_200] * 0.02))
+            if not valid_200.all() and "close" in df.columns:
+                sma_50 = df["sma_50"].replace(0, np.nan)
+                fb_mask = ~valid_200 & sma_50.notna()
+                df.loc[fb_mask, "sig_sma"] = np.tanh(
+                    (df.loc[fb_mask, "close"] - sma_50[fb_mask]) / (sma_50[fb_mask] * 0.02)
+                )
+        elif "sma_50" in df.columns and "close" in df.columns:
+            sma_50 = df["sma_50"].replace(0, np.nan).fillna(1e-8)
+            df["sig_sma"] = np.tanh((df["close"] - sma_50) / (sma_50 * 0.02)).fillna(0.0)
 
         # EMA ──────────────────────────────────────────────────────────
         # Continuo: pendiente de EMA12, confirmación de momentum
