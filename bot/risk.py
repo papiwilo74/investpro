@@ -311,6 +311,26 @@ class RiskManager:
         else:
             self.save()
 
+    def reset_circuit_breaker(self) -> None:
+        """Restablece el freno de emergencia y el contador de pérdidas consecutivas."""
+        self._consecutive_losses = 0
+        self._circuit_breaker_until = None
+        self._account_liquidated = False
+        if self._use_db and self._repo is not None:
+            try:
+                self._repo.save_state(
+                    portfolio_value=self._portfolio_value,
+                    initial_portfolio_value=self._initial_portfolio_value,
+                    consecutive_losses=0,
+                    circuit_breaker_until=None,
+                    account_liquidated=False,
+                )
+            except Exception as exc:
+                logger.warning("No se pudo resetear circuit breaker en DB: %s", exc)
+        else:
+            self.save()
+        logger.info("Circuit breaker y pérdidas consecutivas reseteados manualmente.")
+
     def kelly_suggestion(self, fractional: float = 0.25) -> dict[str, Any]:
         """Kelly Criterion basado en el historial real de trades (out-of-sample implícito)."""
         perf = self.performance_summary()
@@ -455,19 +475,30 @@ class RiskManager:
         return RiskCheck(approved=True, reasons=reasons, warnings=warnings)
 
     def _check_circuit_breaker(self) -> tuple[bool, str]:
-        if self._circuit_breaker_until and datetime.now() < self._circuit_breaker_until:
-            remaining = (self._circuit_breaker_until - datetime.now()).seconds // 60
-            return False, f"Circuit breaker activo ({remaining} min restantes)"
-        self._circuit_breaker_until = None
+        if self._circuit_breaker_until:
+            now = datetime.now()
+            if now < self._circuit_breaker_until:
+                remaining = max(1, int((self._circuit_breaker_until - now).total_seconds() // 60))
+                return False, f"Circuit breaker activo ({remaining} min restantes)"
+            # El período de enfriamiento concluyó: resetear racha para evitar re-armado infinito
+            self._circuit_breaker_until = None
+            self._consecutive_losses = 0
+            self.save()
+            logger.info("Circuit breaker concluido: racha de pérdidas reseteada a 0 para reanudar operaciones.")
         return True, "Circuit breaker OK"
 
     def _check_consecutive_losses(self) -> tuple[bool, str]:
         limit = self.config.consecutive_loss_limit
         if self._consecutive_losses >= limit:
-            self._circuit_breaker_until = datetime.now() + timedelta(minutes=self.config.circuit_breaker_minutes)
-            self.save()
-            msg = f"Límite de pérdidas consecutivas alcanzado ({self._consecutive_losses} >= {limit}). Circuit breaker activado."
-            self._alert("critical", "consecutive_losses", msg)
+            now = datetime.now()
+            if self._circuit_breaker_until is None:
+                self._circuit_breaker_until = now + timedelta(minutes=self.config.circuit_breaker_minutes)
+                self.save()
+                msg = f"Límite de pérdidas consecutivas alcanzado ({self._consecutive_losses} >= {limit}). Circuit breaker activado ({self.config.circuit_breaker_minutes} min)."
+                self._alert("critical", "consecutive_losses", msg)
+            else:
+                remaining = max(1, int((self._circuit_breaker_until - now).total_seconds() // 60))
+                msg = f"Límite de pérdidas consecutivas ({self._consecutive_losses} >= {limit}). Circuit breaker activo ({remaining} min restantes)."
             return False, msg
         return True, f"Pérdidas consecutivas OK ({self._consecutive_losses}/{limit})"
 

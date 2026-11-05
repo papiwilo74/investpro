@@ -316,16 +316,16 @@ SCANNER_CONFIG = ScannerConfig()
 RISK_CONFIG = RiskConfig()
 
 WEB_RISK_CONFIG = RiskConfig(
-    max_daily_loss_pct=-0.015,
-    max_weekly_drawdown_pct=-0.04,
-    max_sector_exposure_pct=0.20,
-    max_position_concentration_pct=0.08,
-    max_total_exposure_pct=0.40,
-    consecutive_loss_limit=2,
-    circuit_breaker_minutes=120,
+    max_daily_loss_pct=-0.02,
+    max_weekly_drawdown_pct=-0.05,
+    max_sector_exposure_pct=0.25,
+    max_position_concentration_pct=0.10,
+    max_total_exposure_pct=0.50,
+    consecutive_loss_limit=4,
+    circuit_breaker_minutes=30,
     correlation_threshold=0.65,
     min_trades_before_risk=5,
     var_confidence_pct=95.0,
-    max_var_daily_pct=-0.015,
+    max_var_daily_pct=-0.02,
     max_beta_exposure_pct=1.5,
 )

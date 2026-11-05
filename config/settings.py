@@ -130,8 +130,8 @@ class Settings(BaseSettings):
     MAX_SECTOR_EXPOSURE_PCT: float = 0.35
     MAX_POSITION_CONCENTRATION_PCT: float = 0.18
     MAX_TOTAL_EXPOSURE_PCT: float = 0.80
-    CONSECUTIVE_LOSS_LIMIT: int = 3
-    CIRCUIT_BREAKER_MINUTES: int = 60
+    CONSECUTIVE_LOSS_LIMIT: int = int(os.getenv("CONSECUTIVE_LOSS_LIMIT", "4"))
+    CIRCUIT_BREAKER_MINUTES: int = int(os.getenv("CIRCUIT_BREAKER_MINUTES", "30"))
     LEVERAGE_ENABLED: bool = True
     MIN_LEVERAGE: float = 2.0
     MAX_LEVERAGE: float = 3.0

@@ -66,6 +66,29 @@ class TestRiskManagerJson:
         check = rm.check_entry("TEST", "LONG", 1000.0)
         assert check.approved is False
 
+    def test_reset_circuit_breaker(self, tmp_path):
+        cfg = RiskConfig(consecutive_loss_limit=3, circuit_breaker_minutes=30)
+        rm = self._make_rm(tmp_path, config=cfg)
+        for _ in range(3):
+            rm.record_trade("TEST", "LONG", -0.01, -10.0)
+        assert rm._consecutive_losses == 3
+        rm.reset_circuit_breaker()
+        assert rm._consecutive_losses == 0
+        assert rm._circuit_breaker_until is None
+        check = rm.check_entry("TEST", "LONG", 1000.0)
+        assert check.approved is True
+
+    def test_circuit_breaker_expiration_resets_consecutive_losses(self, tmp_path):
+        cfg = RiskConfig(consecutive_loss_limit=3, circuit_breaker_minutes=30)
+        rm = self._make_rm(tmp_path, config=cfg)
+        for _ in range(3):
+            rm.record_trade("TEST", "LONG", -0.01, -10.0)
+        # Simular expiración del temporizador
+        rm._circuit_breaker_until = datetime.now() - timedelta(minutes=1)
+        check = rm.check_entry("TEST", "LONG", 1000.0)
+        assert check.approved is True
+        assert rm._consecutive_losses == 0
+
     def test_performance_summary_empty(self, tmp_path):
         rm = self._make_rm(tmp_path)
         perf = rm.performance_summary()

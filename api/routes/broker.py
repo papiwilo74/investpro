@@ -315,6 +315,25 @@ async def get_risk_status() -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/risk/reset")
+async def reset_risk_circuit_breaker() -> dict[str, Any]:
+    """Restablece el circuit breaker y el contador de pérdidas consecutivas."""
+    try:
+        rm = getattr(bot, "risk_manager", None)
+        if rm is not None:
+            if hasattr(rm, "reset_circuit_breaker"):
+                rm.reset_circuit_breaker()
+            else:
+                rm._consecutive_losses = 0
+                rm._circuit_breaker_until = None
+                rm._account_liquidated = False
+                rm.save()
+            return {"status": "success", "msg": "Circuit breaker y pérdidas consecutivas restablecidos exitosamente"}
+        return {"status": "error", "msg": "RiskManager no disponible"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/risk/kelly", response_model=KellyResponse)
 async def get_risk_kelly() -> dict[str, Any]:
     """Kelly Criterion basado en trades reales registrados por el risk manager."""
