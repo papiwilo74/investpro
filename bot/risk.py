@@ -171,6 +171,9 @@ class RiskManager:
             cb = state.get("circuit_breaker_until")
             if cb:
                 self._circuit_breaker_until = datetime.fromisoformat(cb)
+                if datetime.now() >= self._circuit_breaker_until:
+                    self._circuit_breaker_until = None
+                    self._consecutive_losses = 0
             self._portfolio_value = state.get("portfolio_value", 100_000.0)
             self._account_liquidated = state.get("account_liquidated", False)
             if not self._initial_portfolio_value or self._initial_portfolio_value <= 0:
@@ -192,6 +195,9 @@ class RiskManager:
                 cb = data.get("circuit_breaker_until")
                 if cb:
                     self._circuit_breaker_until = datetime.fromisoformat(cb)
+                    if datetime.now() >= self._circuit_breaker_until:
+                        self._circuit_breaker_until = None
+                        self._consecutive_losses = 0
                 self._portfolio_value = data.get("portfolio_value", 100_000.0)
                 self._account_liquidated = data.get("account_liquidated", False)
                 if not self._initial_portfolio_value or self._initial_portfolio_value <= 0:

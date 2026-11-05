@@ -315,7 +315,7 @@ async def get_risk_status() -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/risk/reset")
+@router.api_route("/risk/reset", methods=["GET", "POST"])
 async def reset_risk_circuit_breaker() -> dict[str, Any]:
     """Restablece el circuit breaker y el contador de pérdidas consecutivas."""
     try:
