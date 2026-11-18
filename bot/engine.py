@@ -716,13 +716,21 @@ class TradingBot:
                                         self._log(f"SHADOW: {resolved} señales resueltas")
                                         await self._auto_evaluate_models()
                                     drifts = self.shadow_trader.check_drift()
+                                    last_drift_alerts = getattr(self, "_last_drift_alert_ts", None)
+                                    if not isinstance(last_drift_alerts, dict):
+                                        last_drift_alerts = {}
+                                        self._last_drift_alert_ts = last_drift_alerts
+                                    now_ts = time.time()
                                     for d in drifts:
                                         msg = (
                                             f"DRIFT {d['ticker']}: live acc={d['live_accuracy']:.1%} "
                                             f"({d['samples']} samples) < {d['threshold']:.1%}"
                                         )
                                         self._log(msg)
-                                        notifier.send("model_drift", msg, "warning")
+                                        # Cooldown de 4 horas por ticker para no spamear Telegram cada ciclo
+                                        if now_ts - last_drift_alerts.get(d["ticker"], 0.0) >= 14400:
+                                            last_drift_alerts[d["ticker"]] = now_ts
+                                            notifier.send("model_drift", msg, "warning")
                                 except Exception as exc:
                                     logger.warning("ShadowTrader loop error: %s", exc)
 
@@ -791,7 +799,10 @@ class TradingBot:
                     acc = self.shadow_trader.live_accuracy(ticker, model=model_key)
                     if acc is None:
                         continue
-                    sample_count = getattr(self.shadow_trader, "_SignalJournal__counts", {}).get(ticker, 0)
+                    if hasattr(self.shadow_trader, "resolved_count"):
+                        sample_count = self.shadow_trader.resolved_count(ticker, model=model_key)
+                    else:
+                        sample_count = 0
                     if sample_count < 15:
                         continue
                     metadata = {

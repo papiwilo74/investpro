@@ -1323,6 +1323,17 @@ class TestTradingBrainEnsemble:
         assert brain.last_ensemble_result is not None
         assert hasattr(brain.last_ensemble_result, "consensus_direction")
 
+    def test_last_ensemble_result_reset_on_early_return(self):
+        brain = TradingBrain(StrategyParams(use_ensemble=True, buy_score_threshold=0.0, use_ml_filter=False))
+        df = make_frame(105.0, {"sma_200": 100.0, "rsi": 50.0, "adx": 25.0, "atr": 2.0, "sig_composite": 0.3})
+        brain.decide(
+            df=df, score=0.3, has_position=False, ml_direction="ALCISTA", ml_probability=0.7, market_regime="BULL"
+        )
+        assert brain.last_ensemble_result is not None
+        # Retorno temprano con has_position=True debe limpiar last_ensemble_result
+        brain.decide(df=df, score=0.0, has_position=True, position_side="LONG")
+        assert brain.last_ensemble_result is None
+
 
 class TestTradingBrainHasPositionNoState:
     def test_has_position_no_state_returns_hold(self):

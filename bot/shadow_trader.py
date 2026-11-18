@@ -34,6 +34,8 @@ DEFAULT_HORIZON_DAYS = 5
 DRIFT_ACCURACY_THRESHOLD = 0.45  # alerta si live accuracy < 0.45
 DRIFT_MIN_SAMPLES = 10  # mínimo de samples para concluir drift
 DRIFT_WINDOW = 30  # ventana rolling de samples para drift
+DEFAULT_SIGNAL_DEDUP_SECONDS = 21600.0  # máx. 1 señal por ticker/modelo cada 6 horas
+DIRECTIONAL_DIRECTIONS = ("BULLISH", "BEARISH")
 
 
 class ShadowTrader:
@@ -46,12 +48,17 @@ class ShadowTrader:
         horizon_days: int = DEFAULT_HORIZON_DAYS,
         drift_threshold: float = DRIFT_ACCURACY_THRESHOLD,
         drift_min_samples: int = DRIFT_MIN_SAMPLES,
+        min_signal_interval_seconds: float | None = None,
     ) -> None:
         self.fetcher = fetcher
         self.db_path = db_path or DB_PATH
         self.horizon_days = horizon_days
         self.drift_threshold = drift_threshold
         self.drift_min_samples = drift_min_samples
+        if min_signal_interval_seconds is None:
+            self.min_signal_interval_seconds = 0.0 if horizon_days <= 0 else DEFAULT_SIGNAL_DEDUP_SECONDS
+        else:
+            self.min_signal_interval_seconds = max(0.0, float(min_signal_interval_seconds))
         self._init_db()
 
     # ── DB ─────────────────────────────────────────────────────────────
@@ -100,14 +107,17 @@ class ShadowTrader:
         regime: str = "BULL",
         horizon_days: int | None = None,
     ) -> int:
-        """Registra la señal de cada modelo que participó en el ensemble.
+        """Registra la señal direccional de cada modelo que participó en el ensemble.
 
+        Ignora señales NEUTRAL (abstenciones) para no penalizar la accuracy direccional
+        y deduplica señales repetidas del mismo ticker/modelo dentro de la ventana configurada.
         Retorna el número de filas insertadas.
         """
         if ensemble_result is None:
             return 0
-        horizon = horizon_days or self.horizon_days
+        horizon = horizon_days if horizon_days is not None else self.horizon_days
         now = time.time()
+        ticker_u = ticker.upper()
         rows = 0
         try:
             conn = self._connect()
@@ -117,15 +127,26 @@ class ShadowTrader:
                 "M", (), {"direction": ensemble_result.consensus_direction, "probability": ensemble_result.confidence}
             )()
             for model_name, signal in models.items():
+                direction = getattr(signal, "direction", "NEUTRAL")
+                if direction not in DIRECTIONAL_DIRECTIONS:
+                    continue
+                if self.min_signal_interval_seconds > 0:
+                    last_row = conn.execute(
+                        "SELECT MAX(signal_ts) FROM shadow_signals WHERE ticker = ? AND model = ?",
+                        (ticker_u, model_name),
+                    ).fetchone()
+                    last_ts = last_row[0] if last_row else None
+                    if last_ts is not None and (now - float(last_ts)) < self.min_signal_interval_seconds:
+                        continue
                 conn.execute(
                     """INSERT INTO shadow_signals
                        (ticker, model, predicted_direction, confidence, regime,
                         entry_price, signal_ts, horizon_days)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
-                        ticker.upper(),
+                        ticker_u,
                         model_name,
-                        getattr(signal, "direction", "NEUTRAL"),
+                        direction,
                         float(getattr(signal, "probability", 0.5)),
                         regime,
                         float(entry_price),
@@ -165,7 +186,8 @@ class ShadowTrader:
                 sig_id, ticker, model, predicted_dir, entry_price, _sig_ts, _horizon, regime = row
                 current_price = tickers_prices.get(ticker, entry_price)
                 actual_dir = self._direction_from_prices(entry_price, current_price)
-                correct = 1 if actual_dir == predicted_dir else 0
+                is_directional = predicted_dir in DIRECTIONAL_DIRECTIONS
+                correct = (1 if actual_dir == predicted_dir else 0) if is_directional else None
                 conn.execute(
                     """UPDATE shadow_signals
                        SET resolved = 1, actual_direction = ?, actual_price = ?,
@@ -175,8 +197,9 @@ class ShadowTrader:
                 )
                 resolved_count += 1
 
-                # Alimentar el AdaptiveEnsemble con el outcome real
-                self._feed_ensemble(model, regime, actual_dir, predicted_dir, row)
+                # Alimentar el AdaptiveEnsemble solo con señales direccionales
+                if is_directional:
+                    self._feed_ensemble(model, regime, actual_dir, predicted_dir, row)
 
             conn.commit()
             conn.close()
@@ -186,6 +209,22 @@ class ShadowTrader:
             logger.warning("ShadowTrader: error resolviendo señales: %s", exc)
         return resolved_count
 
+    def resolved_count(self, ticker: str, model: str = "ensemble_blend") -> int:
+        """Número de señales direccionales resueltas para un ticker y modelo."""
+        try:
+            conn = self._connect()
+            count = conn.execute(
+                """SELECT COUNT(*) FROM shadow_signals
+                   WHERE ticker = ? AND model = ? AND resolved = 1
+                     AND predicted_direction IN ('BULLISH', 'BEARISH')
+                     AND correct IS NOT NULL""",
+                (ticker.upper(), model),
+            ).fetchone()[0]
+            conn.close()
+            return int(count or 0)
+        except Exception:
+            return 0
+
     def live_accuracy(self, ticker: str, model: str = "ensemble_blend") -> float:
         """Accuracy en vivo del ensemble (o un modelo específico) para un ticker."""
         try:
@@ -193,6 +232,8 @@ class ShadowTrader:
             cur = conn.execute(
                 """SELECT correct FROM shadow_signals
                    WHERE ticker = ? AND model = ? AND resolved = 1
+                     AND predicted_direction IN ('BULLISH', 'BEARISH')
+                     AND correct IS NOT NULL
                    ORDER BY resolved_ts DESC LIMIT ?""",
                 (ticker.upper(), model, DRIFT_WINDOW),
             )
@@ -205,26 +246,45 @@ class ShadowTrader:
             return 0.5
 
     def check_drift(self) -> list[dict[str, Any]]:
-        """Revisa drift por ticker. Retorna lista de alertas {ticker, accuracy, samples}."""
+        """Revisa drift por ticker en ventana rolling. Retorna lista de alertas."""
         alerts: list[dict[str, Any]] = []
         try:
             conn = self._connect()
-            cur = conn.execute(
-                """SELECT ticker, COUNT(*) as n, AVG(correct) as acc
-                   FROM shadow_signals
-                   WHERE model = 'ensemble_blend' AND resolved = 1
-                   GROUP BY ticker""",
-            )
-            for ticker, n, acc in cur.fetchall():
-                if n >= self.drift_min_samples and acc < self.drift_threshold:
-                    alerts.append(
-                        {
-                            "ticker": ticker,
-                            "live_accuracy": round(acc, 3),
-                            "samples": n,
-                            "threshold": self.drift_threshold,
-                        }
-                    )
+            tickers = [
+                r[0]
+                for r in conn.execute(
+                    """SELECT DISTINCT ticker
+                       FROM shadow_signals
+                       WHERE model = 'ensemble_blend' AND resolved = 1
+                         AND predicted_direction IN ('BULLISH', 'BEARISH')
+                         AND correct IS NOT NULL"""
+                ).fetchall()
+            ]
+            for ticker in tickers:
+                rows = [
+                    r[0]
+                    for r in conn.execute(
+                        """SELECT correct
+                           FROM shadow_signals
+                           WHERE ticker = ? AND model = 'ensemble_blend' AND resolved = 1
+                             AND predicted_direction IN ('BULLISH', 'BEARISH')
+                             AND correct IS NOT NULL
+                           ORDER BY resolved_ts DESC LIMIT ?""",
+                        (ticker, DRIFT_WINDOW),
+                    ).fetchall()
+                ]
+                n = len(rows)
+                if n >= self.drift_min_samples:
+                    acc = sum(rows) / n
+                    if acc < self.drift_threshold:
+                        alerts.append(
+                            {
+                                "ticker": ticker,
+                                "live_accuracy": round(acc, 3),
+                                "samples": n,
+                                "threshold": self.drift_threshold,
+                            }
+                        )
             conn.close()
         except Exception as exc:
             logger.warning("ShadowTrader: error en check_drift: %s", exc)
@@ -240,7 +300,10 @@ class ShadowTrader:
             avg_acc = None
             if resolved > 0:
                 avg_acc = conn.execute(
-                    "SELECT AVG(correct) FROM shadow_signals WHERE resolved=1 AND model='ensemble_blend'"
+                    """SELECT AVG(correct) FROM shadow_signals
+                       WHERE resolved=1 AND model='ensemble_blend'
+                         AND predicted_direction IN ('BULLISH', 'BEARISH')
+                         AND correct IS NOT NULL"""
                 ).fetchone()[0]
             conn.close()
             return {

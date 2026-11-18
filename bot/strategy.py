@@ -264,6 +264,8 @@ class TradingBrain:
         earnings_blackout: bool = False,  # True si estamos cerca de earnings
         advisor_action: str | None = None,  # ALLOW / REDUCE / BLOCK del OnlineAdvisor
     ) -> Decision:
+        # Resetear resultado previo del ensemble para evitar registrar señales obsoletas si hay retorno temprano
+        self.last_ensemble_result = None
         if df.empty:
             return Decision("HOLD", "no market data")
 

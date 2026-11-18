@@ -254,6 +254,107 @@ class TestShadowTrader:
         stats = st.stats()
         assert stats["total_signals"] == 0
 
+    def test_neutral_signals_ignored_and_not_counted_as_drift(self, tmp_path):
+        import sqlite3
+
+        from ml.ensemble import EnsembleResult, ModelSignal
+
+        fetcher = MagicMock()
+        fetcher.get_data.return_value = pd.DataFrame(
+            {"close": [100.0, 105.0]}, index=pd.date_range("2024-01-01", periods=2)
+        )
+        db_path = tmp_path / "shadow.sqlite3"
+        st = ShadowTrader(
+            fetcher=fetcher,
+            db_path=db_path,
+            horizon_days=0,
+            drift_threshold=0.45,
+            drift_min_samples=2,
+        )
+        neutral_result = EnsembleResult(
+            consensus_direction="NEUTRAL",
+            confidence=0.3,
+            model_signals={"ensemble_blend": ModelSignal("NEUTRAL", 0.3, 0.0)},
+        )
+        # Nuevas señales NEUTRAL no se registran
+        assert st.record_signal("AAPL", neutral_result, entry_price=100.0) == 0
+
+        # Simular señales NEUTRAL antiguas ya presentes en DB antes del fix
+        conn = sqlite3.connect(str(db_path))
+        for _ in range(5):
+            conn.execute(
+                """INSERT INTO shadow_signals
+                   (ticker, model, predicted_direction, confidence, regime,
+                    entry_price, signal_ts, horizon_days)
+                   VALUES ('AAPL', 'ensemble_blend', 'NEUTRAL', 0.3, 'BULL', 100.0, ?, 0)""",
+                (time.time() - 10,),
+            )
+        conn.commit()
+        conn.close()
+
+        assert st.resolve_matured() == 5
+        assert st.resolved_count("AAPL") == 0
+        assert st.live_accuracy("AAPL") == 0.5
+        assert st.check_drift() == []
+
+    def test_deduplicates_repeated_signals_within_interval(self, tmp_path):
+        from ml.ensemble import EnsembleResult, ModelSignal
+
+        st = ShadowTrader(
+            fetcher=None,
+            db_path=tmp_path / "shadow.sqlite3",
+            horizon_days=5,
+            min_signal_interval_seconds=3600,
+        )
+        result = EnsembleResult(
+            consensus_direction="BULLISH",
+            confidence=0.7,
+            model_signals={"xgboost": ModelSignal("BULLISH", 0.8, 0.6)},
+        )
+        assert st.record_signal("AAPL", result, entry_price=100.0) == 2
+        # Segunda llamada inmediata para el mismo ticker debe deduplicarse
+        assert st.record_signal("AAPL", result, entry_price=100.5) == 0
+        # Otro ticker sí se registra
+        assert st.record_signal("MSFT", result, entry_price=200.0) == 2
+
+    def test_check_drift_uses_rolling_window(self, tmp_path):
+        from ml.ensemble import EnsembleResult
+
+        fetcher = MagicMock()
+        db_path = tmp_path / "shadow.sqlite3"
+        st = ShadowTrader(
+            fetcher=fetcher,
+            db_path=db_path,
+            horizon_days=0,
+            drift_threshold=0.45,
+            drift_min_samples=5,
+        )
+        result = EnsembleResult(
+            consensus_direction="BULLISH",
+            confidence=0.7,
+            model_signals={},
+        )
+        # 10 fallos antiguos
+        fetcher.get_data.return_value = pd.DataFrame(
+            {"close": [100.0, 95.0]}, index=pd.date_range("2024-01-01", periods=2)
+        )
+        for _ in range(10):
+            st.record_signal("AAPL", result, entry_price=100.0)
+            st.resolve_matured()
+            time.sleep(0.01)
+
+        # 30 aciertos recientes (ventana DRIFT_WINDOW=30) deben limpiar el drift
+        fetcher.get_data.return_value = pd.DataFrame(
+            {"close": [100.0, 105.0]}, index=pd.date_range("2024-01-01", periods=2)
+        )
+        for _ in range(30):
+            st.record_signal("AAPL", result, entry_price=100.0)
+            st.resolve_matured()
+            time.sleep(0.01)
+
+        assert st.live_accuracy("AAPL") == 1.0
+        assert st.check_drift() == []
+
 
 # ── PortfolioAllocator ─────────────────────────────────────────────────
 
