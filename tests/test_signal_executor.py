@@ -213,6 +213,13 @@ class TestExecuteBuy:
         result = executor.execute_buy("AAPL", mock_decision, 150.0, 100000, 50000, {})
         assert result == 0.0
 
+    def test_buy_rejects_when_risk_check_object_disapproved(self, executor, mock_decision):
+        from bot.risk import RiskCheck
+
+        executor._risk.check_entry.return_value = RiskCheck(approved=False, reasons=["Circuit breaker activo"])
+        result = executor.execute_buy("COST", mock_decision, 150.0, 100000, 50000, {})
+        assert result == 0.0
+
 
 class TestExecuteShort:
     def test_returns_zero_when_daily_limit_reached(self, executor, mock_decision):
@@ -239,6 +246,13 @@ class TestExecuteShort:
 
     def test_short_rejects_when_risk_blocks(self, executor, mock_decision):
         executor._risk.check_entry.return_value = False
+        result = executor.execute_short("AAPL", mock_decision, 150.0, 100000, 50000, {})
+        assert result == 0.0
+
+    def test_short_rejects_when_risk_check_object_disapproved(self, executor, mock_decision):
+        from bot.risk import RiskCheck
+
+        executor._risk.check_entry.return_value = RiskCheck(approved=False, reasons=["Circuit breaker activo"])
         result = executor.execute_short("AAPL", mock_decision, 150.0, 100000, 50000, {})
         assert result == 0.0
 

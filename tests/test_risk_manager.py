@@ -141,3 +141,28 @@ class TestRiskManagerJson:
             "total_trades_risk_logged",
         ]:
             assert key in d
+
+    def test_risk_check_bool_reflects_approved(self):
+        from bot.risk import RiskCheck
+
+        assert bool(RiskCheck(approved=False, reasons=["blocked"])) is False
+        assert bool(RiskCheck(approved=True, reasons=["ok"])) is True
+
+    def test_weekly_drawdown_ignores_old_trades_and_reset_prevents_rearm(self, tmp_path):
+        cfg = RiskConfig(min_trades_before_risk=3, max_weekly_drawdown_pct=-0.05)
+        rm = self._make_rm(tmp_path, config=cfg)
+        old_ts = (datetime.now() - timedelta(days=10)).isoformat()
+        rm._trade_history = [
+            {"ticker": "AAPL", "side": "SELL", "pnl_pct": -0.04, "pnl_usd": -400.0, "timestamp": old_ts},
+            {"ticker": "MSFT", "side": "SELL", "pnl_pct": -0.04, "pnl_usd": -400.0, "timestamp": old_ts},
+            {"ticker": "NVDA", "side": "SELL", "pnl_pct": -0.04, "pnl_usd": -400.0, "timestamp": old_ts},
+        ]
+        # Trades de hace >7 días no deben disparar drawdown semanal
+        assert rm.check_entry("COST", "BUY", 1000.0).approved is True
+
+        # Trades recientes con drawdown >= 5% sí disparan, pero tras reset no re-disparan en bucle
+        for sym in ("AAPL", "MSFT", "NVDA"):
+            rm.record_trade(sym, "SELL", -0.03, -300.0)
+        assert rm.check_entry("COST", "BUY", 1000.0).approved is False
+        rm.reset_circuit_breaker()
+        assert rm.check_entry("COST", "BUY", 1000.0).approved is True

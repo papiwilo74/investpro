@@ -38,6 +38,11 @@ from indicators.signals import SignalGenerator
 from indicators.technical import TechnicalIndicators
 from ml.sentiment import SentimentAnalyzer
 
+# ETFs inversos de cobertura que NO deben liquidarse durante pánico de mercado
+INVERSE_HEDGE_TICKERS: frozenset[str] = frozenset(
+    {"SH", "SQQQ", "SDS", "SPXS", "PSQ", "QID", "SDOW", "DOG", "RWM", "TWM"}
+)
+
 
 class TradingBot:
     """Automated trading bot using shared strategy and risk controls.
@@ -688,18 +693,33 @@ class TradingBot:
                                 # En paper mode mantenemos el escaneo activo para permitir acumular señales y recuperarse
 
                         if self.strategy_mode == "web" and stocks_allowed:
+                            self._panic_halt_longs = False
                             macro = self._check_macro_panic()
                             if macro and macro.get("panic_mode"):
+                                vix_lvl = float(macro.get("vix_level", 0) or 0)
                                 self._log(f"MACRO PANIC: VIX={macro.get('vix_level')} — suspendiendo nuevas entradas")
+                                if vix_lvl >= 28.0:
+                                    self._panic_halt_longs = True
+                                    regime_cache = getattr(getattr(self, "market_regime", None), "_cache", None)
+                                    if isinstance(regime_cache, dict):
+                                        regime_cache.clear()
 
                             hedge = self._check_hedge()
                             if hedge:
                                 status = hedge.get("status", "NORMAL")
                                 if status == "PANIC":
+                                    self._panic_halt_longs = True
+                                    regime_cache = getattr(getattr(self, "market_regime", None), "_cache", None)
+                                    if isinstance(regime_cache, dict):
+                                        regime_cache.clear()
                                     self._log(
                                         f"HEDGE PANIC: {hedge.get('reason', '')} — vendiendo posiciones correlacionadas"
                                     )
-                                    notifier.panic(hedge.get("drop_pct", 0), hedge.get("reason", ""))
+                                    now_panic = time.time()
+                                    last_panic = getattr(self, "_last_panic_alert_ts", 0.0)
+                                    if now_panic - last_panic >= 14400:
+                                        self._last_panic_alert_ts = now_panic
+                                        notifier.panic(hedge.get("drop_pct", 0), hedge.get("reason", ""))
                                     await self._execute_hedge()
                                 elif status == "ALERT":
                                     self._log(f"HEDGE ALERT: {hedge.get('reason', '')} — cobertura parcial recomendada")
@@ -1611,13 +1631,16 @@ class TradingBot:
         return None
 
     async def _execute_hedge(self) -> None:
-        """Vende posiciones durante un pánico de mercado."""
+        """Vende posiciones correlacionadas durante un pánico de mercado (protege ETFs inversos)."""
         try:
             positions = self.client.get_positions()
             if not positions:
                 return
             for pos in positions:
                 ticker = pos.get("symbol", "")
+                if ticker.upper() in INVERSE_HEDGE_TICKERS:
+                    self._log(f"HEDGE KEEP {ticker}: cobertura inversa preservada durante pánico")
+                    continue
                 qty = int(float(pos.get("qty", 0)))
                 current_price = float(pos.get("current_price", 0))
                 if qty <= 0 or current_price <= 0:
@@ -1626,6 +1649,8 @@ class TradingBot:
                 res = await self._route_order(ticker, qty, "SELL", current_price, use_limit=False)
                 if res.get("status") == "success":
                     self.state.remove_position(ticker)
+                    if hasattr(self, "brain") and hasattr(self.brain, "_positions"):
+                        self.brain._positions.pop(ticker, None)
                     notifier.panic(0, f"Vendido {ticker} por hedge automático")
         except Exception as exc:
             logger.exception("Error ejecutando hedge: %s", exc)
@@ -1827,6 +1852,10 @@ class TradingBot:
         checks: list[str] = []
         passed = True
         is_short = side == "SHORT" or (hasattr(decision, "side") and decision.side == "SHORT")
+
+        if not is_short and ticker.upper() not in INVERSE_HEDGE_TICKERS and getattr(self, "_panic_halt_longs", False):
+            checks.append("❌ Pánico de mercado activo (VIX/SPY): nuevas entradas LONG suspendidas")
+            passed = False
 
         # 0. Market Breadth (global — salud del mercado amplio)
         breadth = self._check_market_breadth()

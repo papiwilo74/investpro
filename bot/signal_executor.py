@@ -180,7 +180,11 @@ class SignalExecutor:
 
         first_tranche = cfg.dca_first_tranche if cfg.leverage_enabled else 1.0
         first_alloc = invest_amount * first_tranche
-        if not self._risk.check_entry(ticker, "BUY", first_alloc):
+        risk_check = self._risk.check_entry(ticker, "BUY", first_alloc)
+        approved = risk_check.approved if hasattr(risk_check, "approved") else bool(risk_check)
+        if not approved:
+            reasons = getattr(risk_check, "reasons", [])
+            logger.info("{} BUY bloqueado por RiskManager: {}", ticker, "; ".join(reasons) if reasons else "rejected")
             return 0.0
 
         qty = round(first_alloc / ref_price, 6) if is_crypto else int(first_alloc // ref_price)
@@ -258,7 +262,11 @@ class SignalExecutor:
         if short_count >= 2:
             return 0.0
 
-        if not self._risk.check_entry(ticker, "SHORT", invest_amount):
+        risk_check = self._risk.check_entry(ticker, "SHORT", invest_amount)
+        approved = risk_check.approved if hasattr(risk_check, "approved") else bool(risk_check)
+        if not approved:
+            reasons = getattr(risk_check, "reasons", [])
+            logger.info("{} SHORT bloqueado por RiskManager: {}", ticker, "; ".join(reasons) if reasons else "rejected")
             return 0.0
 
         qty = round(invest_amount / ref_price, 6) if is_crypto else int(invest_amount // ref_price)

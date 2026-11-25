@@ -1189,6 +1189,17 @@ class TestPreTradeChecklist:
         passed, _ = bot._pre_trade_checklist("AAPL", 0.5, decision, regime)
         assert passed is False
 
+    def test_panic_halt_blocks_long_but_allows_short(self, bot, market_regime_dict):
+        bot._panic_halt_longs = True
+        buy_dec = Decision(action="BUY", reason="test", confidence=0.8, position_size_pct=0.1)
+        passed_long, checks = bot._pre_trade_checklist("COST", 0.5, buy_dec, market_regime_dict)
+        assert passed_long is False
+        assert any("Pánico de mercado" in c for c in checks)
+
+        short_dec = Decision(action="SHORT", reason="test", confidence=0.8, position_size_pct=0.1, side="SHORT")
+        passed_short, _ = bot._pre_trade_checklist("AAPL", -0.5, short_dec, market_regime_dict, side="SHORT")
+        assert passed_short is True
+
 
 # ===========================================================================
 #  Market regime
@@ -1793,6 +1804,20 @@ class TestManageRotationHedge:
 
         asyncio.run(bot._manage_rotation_hedge())
         assert any("ROTATION" in m for m in bot.logs)
+
+    def test_execute_hedge_preserves_inverse_etfs(self, bot):
+        bot.client.get_positions.return_value = [
+            {"symbol": "COST", "qty": "24", "current_price": "1090.0"},
+            {"symbol": "SH", "qty": "419", "current_price": "35.5"},
+            {"symbol": "SQQQ", "qty": "50", "current_price": "12.0"},
+        ]
+        bot.order_manager.route_order.return_value = {"status": "success"}
+
+        asyncio.run(bot._execute_hedge())
+
+        bot.order_manager.route_order.assert_called_once_with("COST", 24, "SELL", 1090.0, False)
+        assert any("HEDGE KEEP SH" in m for m in bot.logs)
+        assert any("HEDGE KEEP SQQQ" in m for m in bot.logs)
 
 
 # ===========================================================================

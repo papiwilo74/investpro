@@ -123,6 +123,9 @@ class RiskCheck:
         self.reasons = reasons
         self.warnings = warnings or []
 
+    def __bool__(self) -> bool:
+        return bool(self.approved)
+
 
 class RiskManager:
     def __init__(self, config: RiskConfig | None = None, session: Session | None = None, file_path: str | None = None):
@@ -132,6 +135,7 @@ class RiskManager:
         self._current_date: date = date.today()
         self._consecutive_losses: int = 0
         self._circuit_breaker_until: datetime | None = None
+        self._weekly_dd_since: datetime | None = None
         self._positions_cache: list[dict] = []
         self._portfolio_value: float = 100_000.0
         self._initial_portfolio_value: float = 100_000.0
@@ -200,6 +204,9 @@ class RiskManager:
                         self._consecutive_losses = 0
                 self._portfolio_value = data.get("portfolio_value", 100_000.0)
                 self._account_liquidated = data.get("account_liquidated", False)
+                wds = data.get("weekly_dd_since")
+                if wds:
+                    self._weekly_dd_since = datetime.fromisoformat(wds)
                 if not self._initial_portfolio_value or self._initial_portfolio_value <= 0:
                     self._initial_portfolio_value = self._portfolio_value
         except Exception as exc:
@@ -228,6 +235,7 @@ class RiskManager:
                 "circuit_breaker_until": (
                     self._circuit_breaker_until.isoformat() if self._circuit_breaker_until else None
                 ),
+                "weekly_dd_since": (self._weekly_dd_since.isoformat() if self._weekly_dd_since else None),
                 "portfolio_value": self._portfolio_value,
                 "account_liquidated": self._account_liquidated,
             }
@@ -322,6 +330,7 @@ class RiskManager:
         self._consecutive_losses = 0
         self._circuit_breaker_until = None
         self._account_liquidated = False
+        self._weekly_dd_since = datetime.now()
         if self._use_db and self._repo is not None:
             try:
                 self._repo.save_state(
@@ -486,9 +495,10 @@ class RiskManager:
             if now < self._circuit_breaker_until:
                 remaining = max(1, int((self._circuit_breaker_until - now).total_seconds() // 60))
                 return False, f"Circuit breaker activo ({remaining} min restantes)"
-            # El período de enfriamiento concluyó: resetear racha para evitar re-armado infinito
+            # El período de enfriamiento concluyó: resetear racha y ventana semanal para evitar re-armado infinito
             self._circuit_breaker_until = None
             self._consecutive_losses = 0
+            self._weekly_dd_since = now
             self.save()
             logger.info("Circuit breaker concluido: racha de pérdidas reseteada a 0 para reanudar operaciones.")
         return True, "Circuit breaker OK"
@@ -551,9 +561,26 @@ class RiskManager:
         return True, f"Daily loss OK ({pnl_pct:.2%})"
 
     def _check_weekly_drawdown(self) -> tuple[bool, str]:
-        if len(self._trade_history) < self.config.min_trades_before_risk:
+        now = datetime.now()
+        cutoff = now - timedelta(days=7)
+        weekly_since = getattr(self, "_weekly_dd_since", None)
+        if weekly_since is not None and weekly_since > cutoff:
+            cutoff = weekly_since
+
+        recent_trades: list[dict] = []
+        for t in self._trade_history:
+            ts_raw = t.get("timestamp")
+            if ts_raw:
+                try:
+                    if datetime.fromisoformat(str(ts_raw)) < cutoff:
+                        continue
+                except ValueError:
+                    pass
+            recent_trades.append(t)
+
+        if len(recent_trades) < self.config.min_trades_before_risk:
             return True, "Weekly drawdown OK (pocos trades)"
-        pnls = [t["pnl_pct"] for t in self._trade_history]
+        pnls = [t["pnl_pct"] for t in recent_trades]
         cumulative = 1.0
         max_val = 1.0
         for p in pnls:
@@ -562,7 +589,7 @@ class RiskManager:
                 max_val = cumulative
         dd = (cumulative - max_val) / max_val
         if dd <= self.config.max_weekly_drawdown_pct:
-            self._circuit_breaker_until = datetime.now() + timedelta(hours=2)
+            self._circuit_breaker_until = now + timedelta(hours=2)
             self.save()
             return False, f"Drawdown semanal excedido ({dd:.2%} ≤ {self.config.max_weekly_drawdown_pct:.2%})"
         return True, f"Weekly drawdown OK ({dd:.2%})"
