@@ -126,26 +126,26 @@ class Settings(BaseSettings):
     COMMISSION_PCT: float = 0.001
     SLIPPAGE_PCT: float = 0.0005
     RISK_FREE_RATE: float = 0.04
-    MAX_DAILY_LOSS_PCT: float = -0.02
-    MAX_WEEKLY_DRAWDOWN_PCT: float = -0.05
-    MAX_SECTOR_EXPOSURE_PCT: float = 0.35
-    MAX_POSITION_CONCENTRATION_PCT: float = 0.18
-    MAX_TOTAL_EXPOSURE_PCT: float = 0.80
-    CONSECUTIVE_LOSS_LIMIT: int = int(os.getenv("CONSECUTIVE_LOSS_LIMIT", "4"))
-    CIRCUIT_BREAKER_MINUTES: int = int(os.getenv("CIRCUIT_BREAKER_MINUTES", "30"))
+    MAX_DAILY_LOSS_PCT: float = -0.06
+    MAX_WEEKLY_DRAWDOWN_PCT: float = -0.15
+    MAX_SECTOR_EXPOSURE_PCT: float = 0.60
+    MAX_POSITION_CONCENTRATION_PCT: float = 0.50
+    MAX_TOTAL_EXPOSURE_PCT: float = 10.0
+    CONSECUTIVE_LOSS_LIMIT: int = int(os.getenv("CONSECUTIVE_LOSS_LIMIT", "8"))
+    CIRCUIT_BREAKER_MINUTES: int = int(os.getenv("CIRCUIT_BREAKER_MINUTES", "15"))
     LEVERAGE_ENABLED: bool = True
-    MIN_LEVERAGE: float = 2.0
-    MAX_LEVERAGE: float = 3.0
+    MIN_LEVERAGE: float = 5.0
+    MAX_LEVERAGE: float = 10.0
 
     # ── Scanner ────────────────────────────────────────────────────────
     SCANNER_DEFAULT_UNIVERSE: str = "nasdaq100"
     SCANNER_MAX_TICKERS: int = 60
     SCANNER_MIN_AVG_VOLUME: int = 1_000_000
     SCANNER_MIN_PRICE: float = 5.0
-    SCANNER_MAX_ATR_PCT: float = 0.08
-    SCANNER_MIN_ATR_PCT: float = 0.005
-    SCANNER_MIN_ADX: float = 15.0
-    SCANNER_MIN_SCORE: float = 0.05
+    SCANNER_MAX_ATR_PCT: float = 0.12
+    SCANNER_MIN_ATR_PCT: float = 0.003
+    SCANNER_MIN_ADX: float = 10.0
+    SCANNER_MIN_SCORE: float = 0.02
 
     # ── Model Gate ─────────────────────────────────────────────────────
     GATE_MIN_ACCURACY: float = 0.55

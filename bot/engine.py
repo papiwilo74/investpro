@@ -697,8 +697,8 @@ class TradingBot:
                             macro = self._check_macro_panic()
                             if macro and macro.get("panic_mode"):
                                 vix_lvl = float(macro.get("vix_level", 0) or 0)
-                                self._log(f"MACRO PANIC: VIX={macro.get('vix_level')} — suspendiendo nuevas entradas")
-                                if vix_lvl >= 28.0:
+                                self._log(f"MACRO PANIC: VIX={macro.get('vix_level')}")
+                                if vix_lvl >= 35.0:
                                     self._panic_halt_longs = True
                                     regime_cache = getattr(getattr(self, "market_regime", None), "_cache", None)
                                     if isinstance(regime_cache, dict):
@@ -1442,16 +1442,17 @@ class TradingBot:
                         )
                         return 0.0
 
-                # Filtro Multi-Timeframe: bloquea si el semanal es bajista o no hay momentum
-                mtf_result = self._check_mtf(ticker, df)
-                if mtf_result and not mtf_result.passed:
-                    self._log(f"MTF BLOQUEA BUY {ticker}: {mtf_result.block_reason}")
-                    return 0.0
-                if mtf_result and mtf_result.passed:
-                    self._log(
-                        f"MTF CONFIRMA {ticker}: semanal={mtf_result.details.get('weekly_trend')}, "
-                        f"VWAP={mtf_result.daily_above_vwap}, ADX/DI={mtf_result.adx_strong}"
-                    )
+                # Filtro Multi-Timeframe: solo si use_multi_timeframe está activo
+                if getattr(self._strategy_params, "use_multi_timeframe", True):
+                    mtf_result = self._check_mtf(ticker, df)
+                    if mtf_result and not mtf_result.passed:
+                        self._log(f"MTF BLOQUEA BUY {ticker}: {mtf_result.block_reason}")
+                        return 0.0
+                    if mtf_result and mtf_result.passed:
+                        self._log(
+                            f"MTF CONFIRMA {ticker}: semanal={mtf_result.details.get('weekly_trend')}, "
+                            f"VWAP={mtf_result.daily_above_vwap}, ADX/DI={mtf_result.adx_strong}"
+                        )
 
                 passed, checks = self._pre_trade_checklist(ticker, score, decision, market_regime)
                 self._log(f"CHECKLIST {ticker}: {' | '.join(checks)}")

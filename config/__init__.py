@@ -27,14 +27,18 @@ def validate_secrets() -> list[str]:
     return _settings.validate()
 
 
-# ── Watchlist por defecto (100% Cripto) ───────────────────────────────
+# ── Watchlist por defecto (100% Acciones US) ──────────────────────────
 WATCHLIST: list[str] = [
-    "BTC-USD",
-    "ETH-USD",
-    "SOL-USD",
-    "LTC-USD",
-    "DOT-USD",
-    "AAVE-USD",
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AMZN",
+    "META",
+    "GOOGL",
+    "TSLA",
+    "AVGO",
+    "AMD",
+    "NFLX",
 ]
 
 NASDAQ_100_UNIVERSE: list[str] = [
@@ -255,24 +259,24 @@ class BrokerConfig:
     secret_key: str = _settings.ALPACA_SECRET_KEY
     base_url: str = _settings.ALPACA_BASE_URL
     paper: bool = _settings.ALPACA_PAPER
-    max_position_size_pct: float = 0.10
-    buy_score_threshold: float = 0.05
-    sell_score_threshold: float = -0.30
+    max_position_size_pct: float = 0.25
+    buy_score_threshold: float = 0.04
+    sell_score_threshold: float = -0.35
     stop_loss_pct: float = -0.10
     take_profit_pct: float = 0.50
     trailing_stop_atr_mult: float = 3.5
     use_trailing_stop: bool = True
-    min_ml_buy_probability: float = 0.55
-    max_daily_orders: int = 20
+    min_ml_buy_probability: float = 0.52
+    max_daily_orders: int = 40
     bot_active: bool = False
     leverage_enabled: bool = _settings.LEVERAGE_ENABLED
     min_leverage: float = _settings.MIN_LEVERAGE
     max_leverage: float = _settings.MAX_LEVERAGE
-    leverage_daily_loss_soft_pct: float = -1.0
-    leverage_daily_loss_hard_pct: float = -2.0
-    leverage_unrealized_soft_pct: float = -3.0
-    dca_first_tranche: float = 0.60
-    dca_cancel_drop_pct: float = -0.03
+    leverage_daily_loss_soft_pct: float = -0.05
+    leverage_daily_loss_hard_pct: float = -0.10
+    leverage_unrealized_soft_pct: float = -0.08
+    dca_first_tranche: float = 0.80
+    dca_cancel_drop_pct: float = -0.05
 
 
 @dataclass
@@ -298,13 +302,13 @@ class RiskConfig:
     max_total_exposure_pct: float = _settings.MAX_TOTAL_EXPOSURE_PCT
     consecutive_loss_limit: int = _settings.CONSECUTIVE_LOSS_LIMIT
     circuit_breaker_minutes: int = _settings.CIRCUIT_BREAKER_MINUTES
-    correlation_threshold: float = 0.70
+    correlation_threshold: float = 0.85
     min_trades_before_risk: int = 5
     var_confidence_pct: float = 95.0
-    max_var_daily_pct: float = -0.02
-    account_floor_pct: float = 0.85
-    max_unrealized_drawdown_pct: float = -0.10
-    max_beta_exposure_pct: float = 2.0
+    max_var_daily_pct: float = -0.08
+    account_floor_pct: float = 0.80
+    max_unrealized_drawdown_pct: float = -0.15
+    max_beta_exposure_pct: float = 10.0
 
 
 # ── Instancias por defecto ────────────────────────────────────────────
@@ -316,16 +320,18 @@ SCANNER_CONFIG = ScannerConfig()
 RISK_CONFIG = RiskConfig()
 
 WEB_RISK_CONFIG = RiskConfig(
-    max_daily_loss_pct=-0.02,
-    max_weekly_drawdown_pct=-0.05,
-    max_sector_exposure_pct=0.25,
-    max_position_concentration_pct=0.10,
-    max_total_exposure_pct=0.50,
-    consecutive_loss_limit=4,
-    circuit_breaker_minutes=30,
-    correlation_threshold=0.65,
+    max_daily_loss_pct=-0.06,
+    max_weekly_drawdown_pct=-0.15,
+    max_sector_exposure_pct=3.0,
+    max_position_concentration_pct=1.5,
+    max_total_exposure_pct=10.0,
+    consecutive_loss_limit=8,
+    circuit_breaker_minutes=15,
+    correlation_threshold=0.85,
     min_trades_before_risk=5,
     var_confidence_pct=95.0,
-    max_var_daily_pct=-0.02,
-    max_beta_exposure_pct=1.5,
+    max_var_daily_pct=-0.08,
+    account_floor_pct=0.80,
+    max_unrealized_drawdown_pct=-0.15,
+    max_beta_exposure_pct=10.0,
 )

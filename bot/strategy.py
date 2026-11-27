@@ -1094,14 +1094,16 @@ class TradingBrain:
 
 def create_web_bot_strategy_params() -> StrategyParams:
     """
-    Parámetros conservadores para el bot web:
-    - Estrategia LONG con trend-following + SHORT en mercados bajistas.
-    - Desactiva NN, RL, scalping, mean-reversion y dip-buying.
-    - Filtros de régimen, tendencia semanal y confirmación activos.
-    - Tamaño de posición reducido (max 8% LONG, 7% SHORT).
-    - Shorts más tight: TP +5%, SL -3%.
+    Parámetros agresivos 100% Acciones US para el bot web:
+    - 100% renta variable estadounidense / 0% cripto.
+    - Mayor apetito de riesgo: umbrales relajados, mayor tamaño por posición y confirmación rápida.
+    - Desactiva NN, RL, scalping, mean-reversion y dip-buying en el pipeline web.
     """
     return StrategyParams(
+        crypto_portfolio_target_pct=0.0,
+        stock_portfolio_target_pct=1.0,
+        crypto_position_size_mult=0.0,
+        crypto_symbols=(),
         buy_score_threshold=WEB_STRATEGY_DEFAULTS["buy_score_threshold"],  # type: ignore[arg-type]
         sell_score_threshold=WEB_STRATEGY_DEFAULTS["sell_score_threshold"],  # type: ignore[arg-type]
         stop_loss_pct=WEB_STRATEGY_DEFAULTS["stop_loss_pct"],  # type: ignore[arg-type]
@@ -1111,8 +1113,8 @@ def create_web_bot_strategy_params() -> StrategyParams:
         max_position_size_pct=WEB_STRATEGY_DEFAULTS["max_position_size_pct"],  # type: ignore[arg-type]
         min_position_size_pct=WEB_STRATEGY_DEFAULTS["min_position_size_pct"],  # type: ignore[arg-type]
         atr_position_sizing=True,
-        atr_risk_pct=0.015,
-        min_ml_buy_probability=0.60,
+        atr_risk_pct=0.035,
+        min_ml_buy_probability=0.52,
         require_price_above_sma200=WEB_STRATEGY_DEFAULTS["require_price_above_sma200"],  # type: ignore[arg-type]
         max_buy_rsi=WEB_STRATEGY_DEFAULTS["max_buy_rsi"],  # type: ignore[arg-type]
         use_ml_filter=False,
@@ -1120,39 +1122,39 @@ def create_web_bot_strategy_params() -> StrategyParams:
         use_momentum_scalp=False,
         use_mean_reversion=False,
         use_contrarian_dip=False,
-        # ── SHORT enabled in web mode (conservador) ───────────────
+        # ── SHORT enabled in web mode ─────────────────────────────
         use_short_selling=True,
-        short_score_threshold=-0.25,
-        short_min_rsi=55.0,
-        short_stop_loss_pct=0.030,  # +3% price rise = cover
-        short_take_profit_pct=-0.050,  # -5% price drop = cover
-        short_position_size_pct=0.07,  # 7% max per short
-        short_momentum_threshold=-0.30,
-        short_min_adx=18.0,  # Solo shorts si hay momentum bajista real
+        short_score_threshold=-0.20,
+        short_min_rsi=50.0,
+        short_stop_loss_pct=0.050,
+        short_take_profit_pct=-0.080,
+        short_position_size_pct=0.15,
+        short_momentum_threshold=-0.20,
+        short_min_adx=12.0,
         use_partial_take_profit=True,
         use_dynamic_trailing=True,
         use_confirmation_filter=True,
-        confirmation_bars=10,
-        confirmation_min_ratio=0.4,
-        volume_surge_min_ratio=0.85,
+        confirmation_bars=5,
+        confirmation_min_ratio=0.20,
+        volume_surge_min_ratio=0.65,
         crypto_volume_surge_min_ratio=0.80,
-        volume_bypass_score_threshold=0.30,
-        use_multi_timeframe=True,
-        use_regime_filter=True,
+        volume_bypass_score_threshold=0.15,
+        use_multi_timeframe=False,
+        use_regime_filter=False,
         use_earnings_blackout=False,
         use_rl_exits=False,
         use_intraday_scalp=False,
         use_session_filter=False,
         use_vwap_filter=False,
         use_neural_brain=False,
-        signal_smoothing_periods=3,
-        min_adx_to_trade=15.0,
+        signal_smoothing_periods=2,
+        min_adx_to_trade=10.0,
         confirm_candle=False,
         use_time_based_exit=True,
         max_hold_days=20,
         use_breakeven_stop=True,
-        breakeven_trigger_pct=0.03,
-        use_volatility_targeting=True,
-        target_annual_volatility=0.15,
-        cautious_regime_score_boost=0.15,
+        breakeven_trigger_pct=0.04,
+        use_volatility_targeting=False,
+        target_annual_volatility=0.30,
+        cautious_regime_score_boost=0.04,
     )

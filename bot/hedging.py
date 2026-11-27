@@ -47,8 +47,8 @@ class HedgeMonitor:
     def __init__(
         self,
         index_ticker: str = "SPY",
-        crash_threshold_pct: float = -0.015,
-        vix_spike_threshold: float = 28.0,
+        crash_threshold_pct: float = -0.03,
+        vix_spike_threshold: float = 35.0,
         hedge_target_pct: float = 0.25,
     ):
         self.index_ticker = index_ticker

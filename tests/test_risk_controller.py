@@ -79,7 +79,8 @@ class TestRiskController:
             lev_high = controller.compute_leverage(confidence=1.0, equity=100000, positions={})
             lev_low = controller.compute_leverage(confidence=0.0, equity=100000, positions={})
             assert lev_high >= lev_low
-            assert lev_low >= 1.0
+            assert lev_low >= 5.0
+            assert lev_high <= 10.0
         finally:
             BROKER_CONFIG.leverage_enabled = original
 

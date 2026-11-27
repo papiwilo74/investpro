@@ -64,16 +64,19 @@ class TestStrategyParams:
         assert p.use_neural_brain is False
         assert p.use_ensemble is True
 
-    def test_web_params_are_conservative(self):
+    def test_web_params_are_configured_for_aggressive_equities(self):
         p = create_web_bot_strategy_params()
-        assert p.max_position_size_pct <= 0.10
+        assert p.stock_portfolio_target_pct == 1.0
+        assert p.crypto_portfolio_target_pct == 0.0
+        assert p.max_position_size_pct == 0.25
+        assert p.buy_score_threshold == 0.04
         assert p.use_momentum_scalp is False
         assert p.use_mean_reversion is False
         assert p.use_contrarian_dip is False
         assert p.use_neural_brain is False
         assert p.use_rl_exits is False
         assert p.use_short_selling is True
-        assert p.short_position_size_pct == 0.07
+        assert p.short_position_size_pct == 0.15
 
     def test_custom_params_override(self):
         p = StrategyParams(buy_score_threshold=0.50, stop_loss_pct=-0.10)

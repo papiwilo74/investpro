@@ -33,22 +33,19 @@ def sample_crypto_df():
 
 def test_strategy_params_allocation():
     params = StrategyParams()
-    assert params.crypto_portfolio_target_pct == 0.60
-    assert params.stock_portfolio_target_pct == 0.40
-    assert params.crypto_position_size_mult == 1.0
-    assert "BTC/USD" in params.crypto_symbols
-    assert "ETH/USD" in params.crypto_symbols
-    assert "SOL/USD" in params.crypto_symbols
+    assert params.crypto_portfolio_target_pct == 0.0
+    assert params.stock_portfolio_target_pct == 1.0
+    assert params.crypto_position_size_mult == 0.0
+    assert params.crypto_symbols == ()
 
 
 def test_multi_strategy_allocator_crypto_weighting():
     allocator = MultiStrategyAllocator()
-    # Crypto con 60% allocation recibe factor de impulso
+    # Cartera 100% acciones: crypto queda bloqueado (0.0) y stocks reciben ponderación completa
     scale_crypto = allocator.get_allocation_scale("MOMENTUM", asset_type="CRYPTO")
-    # Stock con 40% allocation ahora está habilitado (> 0.0)
     scale_stock = allocator.get_allocation_scale("MOMENTUM", asset_type="STOCK")
 
-    assert scale_crypto >= 1.0
+    assert scale_crypto == 0.0
     assert scale_stock > 0.0
 
 

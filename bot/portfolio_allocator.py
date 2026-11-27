@@ -34,7 +34,7 @@ from data.fetcher import DataFetcher
 logger = logging.getLogger("inversion_helper.portfolio_allocator")
 
 REBALANCE_THRESHOLD = 0.20  # rebalancear si desviación > 20% del target
-MAX_WEIGHT_PER_TICKER = 0.15  # cap duro (15%) incluso si risk-parity da más
+MAX_WEIGHT_PER_TICKER = 0.35  # cap por ticker (35% base antes de leverage)
 MIN_WEIGHT_TO_INCLUDE = 0.02  # no incluir tickers con target < 2%
 LOOKBACK_PERIOD = "1y"
 
@@ -224,17 +224,20 @@ class PortfolioAllocator:
         return {t: w for t in tickers}
 
     def _apply_caps(self, weights: dict[str, float]) -> dict[str, float]:
-        """Aplica cap máximo por ticker y renormaliza iterativamente."""
+        """Aplica cap máximo por ticker y renormaliza iterativamente sin violar max_weight."""
+        if not weights:
+            return {}
         result = dict(weights)
+        can_sum_to_one = len(result) * self.max_weight >= 1.0 - 1e-9
         for _ in range(5):
             capped = {t: min(w, self.max_weight) for t, w in result.items()}
             total = sum(capped.values())
-            if total > 0:
+            if can_sum_to_one and total > 0:
                 capped = {t: w / total for t, w in capped.items()}
             result = capped
             if all(w <= self.max_weight + 1e-6 for w in result.values()):
                 break
-        return result
+        return {t: min(w, self.max_weight) for t, w in result.items()}
 
     def _load_prices(self, tickers: list[str]) -> pd.DataFrame | None:
         frames: dict[str, pd.Series] = {}
